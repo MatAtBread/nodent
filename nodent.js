@@ -8,6 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
+		useDirective:"use nodent",
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -296,13 +297,46 @@ var nodent = {
 		AST:U2
 };
 
-require.extensions[config.extension] = function(mod, filename) {
-	var code,content = fs.readFileSync(filename, 'utf8');
-	var ast = nodent.parse(stripBOM(content),filename);
-	nodent.asynchronize(ast) ;
-	code = prettyPrint(ast) ;
-	// Mangle filename to stop node-inspector overwriting them
-	mod._compile(code, filename+".js");	 
-};
+module.exports = function(opts){
+	for (var k in opts) {
+		if (!config.hasOwnProperty(k))
+			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts[k])) ;
+		config[k] = opts[k] ;
+	}
 
-module.exports = nodent ;
+	var stdJSLoader = require.extensions['.js'] ; 
+	if (config.useDirective) {
+		require.extensions['.js'] = function(mod,filename) {
+			var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
+			var ast = nodent.parse(content,filename);
+			for (var i=0; i<ast.body.length; i++) {
+				if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==config.useDirective) {
+					return require.extensions[config.extension](mod,filename) ;
+				}
+			}
+			return stdJSLoader(mod,filename) ;
+		} ;
+	}
+
+	require.extensions[config.extension] = function(mod, filename) {
+		try {
+			var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
+			var ast = nodent.parse(content,filename);
+			nodent.asynchronize(ast) ;
+			code = prettyPrint(ast) ;
+			// Mangle filename to stop node-inspector overwriting them
+			mod._compile(code, filename+".js");
+		} catch (ex) {
+			if (ex.constructor.name=="JS_Parse_Error") {
+				console.error(content.substring(ex.pos-20,ex.pos-1)
+						+"^"+content.substring(ex.pos,ex.pos+1)+"^"
+						+content.substring(ex.pos+1,ex.pos+21)) ;
+				console.error(filename+": "+ex.toString()) ;
+			} else {
+				throw ex ;
+			}
+		}
+	};
+	
+	return nodent ;
+} ;
