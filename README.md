@@ -4,7 +4,7 @@ NoDent
 NoDent is a small module for Nodejs that extends standard Javascript semantics to make writing, reading and understanding
 asynchronous and callback methods more implicit and embedded in the language.
 
-It works by optionally transforming JavaScript when it is loaded into Node. The excellent parser and code generator are 
+It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are 
 courtesy of Uglify2 http://lisperator.net/uglifyjs/
 
 Basic Use and Syntax
@@ -20,6 +20,14 @@ Call an async function:
 	
 	result <<= tellYouLater("Hi there") ;
 	
+To use NoDent, you need to:
+
+	require('nodent'() ;
+	
+This must take place early in your app, and need only happen once per app - there is no need to require('nodent') in more 
+than one file, once it is loaded it will process any files ending in ".njs" or containing the 'use nodent'; at the top
+of a .js file. 
+
 That's the basics.  
 
 How (and why) it works
