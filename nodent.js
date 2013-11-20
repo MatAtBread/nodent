@@ -1,5 +1,5 @@
 /**
- * AJS - AsyncJavaScript
+ * NoDent - Asynchronus JavaScript Language extensions for Node
  * 
  * AST transforms and node loader extension 
  */
@@ -8,6 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
+		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
 		$except:"$except",
@@ -161,7 +162,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
  *  your code is already broken (NB: there are some caveats here in that static syntax transformation
  *  can't tell whats on the right isn't really a number, but we check it looks like a call rather than
  *  a variable. In this way you can "repair" any broken code). In any case, the file extension for AJS 
- *  is ".ajs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
+ *  is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
  *  use of parenthesis will allow uou to restore the original functionality.  
  *  
  */
@@ -276,7 +277,7 @@ function prettyPrint(ast) {
 	return str.toString() ;
 }
 
-var ajs = {
+var nodent = {
 		prettyPrint:prettyPrint,
 		parse:function(code,filename) { 
 			var ast = U2.parse(code.toString(), {strict:true,filename:filename}) ;
@@ -295,7 +296,7 @@ var ajs = {
 		AST:U2
 };
 
-require.extensions['.ajs'] = function(mod, filename) {
+require.extensions[config.extension] = function(mod, filename) {
 	var code,content = fs.readFileSync(filename, 'utf8');
 	var ast = ajs.parse(stripBOM(content),filename);
 	ajs.asynchronize(ast) ;
@@ -304,4 +305,4 @@ require.extensions['.ajs'] = function(mod, filename) {
 	mod._compile(code, filename+".js");	 
 };
 
-module.exports = ajs ;
+module.exports = nodent ;
