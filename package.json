@@ -1,15 +1,19 @@
 {
   "name": "nodent",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "dependencies": {
+    "uglify-js": "2.4.x"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/MatAtBread/nodent.git"
   },
+  "engine": "node >= 0.10.0",
   "keywords": [
     "Javascript",
     "language",
@@ -18,7 +22,7 @@
     "callback",
     "asynchronous"
   ],
-  "author": "Mat At Bread",
+  "author": "Mat At Bread <nodent@mailed.me.uk>",
   "license": "BSD-2-Clause",
   "bugs": {
     "url": "https://github.com/MatAtBread/nodent/issues"
