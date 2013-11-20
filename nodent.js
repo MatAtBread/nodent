@@ -298,8 +298,8 @@ var nodent = {
 
 require.extensions[config.extension] = function(mod, filename) {
 	var code,content = fs.readFileSync(filename, 'utf8');
-	var ast = ajs.parse(stripBOM(content),filename);
-	ajs.asynchronize(ast) ;
+	var ast = nodent.parse(stripBOM(content),filename);
+	nodent.asynchronize(ast) ;
 	code = prettyPrint(ast) ;
 	// Mangle filename to stop node-inspector overwriting them
 	mod._compile(code, filename+".js");	 
