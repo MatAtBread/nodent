@@ -1,0 +1,26 @@
+{
+  "name": "ajs",
+  "version": "0.1.0",
+  "description": "Asynchronous Javascript language extensions",
+  "main": "ajs.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MatAtBread/ajs.git"
+  },
+  "keywords": [
+    "Javascript",
+    "language",
+    "extensions",
+    "Node",
+    "callback",
+    "asynchronous"
+  ],
+  "author": "Mat At Bread",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/MatAtBread/ajs/issues"
+  }
+}
