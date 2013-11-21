@@ -1,5 +1,5 @@
 /**
- * NoDent - Asynchronus JavaScript Language extensions for Node
+ * NoDent - Asynchronous JavaScript Language extensions for Node
  * 
  * AST transforms and node loader extension 
  */
@@ -8,6 +8,10 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
+		/* Useful packages */
+		http:false,
+		https:false,
+		
 		useDirective:"use nodent",
 		extension:'.njs',
 		$return:"$return",
@@ -47,17 +51,37 @@ function addComment(node,value){
  * This allows us to capture a normal "return" statement and actually implement it
  * by calling the locally-scoped function $return()
  */
+var lambdaNesting = 0 ;
+var tryNesting = 0 ;
 var returnMapper = new U2.TreeTransformer(function(node,descend) {
-	if (node instanceof U2.AST_Return) {
+	if (!lambdaNesting && (node instanceof U2.AST_Return)) {
 		node = node.clone() ;
-		var value = node.value.clone() ;
+		var value = node.value?[node.value.clone()]:[] ;
 		node.value = new U2.AST_Call({
 			expression:new U2.AST_SymbolRef({name:config.$return}),
-			args:[value]
+			args:value,
 		}) ;
 		node.value.start = {} ;
 		return node ;
+	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
+		var value = node.value.clone() ;
+		node = new U2.AST_Return({
+			value:new U2.AST_Call({
+				expression:new U2.AST_SymbolRef({name:config.$error}),
+				args:[value],
+				start:{}
+			})
+		}) ;
+		return node ;
 	} else if (node instanceof U2.AST_Lambda) {
+		lambdaNesting++ ;
+		descend(node, this);
+		lambdaNesting-- ;
+		return node ;
+	} else if (node instanceof U2.AST_Try) {
+		tryNesting++ ;
+		descend(node, this);
+		tryNesting-- ;
 		return node ;
 	}  else {
 		descend(node, this);
@@ -189,20 +213,20 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 		var replace = new U2.AST_SimpleStatement({
 			body:new U2.AST_Return({
 				value:new U2.AST_Call({
-					expression:asyncCall,
+					expression:asyncCall.transform(asyncAssign),
 					args:[cbBody.body.length ?
-							new U2.AST_Call({
-								expression:new U2.AST_Dot({
-									expression: new U2.AST_Function({
-										argnames:undefinedReturn?[]:[assignee],
-												body:cbBody.body
-									}),
-									property: "bind"
+						new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: new U2.AST_Function({
+									argnames:(undefinedReturn?[]:[assignee]),
+									body:cbBody.body
 								}),
-								args:[new U2.AST_This()]
-							}):new U2.AST_Function({argnames:[],body:[]}),
-							new U2.AST_SymbolRef({name:config.$error})
-							]
+								property: "bind"
+							}),
+							args:[new U2.AST_This()]
+						}):new U2.AST_Function({argnames:[],body:[]}),
+						new U2.AST_SymbolRef({name:config.$error})
+					]
 				})
 			})
 		});
@@ -229,7 +253,7 @@ var asyncDefine = new U2.TreeTransformer(function(node, descend){
 		/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 		 * with a call to "$return" */
 		var fnBody = stmt.right.body.map(function(sub){
-			return sub.transform(returnMapper) ;
+			return sub.transform(returnMapper).transform(asyncDefine) ;
 		}) ;
 
 		replace.body = [new U2.AST_Return({
@@ -305,48 +329,127 @@ function reportParseException(ex,content,filename) {
 	console.error(filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+":: "+sample) ;
 } 
 
+var configured = false ;
 module.exports = function(opts){
+	if (!configured) {
+		/**
+		 * NoDentify (make async) a general function.
+		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
+		 * for example:
+		 * 		http.aGet = http.get.noDentify(1) ;	// The 1st argument (from zero) is the callback. errorIdx is undefined (no error)
+		 * 
+		 * The function is transformed from:
+		 * 		http.get(opts,function(result){}) ;
+		 * to:
+		 * 		http.aGet(opts)(function(result){}) ;
+		 */
+		Function.prototype.noDentify = function(idx,errorIdx,resultIdx) {
+			var fn = this ;
+			return function() {
+				var scope = this ;
+				var args = Array.prototype.slice.apply(arguments) ;
+				return function(ok,error) {
+					if (undefined==idx)	// No index specified - use the final (unspecified) parameter
+						idx = args.length ;
+					if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
+						args[idx] = ok ;
+					else {
+						args[idx] = function() {
+							var err = arguments[errorIdx] ;
+							var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
+							if (err)
+								error(err) ;
+							ok(result) ;
+						} ;
+					}
+					return fn.apply(scope,args) ;
+				}
+			};
+		};
+		
+		var stdJSLoader = require.extensions['.js'] ; 
+		if (opts.useDirective) {
+			require.extensions['.js'] = function(mod,filename) {
+				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
+				try {
+					var ast = nodent.parse(content,filename);
+					for (var i=0; i<ast.body.length; i++) {
+						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.useDirective) {
+							return require.extensions[opts.extension](mod,filename) ;
+						}
+					}
+				} catch (ex) {
+					if (ex.constructor.name=="JS_Parse_Error") 
+						reportParseException(ex,content,filename) ;
+					else
+						throw ex;
+				}
+				return stdJSLoader(mod,filename) ;
+			} ;
+		}
+	
+		require.extensions[opts.extension] = function(mod, filename) {
+			try {
+				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
+				var ast = nodent.parse(content,filename);
+				nodent.asynchronize(ast) ;
+				code = nodent.prettyPrint(ast) ;
+				// Mangle filename to stop node-inspector overwriting the original source
+				mod._compile(code, "nodent:///"+filename);
+			} catch (ex) {
+				if (ex.constructor.name=="JS_Parse_Error") 
+					reportParseException(ex,content,filename) ;
+				throw ex ;
+			}
+		};
+	}
+	
+	/**
+	 * Entirely optional: create an instance of noDent friendly
+	 * http with the API:
+	 * 		res <<== nodent.http.get(opts) ;
+	 * 			... set up some stuff with res...
+	 * 		undefined <<= res.wait ;
+	 */
+	function onIncomingMessageEnd($return,$error) {
+		this.once('end',$return) ;
+		this.once('error',$error) ;
+	}
+	if (opts.http && !config.http) {
+		var http = require('http') ;
+		nodent.http = {
+			handleResponse:
+			get:function(opts){
+				return function($return,$error){
+					http.get(opts,function(response){
+						response.wait = onIncomingMessageEnd ;
+						$return(response);
+					}).on('error',$error) ;
+				}
+			}	
+		};
+	}
+	
+	if (opts.https && !config.https) {
+		var http = require('https') ;
+		nodent.https = {
+			handleResponse:
+			get:function(opts){
+				return function($return,$error){
+					http.get(opts,function(response){
+						response.wait = onIncomingMessageEnd ;
+						$return(response);
+					}).on('error',$error) ;
+				}
+			}	
+		};
+	}
+	
 	for (var k in opts) {
 		if (!config.hasOwnProperty(k))
 			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts[k])) ;
 		config[k] = opts[k] ;
 	}
-
-	var stdJSLoader = require.extensions['.js'] ; 
-	if (config.useDirective) {
-		require.extensions['.js'] = function(mod,filename) {
-			var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			try {
-				var ast = nodent.parse(content,filename);
-				for (var i=0; i<ast.body.length; i++) {
-					if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==config.useDirective) {
-						return require.extensions[config.extension](mod,filename) ;
-					}
-				}
-			} catch (ex) {
-				if (ex.constructor.name=="JS_Parse_Error") 
-					reportParseException(ex,content,filename) ;
-				else
-					throw ex;
-			}
-			return stdJSLoader(mod,filename) ;
-		} ;
-	}
-
-	require.extensions[config.extension] = function(mod, filename) {
-		try {
-			var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var ast = nodent.parse(content,filename);
-			nodent.asynchronize(ast) ;
-			code = prettyPrint(ast) ;
-			// Mangle filename to stop node-inspector overwriting them
-			mod._compile(code, filename+".js");
-		} catch (ex) {
-			if (ex.constructor.name=="JS_Parse_Error") 
-				reportParseException(ex,content,filename) ;
-			throw ex ;
-		}
-	};
-	
+	configured = true ;
 	return nodent ;
 } ;
