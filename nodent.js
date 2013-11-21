@@ -281,7 +281,7 @@ function prettyPrint(ast) {
 var nodent = {
 		prettyPrint:prettyPrint,
 		parse:function(code,filename) { 
-			var ast = U2.parse(code.toString(), {strict:true,filename:filename}) ;
+			var ast = U2.parse(code.toString(), {strict:false,filename:filename}) ;
 			ast.figure_out_scope();
 			return ast ;
 		},
@@ -297,6 +297,14 @@ var nodent = {
 		AST:U2
 };
 
+function reportParseException(ex,content,filename) {
+	var sample = content.substring(ex.pos-20,ex.pos-1)
+			+"^"+content.substring(ex.pos,ex.pos+1)+"^"
+			+content.substring(ex.pos+1,ex.pos+21) ;
+	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
+	console.error(filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+":: "+sample) ;
+} 
+
 module.exports = function(opts){
 	for (var k in opts) {
 		if (!config.hasOwnProperty(k))
@@ -308,11 +316,18 @@ module.exports = function(opts){
 	if (config.useDirective) {
 		require.extensions['.js'] = function(mod,filename) {
 			var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var ast = nodent.parse(content,filename);
-			for (var i=0; i<ast.body.length; i++) {
-				if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==config.useDirective) {
-					return require.extensions[config.extension](mod,filename) ;
+			try {
+				var ast = nodent.parse(content,filename);
+				for (var i=0; i<ast.body.length; i++) {
+					if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==config.useDirective) {
+						return require.extensions[config.extension](mod,filename) ;
+					}
 				}
+			} catch (ex) {
+				if (ex.constructor.name=="JS_Parse_Error") 
+					reportParseException(ex,content,filename) ;
+				else
+					throw ex;
 			}
 			return stdJSLoader(mod,filename) ;
 		} ;
@@ -327,14 +342,9 @@ module.exports = function(opts){
 			// Mangle filename to stop node-inspector overwriting them
 			mod._compile(code, filename+".js");
 		} catch (ex) {
-			if (ex.constructor.name=="JS_Parse_Error") {
-				console.error(content.substring(ex.pos-20,ex.pos-1)
-						+"^"+content.substring(ex.pos,ex.pos+1)+"^"
-						+content.substring(ex.pos+1,ex.pos+21)) ;
-				console.error(filename+": "+ex.toString()) ;
-			} else {
-				throw ex ;
-			}
+			if (ex.constructor.name=="JS_Parse_Error") 
+				reportParseException(ex,content,filename) ;
+			throw ex ;
 		}
 	};
 	
