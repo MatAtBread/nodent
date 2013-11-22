@@ -9,9 +9,7 @@ var U2 = require("uglify-js");
 
 var config = {
 		/* Useful packages */
-		http:false,
-		https:false,
-		
+		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
 		$return:"$return",
@@ -21,10 +19,6 @@ var config = {
 		async:"async",
 		assign:"<<=",
 		ltor:true	/* true: val <<= async(),   false: async() <<= val */
-};
-
-global[config.$error] = function(err) {
-	throw err ;
 };
 
 var decorate = new U2.TreeWalker(function(node) {
@@ -331,14 +325,22 @@ function reportParseException(ex,content,filename) {
 
 var configured = false ;
 module.exports = function(opts){
-	if (!opts.config)
-		opts.config = config ;
+	if (!opts)
+		opts = config ;
 	
 	if (!configured) {
+		// Fill in default config values
 		for (var k in config) {
-			if (!opts.config.hasOwnProperty(k))
-				opts.config[k] = config[k] ;
+			if (!opts.hasOwnProperty(k))
+				opts[k] = config[k] ;
 		}
+
+		/**
+		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
+		 */
+		global[config.$error] = function(err) {
+			throw err ;
+		};
 
 		/**
 		 * NoDentify (make async) a general function.
@@ -376,14 +378,14 @@ module.exports = function(opts){
 		};
 		
 		var stdJSLoader = require.extensions['.js'] ; 
-		if (opts.config.useDirective) {
+		if (opts.useDirective) {
 			require.extensions['.js'] = function(mod,filename) {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				try {
 					var ast = nodent.parse(content,filename);
 					for (var i=0; i<ast.body.length; i++) {
-						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.config.useDirective) {
-							return require.extensions[opts.config.extension](mod,filename) ;
+						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.useDirective) {
+							return require.extensions[opts.extension](mod,filename) ;
 						}
 					}
 				} catch (ex) {
@@ -396,7 +398,7 @@ module.exports = function(opts){
 			} ;
 		}
 	
-		require.extensions[opts.config.extension] = function(mod, filename) {
+		require.extensions[opts.extension] = function(mod, filename) {
 			try {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				var ast = nodent.parse(content,filename);
@@ -412,13 +414,16 @@ module.exports = function(opts){
 		};
 	}
 	
-	for (var k in opts) if (opts[k] && !config[k])
-		nodent[opts[k]] = require("./covers/"+k)(nodent) ;
+	opts.use.forEach(function(k){
+		if (!nodent[k])
+			nodent[k] = require("./covers/"+k)(nodent) ;
+	});
 
-	for (var k in opts.config) {
+	for (var k in opts) {
 		if (!config.hasOwnProperty(k))
-			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts.config[k])) ;
-		config[k] = opts.config[k] ;
+			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts[k])) ;
+		if (k!="use") 
+			config[k] = opts[k] ;
 	}
 	configured = true ;
 	return nodent ;
