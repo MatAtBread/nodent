@@ -331,7 +331,15 @@ function reportParseException(ex,content,filename) {
 
 var configured = false ;
 module.exports = function(opts){
+	if (!opts.config)
+		opts.config = config ;
+	
 	if (!configured) {
+		for (var k in config) {
+			if (!opts.config.hasOwnProperty(k))
+				opts.config[k] = config[k] ;
+		}
+
 		/**
 		 * NoDentify (make async) a general function.
 		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
@@ -368,14 +376,14 @@ module.exports = function(opts){
 		};
 		
 		var stdJSLoader = require.extensions['.js'] ; 
-		if (opts.useDirective) {
+		if (opts.config.useDirective) {
 			require.extensions['.js'] = function(mod,filename) {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				try {
 					var ast = nodent.parse(content,filename);
 					for (var i=0; i<ast.body.length; i++) {
-						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.useDirective) {
-							return require.extensions[opts.extension](mod,filename) ;
+						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.config.useDirective) {
+							return require.extensions[opts.config.extension](mod,filename) ;
 						}
 					}
 				} catch (ex) {
@@ -388,7 +396,7 @@ module.exports = function(opts){
 			} ;
 		}
 	
-		require.extensions[opts.extension] = function(mod, filename) {
+		require.extensions[opts.config.extension] = function(mod, filename) {
 			try {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				var ast = nodent.parse(content,filename);
@@ -404,51 +412,13 @@ module.exports = function(opts){
 		};
 	}
 	
-	/**
-	 * Entirely optional: create an instance of noDent friendly
-	 * http with the API:
-	 * 		res <<== nodent.http.get(opts) ;
-	 * 			... set up some stuff with res...
-	 * 		undefined <<= res.wait ;
-	 */
-	function onIncomingMessageEnd($return,$error) {
-		this.once('end',$return) ;
-		this.once('error',$error) ;
-	}
-	if (opts.http && !config.http) {
-		var http = require('http') ;
-		nodent.http = {
-			handleResponse:
-			get:function(opts){
-				return function($return,$error){
-					http.get(opts,function(response){
-						response.wait = onIncomingMessageEnd ;
-						$return(response);
-					}).on('error',$error) ;
-				}
-			}	
-		};
-	}
-	
-	if (opts.https && !config.https) {
-		var http = require('https') ;
-		nodent.https = {
-			handleResponse:
-			get:function(opts){
-				return function($return,$error){
-					http.get(opts,function(response){
-						response.wait = onIncomingMessageEnd ;
-						$return(response);
-					}).on('error',$error) ;
-				}
-			}	
-		};
-	}
-	
-	for (var k in opts) {
+	for (var k in opts) if (opts[k] && !config[k])
+		nodent[opts[k]] = require("./covers/"+k)(nodent) ;
+
+	for (var k in opts.config) {
 		if (!config.hasOwnProperty(k))
-			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts[k])) ;
-		config[k] = opts[k] ;
+			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(opts.config[k])) ;
+		config[k] = opts.config[k] ;
 	}
 	configured = true ;
 	return nodent ;

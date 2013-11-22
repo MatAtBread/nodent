@@ -22,13 +22,13 @@ Call an async function:
 	
 To use NoDent, you need to:
 
-	require('nodent'() ;
+	require('nodent')() ;
 	
 This must take place early in your app, and need only happen once per app - there is no need to require('nodent') in more 
 than one file, once it is loaded it will process any files ending in ".njs" or containing the 'use nodent'; at the top
 of a .js file. 
 
-That's the basics.  
+That's the basics.
 
 How (and why) it works
 ======================
@@ -59,6 +59,8 @@ is mapped to:
 				}
 			}
 		}
+
+(NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demontsrated in the exmaple above).
 
 Remember, we're simply transforming a syntactic short-cut into a "normal" JS function. Don't be confused by the
 $return and $error identifiers (which are all configuarble in any case), they're just normal JS identifiers (in fact,
@@ -151,5 +153,45 @@ your code is already broken (NB: there are some caveats here in that static synt
 can't tell whats on the right isn't really a number, but we check it looks like a call rather than
 a variable. In this way you can "repair" any broken code). In any case, the file extension for AJS 
 is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
-use of parenthesis will allow uou to restore the original functionality.  
+use of parenthesis will allow uou to restore the original functionality.
+
+Built-in conversions
+====================
+Nodentify has a (small but possibly growing) set of covers for common Node modules. Initially these are "http" and "https". You specify these through the parameter when requiring nodent:
+
+	require('nodent')({http:true}) ;
+
+Nodent will require and instantiate the http library for you and attach it to the return, so you can say:
+
+	var http = require('nodent')({http:true}).http ;
+
+In this early release, only http.get is covered. The nodent version of http.get has JS "funcback" the signature:
+
+	nodent.http.get(options)(function(response){},function(error){}) ;
+
+Hopefully you'll recognise this and be able to see you can now invoke it like:
+
+	response <<= nodent.http.get(options) ;
+
+To make life even easier, the response is covered too, just before the first callback is invoked with an addition "funcback" called "wait", that waits for a named event. The whole setup is therefore:
+
+	var http = require('nodent')({http:true}).http ;
+
+	/* Make a request. Nodent creates the callbacks, etc. for you
+	and so you can read the line as "wait for the response to be generated" */	
+	response <<= http.get("https://npmjs.org/~matatbread") ;
+
+	var body = "" ;
+	response.on('data,function(chunk){ body += chunk ;} ;
+
+	/* Wait for the "end" event */
+	undefined <<= response.wait('end') ;
+
+	/* The response is complete, print it out */
+	console.log('The response is:\n"+body) ;
+
+
+
+
+
  
