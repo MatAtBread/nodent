@@ -312,15 +312,20 @@ var nodent = {
 			ast.walk(decorate) ;
 			return ast ;
 		},
+		require:function(cover) {
+			if (!nodent[cover])
+				nodent[cover] = require("./covers/"+cover)(nodent) ;
+			return nodent[cover] ;
+		},
 		AST:U2
 };
 
 function reportParseException(ex,content,filename) {
-	var sample = content.substring(ex.pos-20,ex.pos-1)
+	var sample = content.substring(ex.pos-30,ex.pos-1)
 			+"^"+content.substring(ex.pos,ex.pos+1)+"^"
-			+content.substring(ex.pos+1,ex.pos+21) ;
+			+content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
-	console.error(filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+":: "+sample) ;
+	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
 
 var configured = false ;
@@ -391,8 +396,7 @@ module.exports = function(opts){
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
 						reportParseException(ex,content,filename) ;
-					else
-						throw ex;
+					console.log("NoDent JS: Warning - couldn't parse "+filename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 				}
 				return stdJSLoader(mod,filename) ;
 			} ;
@@ -414,10 +418,7 @@ module.exports = function(opts){
 		};
 	}
 	
-	opts.use.forEach(function(k){
-		if (!nodent[k])
-			nodent[k] = require("./covers/"+k)(nodent) ;
-	});
+	opts.use.forEach(nodent.require) ;
 
 	for (var k in opts) {
 		if (!config.hasOwnProperty(k))
