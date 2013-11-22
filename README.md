@@ -182,7 +182,7 @@ To make life even easier, the response is covered too, just before the first cal
 	response <<= http.get("https://npmjs.org/~matatbread") ;
 
 	var body = "" ;
-	response.on('data,function(chunk){ body += chunk ;} ;
+	response.on('data',function(chunk){ body += chunk ;} ;
 
 	/* Wait for the "end" event */
 	undefined <<= response.wait('end') ;
