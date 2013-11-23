@@ -8,6 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
+		sourceMapping:true,
 		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
@@ -28,12 +29,45 @@ var decorate = new U2.TreeWalker(function(node) {
 function addComment(node,value){
 	if (!node.start)
 		node.start = new U2.AST_Token({comments_before:[]}) ;
+	node.start.comments_before = node.start.comments_before || [] ;
 	node.start.comments_before.push(new U2.AST_Token({
 		type:"comment2",
 		value:value
 	})) ;
 	return node ;
 }
+
+/*var first = null, last = null ;
+var getRange = new U2.TreeWalker(function(node){
+	if (node.start) {
+		if (!first || first.pos > node.start.pos)
+			first = node.start ;
+		if (!last || last.pos < node.start.pos)
+			last = node.start ;
+	}
+	if (node.end) {
+		if (!first || first.pos > node.end.pos)
+			first = node.end ;
+		if (!last || last.pos < node.end.pos)
+			last = node.end ;
+	}
+l}) ;
+
+Object.defineProperties(U2.AST_Node.prototype,{
+	tk:{
+		get:global.v8debug?function () {
+			var node = this ;
+			first = last = null ;
+			node.walk(getRange) ;
+			if (first)
+				node.start = node.start || new U2.AST_Token({file:first.file,line:first.line,col:first.col,pos:first.pos,endpos:first.endpos,name:node.name}) ;
+			if (last)
+				node.end = node.end || new U2.AST_Token({file:last.file,line:last.line,col:last.col,pos:last.pos,endpos:last.endpos,name:node.name}) ;
+			return node ;
+		}:function(){return this}
+	}
+});*/
+
 /**
  * returnMapper is an Uglify2 transformer that is used to change statements such as:
  * 		return some-expression ;
@@ -46,27 +80,29 @@ function addComment(node,value){
  */
 var lambdaNesting = 0 ;
 var tryNesting = 0 ;
+
 var returnMapper = new U2.TreeTransformer(function(node,descend) {
 	if (!lambdaNesting && (node instanceof U2.AST_Return)) {
-		node = node.clone() ;
-		var value = node.value?[node.value.clone()]:[] ;
-		node.value = new U2.AST_Call({
+		var repl = node.clone() ;
+		var value = repl.value?[repl.value.clone()]:[] ;
+		repl.value = new U2.AST_Call({
 			expression:new U2.AST_SymbolRef({name:config.$return}),
-			args:value,
+			args:value
 		}) ;
-		node.value.start = node.start ;
-		node.value.end = node.end ;
-		return node ;
+		repl.start = repl.value.start = node.start ;
+		repl.end = repl.value.end = node.end ;
+		return repl ;
 	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
 		var value = node.value.clone() ;
-		node = new U2.AST_Return({
+		var repl = new U2.AST_Return({
 			value:new U2.AST_Call({
 				expression:new U2.AST_SymbolRef({name:config.$error}),
-				args:[value],
-				start:{}
+				args:[value]
 			})
 		}) ;
-		return node ;
+		repl.start = repl.value.start = node.start ;
+		repl.end = repl.value.end = node.end ;
+		return repl ;
 	} else if (node instanceof U2.AST_Lambda) {
 		lambdaNesting++ ;
 		descend(node, this);
@@ -224,7 +260,7 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 				})
 			})
 		});
-		addComment(replace,"*"+(undefinedReturn?"":assignee.name)+" <<= *") ;
+		addComment(replace.body.value,"*"+(undefinedReturn?"":assignee.name)+" <<= *") ;
 		return replace ;
 	} else {
 		descend(node, this);
@@ -270,7 +306,6 @@ var asyncDefine = new U2.TreeTransformer(function(node, descend){
 				}),
 				args:[new U2.AST_This()]
 			})
-
 		})] ;
 		addComment(replace,"* async- *") ;
 		return replace ;
@@ -290,21 +325,37 @@ function stripBOM(content) {
 	return content;
 }
 
+function mangle(fn) {
+	return fn+":nodent" ;
+}
+function btoa(str) {
+    var buffer ;
+
+    if (str instanceof Buffer) {
+      buffer = str;
+    } else {
+      buffer = new Buffer(str.toString(), 'binary');
+    }
+
+    return buffer.toString('base64');
+  }
+
 var nodent = {
 		parse:function(code,filename) {
-			code = code.toString() ;
-			var r = {} ;
-			r.ast = U2.parse(code, {strict:false,filename:filename}) ;
+			var r = { origCode:code.toString() } ;
+			r.ast = U2.parse(r.origCode, {strict:false,filename:filename}) ;
 			r.ast.figure_out_scope();
 			r.filename = filename ;
-			r.srcMap = U2.SourceMap({filename:filename}) ;
-			r.ast.walk(new U2.TreeWalker(function(node){
-				function add(token) {
-					if (token) r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,(token.type=="name")?token.value:undefined) ;
-				}
-				add(node.start) ;
-				add(node.end) ;
-			})) ;
+			if (config.sourceMapping) {
+				r.srcMap = U2.SourceMap({filename:filename}) ;
+				r.ast.walk(new U2.TreeWalker(function(node){
+					function add(token) {
+						if (token) r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,(token.type=="name")?token.value:undefined) ;
+					}
+					add(node.start) ;
+					//add(node.end) ;
+				})) ;
+			}
 			return r ;
 		},
 		asynchronize:function(pr) {
@@ -313,11 +364,19 @@ var nodent = {
 			return pr ;
 		},
 		prettyPrint:function(pr) {
-			var map = U2.SourceMap({file:pr.filename+".js",orig:pr.srcMap.toString()}) ;
+			var map = U2.SourceMap({file:mangle(pr.filename),orig: (config.sourceMapping?pr.srcMap.toString():null)}) ;
 			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
 			pr.ast.print(str);
-			var mapUrl = "data:text/plain;charset=utf-8,"+encodeURIComponent(map.toString()) ; 
-			return "//# sourceMappingURL="+mapUrl+"\n"+str.toString() ;
+			var jsmap = JSON.parse(map.toString()) ;
+			//jsmap.sources[0] = "data:text/plain;charset=utf-8,"+encodeURIComponent(pr.origCode) ;
+			jsmap.sources[0] = mangle(jsmap.sources[0]) ;
+			jsmap.sourcesContent = [pr.origCode] ;
+			nodent.sourceMaps = nodent.sourceMaps || {} ;
+			nodent.sourceMaps[pr.filename] = JSON.stringify(jsmap) ;
+			var mapUrl = "data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap)) ; 
+			//var mapUrl = "http://86.7.115.85:8124"+pr.filename+".map" ; 
+			//console.log("srcMap:\n"+JSON.stringify(jsmap)) ;
+			return str.toString()+(config.sourceMapping?("\n//# sourceMappingURL="+mapUrl+"\n"):"") ;
 		},
 		decorate:function(pr) {
 			pr.ast.walk(decorate) ;
@@ -419,7 +478,7 @@ module.exports = function(opts){
 				nodent.asynchronize(pr) ;
 				code = nodent.prettyPrint(pr) ;
 				// Mangle filename to stop node-inspector overwriting the original source
-				mod._compile(code, filename+".js");
+				mod._compile(code, mangle(filename));
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
 					reportParseException(ex,content,filename) ;
