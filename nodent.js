@@ -8,7 +8,6 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
-		/* Useful packages */
 		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
@@ -55,7 +54,8 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 			expression:new U2.AST_SymbolRef({name:config.$return}),
 			args:value,
 		}) ;
-		node.value.start = {} ;
+		node.value.start = node.start ;
+		node.value.end = node.end ;
 		return node ;
 	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
 		var value = node.value.clone() ;
@@ -290,27 +290,37 @@ function stripBOM(content) {
 	return content;
 }
 
-function prettyPrint(ast) {
-	var str = U2.OutputStream({beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
-	ast.print(str);
-	return str.toString() ;
-}
-
 var nodent = {
-		prettyPrint:prettyPrint,
-		parse:function(code,filename) { 
-			var ast = U2.parse(code.toString(), {strict:false,filename:filename}) ;
-			ast.figure_out_scope();
-			return ast ;
+		parse:function(code,filename) {
+			code = code.toString() ;
+			var r = {} ;
+			r.ast = U2.parse(code, {strict:false,filename:filename}) ;
+			r.ast.figure_out_scope();
+			r.filename = filename ;
+			r.srcMap = U2.SourceMap({filename:filename}) ;
+			r.ast.walk(new U2.TreeWalker(function(node){
+				function add(token) {
+					if (token) r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,(token.type=="name")?token.value:undefined) ;
+				}
+				add(node.start) ;
+				add(node.end) ;
+			})) ;
+			return r ;
 		},
-		asynchronize:function(ast) {
-			ast = ast.transform(asyncDefine) ; 
-			ast = ast.transform(asyncAssign) ;
-			return ast ;
+		asynchronize:function(pr) {
+			pr.ast = pr.ast.transform(asyncDefine) ; 
+			pr.ast = pr.ast.transform(asyncAssign) ;
+			return pr ;
 		},
-		decorate:function(ast) {
-			ast.walk(decorate) ;
-			return ast ;
+		prettyPrint:function(pr) {
+			var map = U2.SourceMap({file:pr.filename+".js",orig:pr.srcMap.toString()}) ;
+			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
+			pr.ast.print(str);
+			var mapUrl = "data:text/plain;charset=utf-8,"+encodeURIComponent(map.toString()) ; 
+			return "//# sourceMappingURL="+mapUrl+"\n"+str.toString() ;
+		},
+		decorate:function(pr) {
+			pr.ast.walk(decorate) ;
 		},
 		require:function(cover) {
 			if (!nodent[cover])
@@ -387,9 +397,9 @@ module.exports = function(opts){
 			require.extensions['.js'] = function(mod,filename) {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				try {
-					var ast = nodent.parse(content,filename);
-					for (var i=0; i<ast.body.length; i++) {
-						if (ast.body[i] instanceof U2.AST_Directive && ast.body[i].value==opts.useDirective) {
+					var pr = nodent.parse(content,filename);
+					for (var i=0; i<pr.ast.body.length; i++) {
+						if (pr.ast.body[i] instanceof U2.AST_Directive && pr.ast.body[i].value==opts.useDirective) {
 							return require.extensions[opts.extension](mod,filename) ;
 						}
 					}
@@ -405,11 +415,11 @@ module.exports = function(opts){
 		require.extensions[opts.extension] = function(mod, filename) {
 			try {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var ast = nodent.parse(content,filename);
-				nodent.asynchronize(ast) ;
-				code = nodent.prettyPrint(ast) ;
+				var pr = nodent.parse(content,filename);
+				nodent.asynchronize(pr) ;
+				code = nodent.prettyPrint(pr) ;
 				// Mangle filename to stop node-inspector overwriting the original source
-				mod._compile(code, "nodent:///"+filename);
+				mod._compile(code, filename+".js");
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
 					reportParseException(ex,content,filename) ;
