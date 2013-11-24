@@ -223,9 +223,6 @@ function stripBOM(content) {
 	return content;
 }
 
-function mangle(fn) {
-	return fn+":nodent" ;
-}
 function btoa(str) {
     var buffer ;
 
@@ -279,50 +276,45 @@ function createMappingPadding(m) {
 }
 
 var nodent = {
-		parse:function(code,filename) {
-			var r = { origCode:code.toString() } ;
-			r.ast = U2.parse(r.origCode, {strict:false,filename:filename}) ;
+		parse:function(code,origFilename) {
+			var r = { origCode:code.toString(), filename:origFilename } ;
+			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
 			r.ast.figure_out_scope();
-			r.filename = filename ;
 			if (config.sourceMapping) {
-				r.srcMap = U2.SourceMap({filename:filename}) ;
-				var n = 0 ;
+				r.srcMap = U2.SourceMap({file:r.filename}) ;
 				r.ast.walk(new U2.TreeWalker(function(node,descend){
-					n += 1 ;
-					var prev = n ;
 					descend() ;
-					if (prev>=n-1) {
-						function add(token,name) {
-							if (token) {
-								r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,name) ;	
-							} 
-						}
-						add(node.start,node.print_to_string()) ;
-					}
+					var token = node.start ;
+					if (token) {
+						r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col/*,node.print_to_string()*/) ;	
+					} 
 					return true; // prevent descending again
 				})) ;
 			}
 			return r ;
 		},
 		asynchronize:function(pr) {
+			pr.filename += ".nodent" ;
 			pr.ast = pr.ast.transform(asyncDefine) ; 
 			pr.ast = pr.ast.transform(asyncAssign) ;
 			return pr ;
 		},
 		prettyPrint:function(pr) {
-			var map = U2.SourceMap({file:mangle(pr.filename),orig: (config.sourceMapping?pr.srcMap.toString():null)}) ;
+			var map ;
+			if (config.sourceMapping)
+				map = U2.SourceMap({file:pr.filename,orig: pr.srcMap.toString()}) ;
+			
 			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
 			pr.ast.print(str);
 			
-			createMappingPadding(map.get()._mappings) ;
-			
-			var jsmap = JSON.parse(map.toString()) ;
-			jsmap.sources[0] = mangle(jsmap.sources[0]) ;
-			jsmap.sourcesContent = [pr.origCode] ;
-			nodent.sourceMaps = nodent.sourceMaps || {} ;
-			nodent.sourceMaps[pr.filename] = JSON.stringify(jsmap) ;
-			var mapUrl = "data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap)) ; 
-			return str.toString()+(config.sourceMapping?("\n//# sourceMappingURL="+mapUrl+"\n"):"") ;
+			if (map) {
+				createMappingPadding(map.get()._mappings) ;
+				
+				var jsmap = JSON.parse(map.toString()) ;
+				jsmap.sourcesContent = [pr.origCode] ;
+				var mapUrl = "/*\n//@ sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))+"\n*/" ;
+			}
+			pr.code = str.toString()+(map?mapUrl:"") ;
 		},
 		decorate:function(pr) {
 			pr.ast.walk(decorate) ;
@@ -419,12 +411,11 @@ module.exports = function(opts){
 	
 		require.extensions[opts.extension] = function(mod, filename) {
 			try {
-				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
+				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				var pr = nodent.parse(content,filename);
 				nodent.asynchronize(pr) ;
-				code = nodent.prettyPrint(pr) ;
-				// Mangle filename to stop node-inspector overwriting the original source
-				mod._compile(code, mangle(filename));
+				nodent.prettyPrint(pr) ;
+				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
 					reportParseException(ex,content,filename) ;
