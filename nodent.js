@@ -27,46 +27,15 @@ var decorate = new U2.TreeWalker(function(node) {
 });
 
 function addComment(node,value){
-	if (!node.start)
+	/*if (!node.start)
 		node.start = new U2.AST_Token({comments_before:[]}) ;
 	node.start.comments_before = node.start.comments_before || [] ;
 	node.start.comments_before.push(new U2.AST_Token({
 		type:"comment2",
 		value:value
-	})) ;
+	})) ;*/
 	return node ;
 }
-
-/*var first = null, last = null ;
-var getRange = new U2.TreeWalker(function(node){
-	if (node.start) {
-		if (!first || first.pos > node.start.pos)
-			first = node.start ;
-		if (!last || last.pos < node.start.pos)
-			last = node.start ;
-	}
-	if (node.end) {
-		if (!first || first.pos > node.end.pos)
-			first = node.end ;
-		if (!last || last.pos < node.end.pos)
-			last = node.end ;
-	}
-l}) ;
-
-Object.defineProperties(U2.AST_Node.prototype,{
-	tk:{
-		get:global.v8debug?function () {
-			var node = this ;
-			first = last = null ;
-			node.walk(getRange) ;
-			if (first)
-				node.start = node.start || new U2.AST_Token({file:first.file,line:first.line,col:first.col,pos:first.pos,endpos:first.endpos,name:node.name}) ;
-			if (last)
-				node.end = node.end || new U2.AST_Token({file:last.file,line:last.line,col:last.col,pos:last.pos,endpos:last.endpos,name:node.name}) ;
-			return node ;
-		}:function(){return this}
-	}
-});*/
 
 /**
  * returnMapper is an Uglify2 transformer that is used to change statements such as:
@@ -89,8 +58,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 			expression:new U2.AST_SymbolRef({name:config.$return}),
 			args:value
 		}) ;
-		repl.start = repl.value.start = node.start ;
-		repl.end = repl.value.end = node.end ;
+		repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
 		return repl ;
 	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
 		var value = node.value.clone() ;
@@ -118,109 +86,19 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		return node ;
 	}
 });
-
 /**
- * This is the principal AST transformer that does two mappings, one to define "async" functions
- * and one to call them using a nice syntax.
+ * Uglify transormer: Transform
  * 
- * The async function definition is:
- * 		function myFunc(args) { 
- * 			body ; 
- * 			return expr ; 
- * 		}
+ 	x <<= y ;
+ 	body ;
  *
- * is mapped to:
+ * to
  * 
- * 		function myFunc(args) { 	
- * 			return function($return,$error) {
- * 				try {
- * 					body ;
- * 					$return(expr) ;
- * 				} catch (ex) {
- * 					$error(ex) ;
- * 				}
- * 			}
- * 		}
- * 
- * Remember, we simply transforming a syntactic short-cut into a "normal" JS function. In this case, we're
- * using the "funcback" pattern, where a function returns a function that expects two callback arguments, 
- * one to handle the result, and another to handle exceptions (bear with me - it sounds worse than it is).
- * 
- * This JS pattern looks like the second function above, and is called like this:
- * 		myFunc(args)(function(returnValue){ -- do something -- }, function(exception) { -- do something else }) ;
- * 
- * The reason for using this pattern is to make it easy to chain asynchronous callbacks together - myFunc can 
- * "return" whenever it likes, and can pass the handler functions onto another async function with too much nasty
- * indenting.
- * 
- * However, as the sample above shows, it's still very "noisy" in code terms - lots of anonymous functions and
- * functions retruning functions. AJS introduces two syntactic constructs to make this pattern readable and
- * "natural" for all those procedural, synchronous guys out there.
- * 
- * To declare an asynchronous function, put "async-" in front of the definition. Note "async" is like a modifier,
- * there's no variable or function called "async", the syntax transformer just checks for that lexical token. This
- * is how it looks:
- * 
- *  async-function myFunc(args) {
- *  	if (!args)
- *  		throw new Error("Missing parameters") ;
- *  	return doSomething(args) ;
- *  }
- *  
- *  The ACTUAL function created will be:
- *  	function myFunc(args) {
- *  		return function($return,$error) {
- *  			try {
- *  				if (!args)
- *  					throw new Error("Missing parameters") ;
- *  				return $return(doSomething(args)) ;
- *  			} catch ($except) {
- *  				$error($except) ;
- *  			}
- *  		}.bind(this) ;
- *  	}
- *  
- *  This is just a normal JS function, that you can call like:
- *  
- *  	myFunc(args)(function(success){...}, function(except){...}) ;
- *  
- *  There's no useful "return" as such (although it is reasonable and easy to implement async
- *  cancellation by returning an object that can be invoked to cancel the async operation). The 
- *  result of executing "doSomething" is passed back into "success" in the example above, unless
- *  an exception is thrown, in which case it ends up in the "except" parameter. Note that
- *  although this is designed for asynchronous callbacks, transforming the source doesn't ensure
- *  that. The above example looks pretty synchronous to me, and a few lines like those above
- *  would get pretty messy pretty quickly.
- *  
- *  So, the other transformation is a shorter call sequence. It's meant to look like a special
- *  kind of assignment (because it is).
- *  
- *  	result <<= myFunc(args) ;
- *  	moreStuff(result) ;
- *  
- *  This is transformed into the code:
- *  	
- *  	return myFunc(args)(function(result) {
- *  		moreStuff(result) ;
- *  	},$error) ;
- *  
- *  Yes, it hides a return statement in your code. If you step line by line, you WON'T hit "moreStuff"
- *  immediately after executing "<<=", it will be called later, when myFunc invokes your "success" handler.
- *  
- * 	Note that you don't need to declare the left hand side of "<<=" (i.e. "result" in the example). It's
- *  actually created as a "parameter" to the rest of the code in the block.
- *  
- *  Why "<<="? Not modifying JS syntax means existing editors and checkers shouldn't complain.
- *  Introducing new operators would mean updating the parser and might clash with future JS changes. But won't 
- *  it break existing JS code? Only code that is already potentially broken - the right hand side of - and <<= 
- *  are defined by JS not to be function definitions. If you have functions to the right of - and <<=
- *  your code is already broken (NB: there are some caveats here in that static syntax transformation
- *  can't tell whats on the right isn't really a number, but we check it looks like a call rather than
- *  a variable. In this way you can "repair" any broken code). In any case, the file extension for AJS 
- *  is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
- *  use of parenthesis will allow uou to restore the original functionality.  
- *  
+	return y(f(x){ body },bind(this),$error) ; 
+ *
  */
+
+
 var asyncAssign = new U2.TreeTransformer(function(node, descend){
 	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
 	var stmt = isSimple?node.body:node ;
@@ -267,6 +145,26 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 		return node ;
 	}
 }) ;
+
+/**
+ * Uglify transormer: Transform 
+  	async-function test(x) {
+ 		return x*2 ;
+ 	};
+ *
+ * to
+ * 
+  function test(x) {
+    return function($return, $error) {
+        try {
+            return $return(x * 2);
+        } catch ($except) {
+            $error($except)
+        }
+    }.bind(this);
+}
+ *
+ */
 
 var asyncDefine = new U2.TreeTransformer(function(node, descend){
 	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
@@ -338,7 +236,47 @@ function btoa(str) {
     }
 
     return buffer.toString('base64');
-  }
+}
+// Hack: go though and create "padding" mappings between lines
+// Without this, whole blocks of code resolve to call & return sequences.
+// This has dependency on the implemenation of source-map  which is
+// not a healthy thing to have.
+function createMappingPadding(m) {
+	m.sort(function(a,b){
+		if (a.generatedLine < b.generatedLine)
+			return -1 ;
+		if (a.generatedLine > b.generatedLine)
+			return 1 ;
+		if (a.generatedColumn < b.generatedColumn)
+			return -1 ;
+		if (a.generatedColumn > b.generatedColumn)
+			return 1 ;
+		return (a.name || "").length - (b.name || "").length ;
+	}) ;
+	
+	var i = 1 ;
+	while (i<m.length) {
+		if (m[i-1].generatedLine < m[i].generatedLine){
+			m.splice(i,0,{
+		        generatedColumn: 0,
+		        generatedLine: m[i-1].generatedLine+1,
+				originalColumn: 0,
+				originalLine: m[i-1].originalLine+1,
+		        source: m[i-1].source
+		      }) ;
+			i += 1 ;
+		}
+		i += 1 ;
+	}
+	if (m.length)
+		m.push({
+	        generatedColumn: 0,
+	        generatedLine: m[m.length-1].generatedLine+1,
+			originalColumn: 0,
+			originalLine: m[m.length-1].originalLine+1,
+	        source: m[m.length-1].source
+	      }) ;
+}
 
 var nodent = {
 		parse:function(code,filename) {
@@ -348,12 +286,20 @@ var nodent = {
 			r.filename = filename ;
 			if (config.sourceMapping) {
 				r.srcMap = U2.SourceMap({filename:filename}) ;
-				r.ast.walk(new U2.TreeWalker(function(node){
-					function add(token) {
-						if (token) r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,(token.type=="name")?token.value:undefined) ;
+				var n = 0 ;
+				r.ast.walk(new U2.TreeWalker(function(node,descend){
+					n += 1 ;
+					var prev = n ;
+					descend() ;
+					if (prev>=n-1) {
+						function add(token,name) {
+							if (token) {
+								r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col,name) ;	
+							} 
+						}
+						add(node.start,node.print_to_string()) ;
 					}
-					add(node.start) ;
-					//add(node.end) ;
+					return true; // prevent descending again
 				})) ;
 			}
 			return r ;
@@ -367,15 +313,15 @@ var nodent = {
 			var map = U2.SourceMap({file:mangle(pr.filename),orig: (config.sourceMapping?pr.srcMap.toString():null)}) ;
 			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
 			pr.ast.print(str);
+			
+			createMappingPadding(map.get()._mappings) ;
+			
 			var jsmap = JSON.parse(map.toString()) ;
-			//jsmap.sources[0] = "data:text/plain;charset=utf-8,"+encodeURIComponent(pr.origCode) ;
 			jsmap.sources[0] = mangle(jsmap.sources[0]) ;
 			jsmap.sourcesContent = [pr.origCode] ;
 			nodent.sourceMaps = nodent.sourceMaps || {} ;
 			nodent.sourceMaps[pr.filename] = JSON.stringify(jsmap) ;
 			var mapUrl = "data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap)) ; 
-			//var mapUrl = "http://86.7.115.85:8124"+pr.filename+".map" ; 
-			//console.log("srcMap:\n"+JSON.stringify(jsmap)) ;
 			return str.toString()+(config.sourceMapping?("\n//# sourceMappingURL="+mapUrl+"\n"):"") ;
 		},
 		decorate:function(pr) {

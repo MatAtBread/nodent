@@ -1,11 +1,9 @@
 NoDent
 ======
 
-NoDent is a small module for Nodejs that extends standard Javascript semantics to make writing, reading and understanding
-asynchronous and callback methods more implicit and embedded in the language.
+NoDent is a small module for Nodejs that extends standard Javascript semantics to make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language.
 
-It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are 
-courtesy of Uglify2 http://lisperator.net/uglifyjs/
+It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are courtesy of Uglify2 http://lisperator.net/uglifyjs/
 
 Basic Use and Syntax
 ====================
@@ -29,6 +27,10 @@ than one file, once it is loaded it will process any files ending in ".njs" or c
 of a .js file. 
 
 That's the basics.
+
+Status
+======
+NoDent is currently actively developing and in use in a commercial project. The API & Syntax are stable, but not entirely frozen. If you wish to build it is recommended you build against a specific major.minor version.
 
 How (and why) it works
 ======================
@@ -159,13 +161,13 @@ Built-in conversions
 ====================
 Nodentify has a (small but possibly growing) set of covers for common Node modules. Initially these are "http" and "https". You specify these through the parameter when requiring nodent:
 
-	require('nodent')({http:true}) ;
+	require('nodent')({use:['http']}) ;
 
 Nodent will require and instantiate the http library for you and attach it to the return, so you can say:
 
-	var http = require('nodent')({http:true}).http ;
+	var http = require('nodent')({use:['http']}).http ;
 
-In this early release, only http.get is covered. The nodent version of http.get has JS "funcback" the signature:
+In this early release, only http.get & http.request are covered. The nodent version of http.get has JS "funcback" the signature:
 
 	nodent.http.get(options)(function(response){},function(error){}) ;
 
@@ -189,6 +191,20 @@ To make life even easier, the response is covered too, just before the first cal
 
 	/* The response is complete, print it out */
 	console.log('The response is:\n"+body) ;
+
+http.request is similar, but not identical as you will need access to the request object to end it (amongst other things):
+
+	req <<= http.request(options) ;
+	req.end() ;	 // Do whatever you need to with the request
+	// Wait for the "response" event
+	response <<= req.wait('response') ;
+	var body = "" ;
+	response.on('data',function(chunk){ body += chunk ;} ;
+	// Wait for the response to be completed
+	undefined <<= response.wait('end') ;
+	console.log('The response is:\n"+body) ;
+
+
 
 
 
