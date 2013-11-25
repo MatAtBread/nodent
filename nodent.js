@@ -8,7 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
-		sourceMapping:true,
+		sourceMapping:1,	/* 0: No source maps, 1: rename files fro Node, 2: rename files for Web */
 		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
@@ -167,6 +167,7 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
  */
 
 var asyncDefine = new U2.TreeTransformer(function(node, descend){
+	node = node.clone() ;
 	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
 	var stmt = isSimple?node.body:node ;
 	if (stmt instanceof U2.AST_Binary 
@@ -261,6 +262,7 @@ function createMappingPadding(m) {
 				originalLine: m[i-1].originalLine+1,
 		        source: m[i-1].source
 		      }) ;
+			m[i+1].generatedColumn = 0 ;
 			i += 1 ;
 		}
 		i += 1 ;
@@ -277,16 +279,23 @@ function createMappingPadding(m) {
 
 var nodent = {
 		parse:function(code,origFilename) {
+			if (config.sourceMapping==2)
+				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
 			r.ast.figure_out_scope();
-			if (config.sourceMapping) {
-				r.srcMap = U2.SourceMap({file:r.filename}) ;
+			if (config.sourceMapping && false) {
+				r.origMap = U2.SourceMap({file:r.filename}) ;
+				r.origMap.get().setSourceContent(r.filename,r.origCode) ;
 				r.ast.walk(new U2.TreeWalker(function(node,descend){
 					descend() ;
 					var token = node.start ;
 					if (token) {
-						r.srcMap.add(token.file||"?",token.line,token.col,token.line,token.col/*,node.print_to_string()*/) ;	
+						r.origMap.add(token.file||"?",token.line,token.col,token.line,token.col,node.print_to_string()) ;	
+					} 
+					token = node.end ;
+					if (token) {
+						r.origMap.add(token.file||"?",token.line,token.col,token.line,token.col,"padding") ;	
 					} 
 					return true; // prevent descending again
 				})) ;
@@ -294,7 +303,10 @@ var nodent = {
 			return r ;
 		},
 		asynchronize:function(pr) {
-			pr.filename += ".nodent" ;
+			if (config.sourceMapping==2)
+				pr.filename = pr.filename.replace(/\.nodent$/,"") ;
+			if (config.sourceMapping==1)
+				pr.filename += ".nodent" ;
 			pr.ast = pr.ast.transform(asyncDefine) ; 
 			pr.ast = pr.ast.transform(asyncAssign) ;
 			return pr ;
@@ -302,7 +314,9 @@ var nodent = {
 		prettyPrint:function(pr) {
 			var map ;
 			if (config.sourceMapping)
-				map = U2.SourceMap({file:pr.filename,orig: pr.srcMap.toString()}) ;
+				map = U2.SourceMap({
+					file:pr.filename,
+					orig: pr.origMap?pr.origMap.toString():null}) ;
 			
 			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
 			pr.ast.print(str);
@@ -312,7 +326,10 @@ var nodent = {
 				
 				var jsmap = JSON.parse(map.toString()) ;
 				jsmap.sourcesContent = [pr.origCode] ;
-				var mapUrl = "/*\n//@ sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))+"\n*/" ;
+				var mapUrl = "\n/*"
+//					+"\n//@ sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+					+"\n*/" ;
 			}
 			pr.code = str.toString()+(map?mapUrl:"") ;
 		},
