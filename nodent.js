@@ -327,7 +327,6 @@ var nodent = {
 				var jsmap = JSON.parse(map.toString()) ;
 				jsmap.sourcesContent = [pr.origCode] ;
 				var mapUrl = "\n/*"
-//					+"\n//@ sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
 					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
 					+"\n*/" ;
 			}
