@@ -9,19 +9,20 @@
 module.exports = function(nodent) {
 	nodent.require('events') ;
 	var http = require('http') ;
-	
-	return {
-		request:function(opts){
-			return function($return,$error){
-				var request = http.request(opts,function(){}) ;
-				request.on('error',$error) ;
-				$return(request) ;
-			}
-		},
-		get:function(opts){
-			return function($return,$error){
-				http.get(opts,$return).on('error',$error) ;
-			}
-		}	
+	var cover = Object.create(http) ;
+
+	cover.request = function(opts){
+		return function($return,$error){
+			var request = http.request(opts,function(){}) ;
+			request.on('error',$error) ;
+			$return(request) ;
+		}
 	};
+	
+	cover.get = function(opts){
+		return function($return,$error){
+			http.get(opts,$return).on('error',$error) ;
+		}
+	};
+	return cover ;
 };
