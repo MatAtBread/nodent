@@ -8,7 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
-		sourceMapping:1,	/* 0: No source maps, 1: rename files fro Node, 2: rename files for Web */
+		sourceMapping:1,	/* 0: No source maps, 1: rename files for Node, 2: rename files for Web */
 		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
