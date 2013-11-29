@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+29Nov13: Handle the case where we want to chain async-functions. See "Return Mapping" below.
+
 27Nov13: Change from delegation to prototype inheritance to expose un-nodented http/http functions. Add warning about duplicate augmentation of EventEmitter.wait()
 
 25Nov13: Added support for Source Maps to allow for NoDentJS debugging. At present, it seems impossible to enable it for both Node and Web use (although for web use, it would be much more efficient to pre-compile the files) so it it named for Node. In the node-inspector debug session, each processed file will appear twice: under it's usual name as NoDent source, and also under "xxx.js.nodent" which is the compiled output. Take care stepping as the node-inspector "step over" does not skip to the next line in the file, but the next executable statement, which is not the same thing in a nodent source file.
@@ -133,11 +135,36 @@ although this is designed for asynchronous callbacks, transforming the source do
 that. The above example looks pretty synchronous to me, and a few lines like those above
 would get pretty messy pretty quickly.
 
+Return Mapping
+==============
+The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
+also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
+common optimisation in synchronous code where one routine returns the return of another, such as:
+
+	return s_other(123) ;	// Synchronous
+
+In Nodent, you have to do this by typing:
+
+	result <<= a_other(123) ;	// Asynchronous
+	return result ;
+
+The intermediate variable "result" is pretty harmless, bu the creation of the hidden callback is a small
+overhead that can be avoided by simple passing throw all the async values:
+
+	return a_other(123,$return,$error) ; 	// Callbacks passed as normal JS call to async-call
+
+The problem here is it will be wrapped in another call to $return, result in the callback being
+called twice, which is usually a very bad idea. To make this optimisation possible, returning a
+"void" is NOT wrapped so the statement below does what we want:
+
+	return void (a_other(123,$return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
+
 Async assignment
 ================
 
 The other transformation is a shorter call sequence. It's meant to look like a special
-kind of assignment (because it is).
+kind of assignment (because it is). It is ithis transformation that stops all the crazy 
+indenting that async callbacks generate.
  
  	result <<= myFunc(args) ;
  	moreStuff(result) ;

@@ -54,10 +54,42 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 	if (!lambdaNesting && (node instanceof U2.AST_Return)) {
 		var repl = node.clone() ;
 		var value = repl.value?[repl.value.clone()]:[] ;
-		repl.value = new U2.AST_Call({
-			expression:new U2.AST_SymbolRef({name:config.$return}),
-			args:value
-		}) ;
+		/*
+		 * NB: There is a special case where we do a REAL return to allow
+		 * for chained async-calls. This is the following case:
+		 * 
+		 * Rather than doing:
+		 * 		x <<= f() ;
+		 * 		return x ;
+		 * 
+		 * We want to do:
+		 * 		f($return,$error) ;
+		 * 		return ;
+		 * 
+		 * ...i.e. "f" will actually do the return, not us.
+		 * 
+		 * The selected syntax for this is:
+		 * 
+		 * 	return void (expr) ;
+		 * 
+		 * which is mapped to:
+		 * 
+		 * 	return (expr) ;
+		 * 
+		 * Note that the parenthesis are necessary in the case of anything except a single sumbol as "void" binds to
+		 * values before operator.
+		 *  
+		 * In the case where we REALLY want to return undefined to the callback, a simple "return" or "return undefined" 
+		 * works.
+		 */
+		if (value.length>0 && value[0] instanceof U2.AST_UnaryPrefix && value[0].operator=="void") {
+			repl.value = value[0].expression ;
+		} else {
+			repl.value = new U2.AST_Call({
+				expression:new U2.AST_SymbolRef({name:config.$return}),
+				args:value
+			}) ;
+		}
 		repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
 		return repl ;
 	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
