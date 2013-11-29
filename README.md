@@ -238,10 +238,13 @@ http.request is similar, but not identical as you will need access to the reques
 	undefined <<= response.wait('end') ;
 	console.log('The response is:\n"+body) ;
 
+Because the assignment operator maps to the sequence with an embedded function call, it can be used to invoke functions that
+accept function arguments with no mapping layer. A good example is "process.nextTick()". It exepcts a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
+
+	doItNow() ;
+	undefined <<= process.nextTick ;
+	doItABitLater();
+	undefined <<= process.nextTick ;
+	doItLaterStill() ;
 
 
-
-
-
-
- 
