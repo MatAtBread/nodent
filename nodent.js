@@ -428,8 +428,8 @@ module.exports = function(opts){
 							var err = arguments[errorIdx] ;
 							var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
 							if (err)
-								error(err) ;
-							ok(result) ;
+								return error(err) ;
+							return ok(result) ;
 						} ;
 					}
 					return fn.apply(scope,args) ;
