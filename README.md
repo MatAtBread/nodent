@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+04Jan14: Addition of "async" cover providing async object/array mapping facilities.
+
 29Nov13: Handle the case where we want to chain async-functions. See "Return Mapping" below.
 
 27Nov13: Change from delegation to prototype inheritance to expose un-nodented http/http functions. Add warning about duplicate augmentation of EventEmitter.wait()
@@ -193,7 +195,8 @@ use of parenthesis will allow uou to restore the original functionality.
 
 Built-in conversions
 ====================
-Nodentify has a (small but possibly growing) set of covers for common Node modules. Initially these are "http" and "https". You specify these through the parameter when requiring nodent:
+
+Nodentify has a (small but possibly growing) set of covers for common Node modules. You specify these through the parameter when requiring nodent:
 
 	require('nodent')({use:['http']}) ;
 
@@ -201,7 +204,9 @@ Nodent will require and instantiate the http library for you and attach it to th
 
 	var http = require('nodent')({use:['http']}).http ;
 
-In this early release, only http.get & http.request are covered. The nodent version of http.get has JS "funcback" the signature:
+http(s)
+-------
+The nodent version of http.get has JS "funcback" the signature:
 
 	nodent.http.get(options)(function(response){},function(error){}) ;
 
@@ -211,11 +216,11 @@ Hopefully you'll recognise this and be able to see you can now invoke it like:
 
 To make life even easier, the response is covered too, just before the first callback is invoked with an addition "funcback" called "wait", that waits for a named event. The whole setup is therefore:
 
-	var http = require('nodent')({http:true}).http ;
+	var http = require('nodent')({use:['http']}).http ;
 
 	/* Make a request. Nodent creates the callbacks, etc. for you
 	and so you can read the line as "wait for the response to be generated" */	
-	response <<= http.get("https://npmjs.org/~matatbread") ;
+	response <<= http.get("http://npmjs.org/~matatbread") ;
 
 	var body = "" ;
 	response.on('data',function(chunk){ body += chunk ;} ;
@@ -238,6 +243,41 @@ http.request is similar, but not identical as you will need access to the reques
 	undefined <<= response.wait('end') ;
 	console.log('The response is:\n"+body) ;
 
+"async"
+-------
+A nodent cover "async" provides a place to collect useful asynchronous functions with Nodent signatures. Initially, the only supported function is map(), which works like an aynchronous, parallel object/array mapper, similar to Array.map().
+
+Example: mapping an object
+	// Use nodent.async
+	var async = require('nodent')({use:['async']}).async ;
+	
+	// Asynchronously map every key in "myObject" by adding 1 to the value of the key
+	mapped <<= async.map(myObject,async-function(key){
+		return myObject[element]+1 ;	// This can be async without issues
+	}) ;
+	// All done - mapped contains the new object with all the elements "incremeneted"
+
+
+Example: map an array of URLs to their content
+	// Use nodent.async & http
+	var nodent = require('nodent')({use:['http','async']}) ;
+	
+	mapped <<= nodent.async.map(['www.google.com','www.bbc.co.uk'],async-function(value,index){
+		// Get the URL body asynchronously.
+		response <<= nodent.http.get("http://"+value) ;
+		var body = "" ;
+		response.on('data',function(chunk){ body += chunk ;} ;
+		// Wait for the "end" event 
+		undefined <<= response.wait('end') ;
+		return body ;
+	}) ;
+	// All done - mapped is the new array containing the bobies
+
+In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well if the return values is of a specific type, such as the JavaScript Error() type, as they can be easily tested for in the mapped object. the async.map() function only errors if an async-function illegal returns more than once (including multiple errors or both an error and normal response).
+
+
+Function arguments
+------------------
 Because the assignment operator maps to the sequence with an embedded function call, it can be used to invoke functions that
 accept function arguments with no mapping layer. A good example is "process.nextTick()". It exepcts a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
 
