@@ -248,6 +248,7 @@ http.request is similar, but not identical as you will need access to the reques
 A nodent cover "async" provides a place to collect useful asynchronous functions with Nodent signatures. Initially, the only supported function is map(), which works like an aynchronous, parallel object/array mapper, similar to Array.map().
 
 Example: mapping an object
+
 	// Use nodent.async
 	var async = require('nodent')({use:['async']}).async ;
 	
@@ -259,6 +260,7 @@ Example: mapping an object
 
 
 Example: map an array of URLs to their content
+
 	// Use nodent.async & http
 	var nodent = require('nodent')({use:['http','async']}) ;
 	
