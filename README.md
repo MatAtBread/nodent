@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+30Jan14: Add nodent.compile() to provide a one-step cross compilation. Expose optional "sourceMapping" parameter to allow for a server-side installation to cross-compile client-side JS on the fly
+
 04Jan14: Addition of "async" cover providing async object/array mapping facilities.
 
 29Nov13: Handle the case where we want to chain async-functions. See "Return Mapping" below.

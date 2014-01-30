@@ -310,13 +310,20 @@ function createMappingPadding(m) {
 }
 
 var nodent = {
-		parse:function(code,origFilename) {
-			if (config.sourceMapping==2)
+		compile:function(code,origFilename,sourceMapping) {
+			var pr = nodent.parse(code,origFilename);
+			nodent.asynchronize(pr) ;
+			nodent.prettyPrint(pr) ;
+			return pr ;
+		},
+		parse:function(code,origFilename,sourceMapping) {
+			sourceMapping = sourceMapping || config.sourceMapping ; 
+			if (sourceMapping==2)
 				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
 			r.ast.figure_out_scope();
-			if (config.sourceMapping && false) {
+			if (sourceMapping && false) {
 				r.origMap = U2.SourceMap({file:r.filename}) ;
 				r.origMap.get().setSourceContent(r.filename,r.origCode) ;
 				r.ast.walk(new U2.TreeWalker(function(node,descend){
@@ -334,18 +341,22 @@ var nodent = {
 			}
 			return r ;
 		},
-		asynchronize:function(pr) {
-			if (config.sourceMapping==2)
+		asynchronize:function(pr,sourceMapping) {
+			sourceMapping = sourceMapping || config.sourceMapping ; 
+
+			if (sourceMapping==2)
 				pr.filename = pr.filename.replace(/\.nodent$/,"") ;
-			if (config.sourceMapping==1)
+			if (sourceMapping==1)
 				pr.filename += ".nodent" ;
 			pr.ast = pr.ast.transform(asyncDefine) ; 
 			pr.ast = pr.ast.transform(asyncAssign) ;
 			return pr ;
 		},
-		prettyPrint:function(pr) {
+		prettyPrint:function(pr,sourceMapping) {
+			sourceMapping = sourceMapping || config.sourceMapping ; 
+
 			var map ;
-			if (config.sourceMapping)
+			if (sourceMapping)
 				map = U2.SourceMap({
 					file:pr.filename,
 					orig: pr.origMap?pr.origMap.toString():null}) ;
