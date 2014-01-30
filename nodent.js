@@ -311,9 +311,10 @@ function createMappingPadding(m) {
 
 var nodent = {
 		compile:function(code,origFilename,sourceMapping) {
-			var pr = nodent.parse(code,origFilename);
-			nodent.asynchronize(pr) ;
-			nodent.prettyPrint(pr) ;
+			sourceMapping = sourceMapping || config.sourceMapping ; 
+			var pr = nodent.parse(code,origFilename,sourceMapping);
+			nodent.asynchronize(pr,sourceMapping) ;
+			nodent.prettyPrint(pr,sourceMapping) ;
 			return pr ;
 		},
 		parse:function(code,origFilename,sourceMapping) {
