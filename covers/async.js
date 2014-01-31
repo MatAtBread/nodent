@@ -31,7 +31,13 @@ module.exports = function(nodent) {
 							return ;
 						}
 					} ;
-					async.apply(this,arguments)(complete,complete);
+					function completeError(x) {
+						if (x instanceof Error)
+							complete(x) ;
+						else
+							complete(new Error(x)) ;
+					}
+					async.apply(this,arguments)(complete,completeError);
 				}) ;
 			};
 		}
