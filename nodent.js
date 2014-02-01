@@ -311,11 +311,24 @@ function createMappingPadding(m) {
 
 var nodent = {
 		compile:function(code,origFilename,sourceMapping) {
-			sourceMapping = sourceMapping || config.sourceMapping ; 
-			var pr = nodent.parse(code,origFilename,sourceMapping);
-			nodent.asynchronize(pr,sourceMapping) ;
-			nodent.prettyPrint(pr,sourceMapping) ;
-			return pr ;
+			try {
+				sourceMapping = sourceMapping || config.sourceMapping ; 
+				var pr = nodent.parse(code,origFilename,sourceMapping);
+				nodent.asynchronize(pr,sourceMapping) ;
+				nodent.prettyPrint(pr,sourceMapping) ;
+				return pr ;
+			} catch (ex) {
+				if (ex.constructor.name=="JS_Parse_Error") 
+					reportParseException(ex,code,origFilename) ;
+				console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+				if (ex instanceof Error)
+					throw ex ;
+				else {
+					var wrapped = new Error(ex.toString()) ;
+					wrapped.causedBy = ex ;
+					throw wrapped ;
+				}
+			}
 		},
 		parse:function(code,origFilename,sourceMapping) {
 			sourceMapping = sourceMapping || config.sourceMapping ; 

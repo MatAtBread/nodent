@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+02Feb14: Make compile() log friendly error messages and throw an object of type Error if there is a problem parsing
+
 31Jan14: Enforce wrapping of $error() values in a native JS "Error" if they are not already done so. To return "non-error" values, use "return", not "throw"
 
 30Jan14: Add nodent.compile() to provide a one-step cross compilation. Expose optional "sourceMapping" parameter to allow for a server-side installation to cross-compile client-side JS on the fly
