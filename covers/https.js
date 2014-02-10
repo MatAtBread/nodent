@@ -24,5 +24,23 @@ module.exports = function(nodent) {
 			http.get(opts,$return).on('error',$error) ;
 		}
 	};
+	
+	cover.getBody = function(opts){
+		return function($return,$error){
+			http.get(opts,function(res){
+				try {
+					res.setEncoding('utf8');
+					var body = "" ;
+					res.on('data', function (chunk) { body += chunk ; });
+					res.on('end', function(){
+						$return(body) ;
+					}) ;
+				} catch(ex) {
+					$error(ex) ;
+				}
+			}).on('error',$error) ;
+		}
+	};
+	
 	return cover ;
 };

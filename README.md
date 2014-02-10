@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+10Feb14: Add convenience method body <<= http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
+
 02Feb14: Make compile() log friendly error messages and throw an object of type Error if there is a problem parsing
 
 31Jan14: Enforce wrapping of $error() values in a native JS "Error" if they are not already done so. To return "non-error" values, use "return", not "throw"
