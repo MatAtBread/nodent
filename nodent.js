@@ -463,7 +463,8 @@ module.exports = function(opts){
 				};
 			},
 			configurable:false,
-			enumerable:false
+			enumerable:false,
+			writable:true
 		}) ;
 		
 		// Method to wrap error handlers
@@ -476,7 +477,8 @@ module.exports = function(opts){
 				} ; 
 			},
 			configurable:false,
-			enumerable:false
+			enumerable:false,
+			writable:true
 		}) ;
 
 		var stdJSLoader = require.extensions['.js'] ; 

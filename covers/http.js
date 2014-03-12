@@ -33,7 +33,14 @@ module.exports = function(nodent) {
 					var body = "" ;
 					res.on('data', function (chunk) { body += chunk ; });
 					res.on('end', function(){
-						$return(body) ;
+						if (res.statusCode==200)
+							$return(body) ;
+						else {
+							var err = new Error("HTTP error "+res.statusCode) ;
+							err.body = body ;
+							err.res = res ;
+							$error(err) ;
+						}
 					}) ;
 				} catch(ex) {
 					$error(ex) ;
