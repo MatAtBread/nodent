@@ -438,30 +438,47 @@ module.exports = function(opts){
 		 * to:
 		 * 		http.aGet(opts)(function(result){}) ;
 		 */
-		Function.prototype.noDentify = function(idx,errorIdx,resultIdx) {
-			var fn = this ;
-			return function() {
-				var scope = this ;
-				var args = Array.prototype.slice.apply(arguments) ;
-				return function(ok,error) {
-					if (undefined==idx)	// No index specified - use the final (unspecified) parameter
-						idx = args.length ;
-					if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
-						args[idx] = ok ;
-					else {
-						args[idx] = function() {
-							var err = arguments[errorIdx] ;
-							var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
-							if (err)
-								return error(err) ;
-							return ok(result) ;
-						} ;
+		Object.defineProperty(Function.prototype,"noDentify",{
+			value:function(idx,errorIdx,resultIdx) {
+				var fn = this ;
+				return function() {
+					var scope = this ;
+					var args = Array.prototype.slice.apply(arguments) ;
+					return function(ok,error) {
+						if (undefined==idx)	// No index specified - use the final (unspecified) parameter
+							idx = args.length ;
+						if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
+							args[idx] = ok ;
+						else {
+							args[idx] = function() {
+								var err = arguments[errorIdx] ;
+								var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
+								if (err)
+									return error(err) ;
+								return ok(result) ;
+							} ;
+						}
+						return fn.apply(scope,args) ;
 					}
-					return fn.apply(scope,args) ;
-				}
-			};
-		};
+				};
+			},
+			configurable:false,
+			enumerable:false
+		}) ;
 		
+		// Method to wrap error handlers
+		Object.defineProperty(Function.prototype,"chain$error",{
+			value:function(handler){ 
+				var prev = this ; return function(){
+					var a = Array.prototype.slice.call(arguments,0) ;
+					a.push(prev) ;
+					return handler.apply(this,a);
+				} ; 
+			},
+			configurable:false,
+			enumerable:false
+		}) ;
+
 		var stdJSLoader = require.extensions['.js'] ; 
 		if (opts.useDirective) {
 			require.extensions['.js'] = function(mod,filename) {

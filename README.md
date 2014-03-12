@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+12Mar14: Add prototype to allow error handlers to be chained. See "Chaining errors" below.
+
 10Feb14: Add convenience method body <<= http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
 
 02Feb14: Make compile() log friendly error messages and throw an object of type Error if there is a problem parsing
@@ -200,6 +202,39 @@ can't tell whats on the right isn't really a number, but we check it looks like 
 a variable. In this way you can "repair" any broken code). In any case, the file extension for AJS 
 is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
 use of parenthesis will allow uou to restore the original functionality.
+
+Chaining Errors
+===============
+Exceptions and other errors are caught and passed to the "hidden" callbacl function "$error". The automatic chaining of this
+through an async-call path is really useful and one of the reasons Nodent has such a compact syntax. However, sometimes you 
+need to intercept an error and handle it differently rather than just return it to the call chain.
+
+Since "$error" is just a simple paraameter to async calls, this is pretty easy, but requires the creation of a variable
+scope block (e.g. a function) which makes it look messy and verbose. To avoid this a hidden Function prototype chain$error()
+exists to make it quick and easy. 
+
+To handle an exception in the async call-chain, simply redefine $error before invoking the async-function, for example:
+
+async-function createDBrecord() {
+	$error = $error.chain$error(function(ex,chained){
+		if (Error.causedBy(ex,"ConstraintViolation")) {
+			return $return("Thanks. Already exists.") ;
+		} else {
+			chained(ex) ;
+		}
+	}) ;
+
+	data <<= sql("...") ;
+	if (data) {
+		return data ;
+	} else {
+		return null ;
+	}
+}
+
+In this example, before calling the database function, we redfine $error to intercept any exceptions and modify 
+behaviour - in this case either calling $return (via the closure) or calling the original error handler (passed as
+the final parameter to the overidden $error handler).
 
 Built-in conversions
 ====================
