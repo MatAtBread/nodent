@@ -397,6 +397,44 @@ var nodent = {
 				nodent[cover] = require("./covers/"+cover)(nodent) ;
 			return nodent[cover] ;
 		},
+		generateRequestHandler:function(path, matchRegex, options) {
+			var cache = {} ;
+			
+			if (!matchRegex)
+				matchRegex = /\.njs$/ ;
+			if (!options)
+				options = {} ;
+					
+			return function (req, res, next) {
+				if (!req.url.match(matchRegex))
+					return next && next() ;
+				
+				if (cache[req.url]) {
+					res.setHeader("Content-Type", "application/javascript");
+					options.setHeaders && options.setHeaders(res) ;
+					res.write(cache[req.url]) ;
+					res.end();
+				}
+				
+				var filename = path+req.url ;
+				fs.readFile(filename,function(err,content){
+					if (err) {
+						res.statusCode = 500 ;
+						res.write(err.toString()) ;
+						res.end() ;
+						return ;
+					} else {
+						var pr = nodent.compile(content.toString(),req.url,2);
+						if (options.enableCache)
+							cache[req.url] = pr.code ; // Don't cache for now
+						res.setHeader("Content-Type", "application/javascript");
+						options.setHeaders && options.setHeaders(res) ;
+						res.write(pr.code) ;
+						res.end();
+					}
+				}) ;
+			};
+		},
 		AST:U2
 };
 

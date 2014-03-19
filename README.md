@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+18Mar14: Add nodent.generateRequestHandler(path,regex,options). This returns a node request handler that is connect/express compatible that automatically parses a file-based nodent-syntax file into a standard, JS file suitable for use in a browser, complete with a source-map for easy debugging.
+
 12Mar14: Add prototype to allow error handlers to be chained. See "Chaining errors" below.
 
 10Feb14: Add convenience method body <<= http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
@@ -236,6 +238,26 @@ In this example, before calling the database function, we redfine $error to inte
 behaviour - in this case either calling $return (via the closure) or calling the original error handler (passed as
 the final parameter to the overidden $error handler).
 
+Auto-parse from Nodejs
+======================
+The exported function generateRequestHandler(path, matchRegex, options) creates a node/connect/express compatible function for handling requests for nodent-syntax files that are then parsed and served for use within a stanadrd browser environment, complete with a source map for easy debugging. 
+
+For example, with connect:
+
+var nodent = require('nodent')() ;
+	...
+var app = connect() ;
+	...
+app.use(nodent.generateRequestHandler("./static-files/web", 	// Path to where the files are located,
+	/\.njs$/,	// Parse & compiles ending in ".njs"
+	{})) ;	// Options (none)
+
+The regex can be omitted, in which case it has th value above.
+
+The currently supported options are: 
+	enableCache: <boolean>	// Caches the compiled output in memory for speedy serving. 
+	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
+
 Built-in conversions
 ====================
 
@@ -319,7 +341,6 @@ Example: map an array of URLs to their content
 	// All done - mapped is the new array containing the bobies
 
 In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well if the return values is of a specific type, such as the JavaScript Error() type, as they can be easily tested for in the mapped object. the async.map() function only errors if an async-function illegal returns more than once (including multiple errors or both an error and normal response).
-
 
 Function arguments
 ------------------
