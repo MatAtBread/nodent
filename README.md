@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+26Mar14: Catch parsing errors in generateRequestHandler() and return them as HTTP errors
+
 24Mar14: Add support for gzip,deflate in http.getBody
 
 18Mar14: Add nodent.generateRequestHandler(path,regex,options). This returns a node request handler that is connect/express compatible that automatically parses a file-based nodent-syntax file into a standard, JS file suitable for use in a browser, complete with a source-map for easy debugging.

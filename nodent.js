@@ -416,21 +416,28 @@ var nodent = {
 					res.end();
 				}
 				
+				function sendException(ex) {
+					res.statusCode = 500 ;
+					res.write(ex.toString()) ;
+					res.end() ;
+				}
+				
 				var filename = path+req.url ;
 				fs.readFile(filename,function(err,content){
 					if (err) {
-						res.statusCode = 500 ;
-						res.write(err.toString()) ;
-						res.end() ;
-						return ;
+						return sendException(err) ;
 					} else {
-						var pr = nodent.compile(content.toString(),req.url,2);
-						if (options.enableCache)
-							cache[req.url] = pr.code ; // Don't cache for now
-						res.setHeader("Content-Type", "application/javascript");
-						options.setHeaders && options.setHeaders(res) ;
-						res.write(pr.code) ;
-						res.end();
+						try {
+							var pr = nodent.compile(content.toString(),req.url,2);
+							if (options.enableCache)
+								cache[req.url] = pr.code ; // Don't cache for now
+							res.setHeader("Content-Type", "application/javascript");
+							options.setHeaders && options.setHeaders(res) ;
+							res.write(pr.code) ;
+							res.end();
+						} catch (ex) {
+							return sendException(ex) ;
+						}
 					}
 				}) ;
 			};
