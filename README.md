@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+09Apr14: Update async.map() to accept a Number as the first argument. The async-callback is then called with integers from 0 to arg-1 rather than object keys or array elements.
+
 26Mar14: Catch parsing errors in generateRequestHandler() and return them as HTTP errors
 
 24Mar14: Add support for gzip,deflate in http.getBody
@@ -335,14 +337,22 @@ Example: map an array of URLs to their content
 	
 	mapped <<= nodent.async.map(['www.google.com','www.bbc.co.uk'],async-function(value,index){
 		// Get the URL body asynchronously.
-		response <<= nodent.http.get("http://"+value) ;
-		var body = "" ;
-		response.on('data',function(chunk){ body += chunk ;} ;
-		// Wait for the "end" event 
-		undefined <<= response.wait('end') ;
+		body <<= nodent.http.getBody("http://"+value) ;
 		return body ;
 	}) ;
-	// All done - mapped is the new array containing the bobies
+	// All done - mapped is the new array containing the bodies
+
+Example: iterate through a set of values and do something asynchronous with each one.
+
+	// Use nodent.async & http
+	var nodent = require('nodent')({use:['http','async']}) ;
+	
+	mapped <<= nodent.async.map(3,async-function(i){
+		// Get the URL body asynchronously.
+		body <<= nodent.http.getBody("http://example.com/cgi?test="+i) ;
+		return body ;
+	}) ;
+	// All done - mapped is the new array containing the bodies
 
 In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well if the return values is of a specific type, such as the JavaScript Error() type, as they can be easily tested for in the mapped object. the async.map() function only errors if an async-function illegal returns more than once (including multiple errors or both an error and normal response).
 
