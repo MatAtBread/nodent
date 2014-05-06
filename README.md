@@ -316,7 +316,11 @@ http.request is similar, but not identical as you will need access to the reques
 
 "async"
 -------
-A nodent cover "async" provides a place to collect useful asynchronous functions with Nodent signatures. Initially, the only supported function is map(), which works like an aynchronous, parallel object/array mapper, similar to Array.map().
+A nodent cover "async" provides a place to collect useful asynchronous functions with Nodent signatures. Initially, the only supported function is map(), which works like an aynchronous, parallel object/array mapper, similar to Array.map(). The map function takes three parameters: the entity to iterate over, optionally an object in which to place the results, and the async-function to call on each iteration. The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async-function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as return asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
+* An Object - each field is passed to the async-iterator function
+* An array of Objects, Strings or Numbers - each element is passed to the async-iterator function
+* A single Number - the async-function is invoked with the integer values 0 to Number-1
+* An array of async-functions - each function in the array is invoked asynchronously. In this case the third parameter should be omitted.
 
 Example: mapping an object
 
