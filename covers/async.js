@@ -11,7 +11,7 @@ function map(what,result,async) {
 
 	var isArray = Array.isArray(what) ;
 	var context = new Error() ;
-	if (!async && typeof result==='function') {
+	if (!async && (typeof result in {'function':true,'undefined':true})) {
 		async = result ;
 		result = isArray?[]:{} ;
 	}
@@ -45,7 +45,7 @@ function map(what,result,async) {
 				else
 					complete(new Error(x)) ;
 			}
-			async.apply(this,arguments)(complete,completeError);
+			(async || e).apply(this,arguments)(complete,completeError);
 		}) ;
 	};
 }
