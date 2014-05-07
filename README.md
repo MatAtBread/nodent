@@ -320,7 +320,7 @@ A nodent cover "async" provides a place to collect useful asynchronous functions
 * An Object - each field is passed to the async-iterator function
 * An array of Objects, Strings or Numbers - each element is passed to the async-iterator function
 * A single Number - the async-function is invoked with the integer values 0 to Number-1
-* An array of async-functions - each function in the array is invoked asynchronously. In this case the third parameter should be omitted.
+* An array or Object of async-functions - each function in the array is invoked asynchronously. In this case the third parameter must be omitted.
 
 Example: mapping an object
 
