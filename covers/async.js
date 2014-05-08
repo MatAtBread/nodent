@@ -46,7 +46,11 @@ function map(what,result,async) {
 					complete(new Error(x)) ;
 			}
 			
-			(async || (isArray?e:what[e])).apply(this,arguments)(complete,completeError);
+			if (async) {
+				async.apply(this,arguments)(complete,completeError);	
+			} else {
+				(isArray?e:what[e]).call(this,complete,completeError);
+			}
 		}) ;
 	};
 }

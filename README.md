@@ -363,13 +363,8 @@ Example: execute arbitrary async functions in parallel and return when they are 
 	// Use nodent.async
 	var nodent = require('nodent')({use:['async']}) ;
 	
-	mapped <<= nodent.async.map([async-function(){
-		// Do something async
-		...return result ;
-	},async-function(){
-		// Do something else async
-		...return another_result ;
-	},]) ;
+	mapped <<= nodent.async.map([asyncFn("abc"),asyncFn2("def")]) ;
+
 	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to async.map), but the completion routine will only be called when all async-functions have finished either via a return or exception. */
 
 In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The async.map() function only errors if an async-function illegal returns more than once (including multiple errors or both an error and normal response).
