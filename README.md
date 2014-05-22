@@ -30,6 +30,10 @@ That's the basics.
 
 Changelog
 =========
+22May14: Added a real world example. See Before and After below
+
+22May14: Update async.map() to accepts an arbitrary set of async-functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
+
 09Apr14: Update async.map() to accept a Number as the first argument. The async-callback is then called with integers from 0 to arg-1 rather than object keys or array elements.
 
 26Mar14: Catch parsing errors in generateRequestHandler() and return them as HTTP errors
@@ -91,7 +95,7 @@ is mapped to:
 			}
 		}
 
-(NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demontsrated in the exmaple above).
+(NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demontsrated in the example above).
 
 Remember, we're simply transforming a syntactic short-cut into a "normal" JS function. Don't be confused by the
 $return and $error identifiers (which are all configuarble in any case), they're just normal JS identifiers (in fact,
@@ -155,30 +159,6 @@ although this is designed for asynchronous callbacks, transforming the source do
 that. The above example looks pretty synchronous to me, and a few lines like those above
 would get pretty messy pretty quickly.
 
-Return Mapping
-==============
-The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
-also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
-common optimisation in synchronous code where one routine returns the return of another, such as:
-
-	return s_other(123) ;	// Synchronous
-
-In Nodent, you have to do this by typing:
-
-	result <<= a_other(123) ;	// Asynchronous
-	return result ;
-
-The intermediate variable "result" is pretty harmless, bu the creation of the hidden callback is a small
-overhead that can be avoided by simple passing throw all the async values:
-
-	return a_other(123,$return,$error) ; 	// Callbacks passed as normal JS call to async-call
-
-The problem here is it will be wrapped in another call to $return, result in the callback being
-called twice, which is usually a very bad idea. To make this optimisation possible, returning a
-"void" is NOT wrapped so the statement below does what we want:
-
-	return void (a_other(123,$return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
-
 Async assignment
 ================
 
@@ -211,6 +191,30 @@ a variable. In this way you can "repair" any broken code). In any case, the file
 is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
 use of parenthesis will allow uou to restore the original functionality.
 
+Return Mapping
+==============
+The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
+also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
+common optimisation in synchronous code where one routine returns the return of another, such as:
+
+	return s_other(123) ;	// Synchronous
+
+In Nodent, you have to do this by typing:
+
+	result <<= a_other(123) ;	// Asynchronous
+	return result ;
+
+The intermediate variable "result" is pretty harmless, bu the creation of the hidden callback is a small
+overhead that can be avoided by simple passing throw all the async values:
+
+	return a_other(123,$return,$error) ; 	// Callbacks passed as normal JS call to async-call
+
+The problem here is it will be wrapped in another call to $return, result in the callback being
+called twice, which is usually a very bad idea. To make this optimisation possible, returning a
+"void" is NOT wrapped so the statement below does what we want:
+
+	return void (a_other(123,$return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
+
 Chaining Errors
 ===============
 Exceptions and other errors are caught and passed to the "hidden" callbacl function "$error". The automatic chaining of this
@@ -223,22 +227,22 @@ exists to make it quick and easy.
 
 To handle an exception in the async call-chain, simply redefine $error before invoking the async-function, for example:
 
-async-function createDBrecord() {
-	$error = $error.chain$error(function(ex,chained){
-		if (Error.causedBy(ex,"ConstraintViolation")) {
-			return $return("Thanks. Already exists.") ;
-		} else {
-			chained(ex) ;
-		}
-	}) ;
+	async-function createDBrecord() {
+		$error = $error.chain$error(function(ex,chained){
+			if (Error.causedBy(ex,"ConstraintViolation")) {
+				return $return("Thanks. Already exists.") ;
+			} else {
+				chained(ex) ;
+			}
+		}) ;
 
-	data <<= sql("...") ;
-	if (data) {
-		return data ;
-	} else {
-		return null ;
+		data <<= sql("...") ;
+		if (data) {
+			return data ;
+		} else {
+			return null ;
+		}
 	}
-}
 
 In this example, before calling the database function, we redfine $error to intercept any exceptions and modify 
 behaviour - in this case either calling $return (via the closure) or calling the original error handler (passed as
@@ -250,18 +254,19 @@ The exported function generateRequestHandler(path, matchRegex, options) creates 
 
 For example, with connect:
 
-var nodent = require('nodent')() ;
+	var nodent = require('nodent')() ;
 	...
-var app = connect() ;
+	var app = connect() ;
 	...
-app.use(nodent.generateRequestHandler("./static-files/web", 	// Path to where the files are located,
-	/\.njs$/,	// Parse & compiles ending in ".njs"
-	{})) ;	// Options (none)
+	app.use(nodent.generateRequestHandler("./static-files/web", 	// Path to where the files are located,
+		/\.njs$/,	// Parse & compiles ending in ".njs"
+		{})) ;	// Options (none)
 
-The regex can be omitted, in which case it has th value above.
+The regex can be omitted, in which case it has the value above.
 
-The currently supported options are: 
-	enableCache: <boolean>	// Caches the compiled output in memory for speedy serving. 
+The currently supported options are:
+ 
+	enableCache: <boolean>		// Caches the compiled output in memory for speedy serving. 
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
 Built-in conversions
@@ -379,5 +384,114 @@ accept function arguments with no mapping layer. A good example is "process.next
 	doItABitLater();
 	undefined <<= process.nextTick ;
 	doItLaterStill() ;
+
+Before and After
+================
+
+Here's an example from a real-world application. We find the NoDent-style code much easier to write, maintain, train new people on and debug than the JS callback-style code, mainly becuase of the large amount of anonymous function "glue" and the like which kind of hides the logic away. Anyway, take your choice. You can, of course, see your own code before and after  mapping, live, in node-inspector if you enable source-mapping.
+
+Original code, as supplied to Node:
+
+	clientApi.shareProduct = async-function(type,prod,message,img,networks){
+		// Create a link that when clicked on can resolve into 
+		// a (current-user, product) tuple, and which can generate
+		// an affiliation link that itself identified the clicker
+		// as well as the clickee tuple.
+
+		messasge = message.trim() ;
+		offer <<= createOffer(this.request.session.nid,type,prod,message,img,networks) ;
+	
+		sysEvent && sysEvent.emit('offer') ;
+		if (!offer || !offer.p.resolved) 
+			throw new Error("Product not fully resolved") ;
+
+		// Now post this offer on FB and/or twitter
+		var user = offer.u ;
+
+		done <<= async.map(offer.offer.networks,async-function(net){
+			posting <<= Networks.get(net).postStatus({
+				id:user[net+"-id"],
+				token:user[net+"-token"], 
+				secret:user[net+"-secret"],
+				user:user
+			},message,offer.offer,false) ;
+			return posting ;
+		}) ;				
+
+		updated <<= offer.offer.update({status:done}) ;
+		offer.offer = updated ;
+
+		for (var i=0; i<done.length; i++) {
+			if (done[i] instanceof AuthError) {
+				done[i].message = "You need to authorise posting on "+done[i].authRequired ;
+				throw done[i] ;
+			} else if (done[i] instanceof Error) {
+				throw done[i] ;
+			}
+		}
+
+		notify.send(user,{why:"OFFERS"},offer.offer) ;
+		return offer ;
+	};
+
+Code after cross-compilation by Nodent and as execute by Node:
+
+	clientApi.shareProduct[1] = function(type, prod, message, img, networks) {
+	    return function($return, $error) {
+        	try {
+        	    // Create a link that when clicked on can resolve into 
+        	    // a (current-user, product) tuple, and which can generate
+        	    // an affiliation link that itself identified the clicker
+        	    // as well as the clickee tuple.
+        	    messasge = message.trim();
+        	    return createOffer(this.request.session.nid, type, prod, message, img, networks)(function(offer) {
+        	        sysEvent && sysEvent.emit("offer");
+        	        if (!offer || !offer.p.resolved) {
+        	            return $error(new Error("Product not fully resolved"));
+        	        }
+        	        // Now post this offer on FB and/or twitter
+        	        var user = offer.u;
+        	        return async.map(offer.offer.networks, function(net) {
+        	            return function($return, $error) {
+        	                try {
+        	                    return Networks.get(net).postStatus({
+        	                        id: user[net + "-id"],
+        	                        token: user[net + "-token"],
+        	                        secret: user[net + "-secret"],
+        	                        user: user
+        	                    }, message, offer.offer, false)(function(posting) {
+        	                        return $return(posting);
+        	                    }.bind(this), $error);;
+        	                } catch ($except) {
+        	                    $error($except)
+        	                }
+        	            }.bind(this);
+        	        })(function(done) {
+        	            return offer.offer.update({
+        	                status: done
+        	            })(function(updated) {
+        	                offer.offer = updated;
+        	                for (var i = 0; i < done.length; i++) {
+        	                    if (done[i] instanceof AuthError) {
+        	                        done[i].message = "You need to authorise postinf on " + done[i].authRequired;
+        	                        return $error(done[i]);
+        	                    } else {
+        	                        if (done[i] instanceof Error) {
+        	                            return $error(done[i]);
+        	                        }
+        	                    }
+        	                }
+        	                notify.send(user, {
+        	                    why: "OFFERS"
+        	                }, offer.offer);
+        	                return $return(offer);
+        	            }.bind(this), $error);;
+        	        }.bind(this), $error);;
+        	    }.bind(this), $error);;
+        	} catch ($except) {
+        	    $error($except)
+        	}
+	    }.bind(this);
+	};
 
 
