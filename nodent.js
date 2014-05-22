@@ -8,7 +8,7 @@ var fs = require('fs') ;
 var U2 = require("uglify-js");
 
 var config = {
-		sourceMapping:1,	/* 0: No source maps, 1: rename files for Node, 2: rename files for Web */
+		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
 		useDirective:"use nodent",
 		extension:'.njs',
@@ -25,17 +25,6 @@ var decorate = new U2.TreeWalker(function(node) {
 	node.$ = "------------".substring(0,decorate.stack.length)+"\t"+node.CTOR.name+"\t"+node.print_to_string() ;
 	console.log(node.$) ;
 });
-
-function addComment(node,value){
-	/*if (!node.start)
-		node.start = new U2.AST_Token({comments_before:[]}) ;
-	node.start.comments_before = node.start.comments_before || [] ;
-	node.start.comments_before.push(new U2.AST_Token({
-		type:"comment2",
-		value:value
-	})) ;*/
-	return node ;
-}
 
 /**
  * returnMapper is an Uglify2 transformer that is used to change statements such as:
@@ -170,7 +159,6 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 				})
 			})
 		});
-		addComment(replace.body.value,"*"+(undefinedReturn?"":assignee.name)+" <<= *") ;
 		return replace ;
 	} else {
 		descend(node, this);
@@ -238,7 +226,6 @@ var asyncDefine = new U2.TreeTransformer(function(node, descend){
 				args:[new U2.AST_This()]
 			})
 		})] ;
-		addComment(replace,"* async- *") ;
 		return replace ;
 	} else {
 		descend(node, this);
@@ -337,7 +324,7 @@ var nodent = {
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
 			r.ast.figure_out_scope();
-			if (sourceMapping && false) {
+			/*if (sourceMapping && false) {
 				r.origMap = U2.SourceMap({file:r.filename}) ;
 				r.origMap.get().setSourceContent(r.filename,r.origCode) ;
 				r.ast.walk(new U2.TreeWalker(function(node,descend){
@@ -352,7 +339,7 @@ var nodent = {
 					} 
 					return true; // prevent descending again
 				})) ;
-			}
+			}*/
 			return r ;
 		},
 		asynchronize:function(pr,sourceMapping) {
@@ -370,7 +357,7 @@ var nodent = {
 			sourceMapping = sourceMapping || config.sourceMapping ; 
 
 			var map ;
-			if (sourceMapping)
+			if (sourceMapping==1 || sourceMapping==2)
 				map = U2.SourceMap({
 					file:pr.filename,
 					orig: pr.origMap?pr.origMap.toString():null}) ;
