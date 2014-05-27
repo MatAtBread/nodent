@@ -30,6 +30,8 @@ That's the basics.
 
 Changelog
 =========
+27May14: Show both mapped and unmapped files & positions in stack traces. Can be suppressed with option {dontMapStackTraces:true}
+
 22May14: Added a real world example. See Before and After below
 
 22May14: Update async.map() to accepts an arbitrary set of async-functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.

@@ -6,6 +6,7 @@
 
 var fs = require('fs') ;
 var U2 = require("uglify-js");
+var SourceMapConsumer = require('source-map').SourceMapConsumer;
 
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
@@ -296,6 +297,8 @@ function createMappingPadding(m) {
 	      }) ;
 }
 
+var smCache = {} ;
+
 var nodent = {
 		compile:function(code,origFilename,sourceMapping) {
 			try {
@@ -324,22 +327,6 @@ var nodent = {
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
 			r.ast.figure_out_scope();
-			/*if (sourceMapping && false) {
-				r.origMap = U2.SourceMap({file:r.filename}) ;
-				r.origMap.get().setSourceContent(r.filename,r.origCode) ;
-				r.ast.walk(new U2.TreeWalker(function(node,descend){
-					descend() ;
-					var token = node.start ;
-					if (token) {
-						r.origMap.add(token.file||"?",token.line,token.col,token.line,token.col,node.print_to_string()) ;	
-					} 
-					token = node.end ;
-					if (token) {
-						r.origMap.add(token.file||"?",token.line,token.col,token.line,token.col,"padding") ;	
-					} 
-					return true; // prevent descending again
-				})) ;
-			}*/
 			return r ;
 		},
 		asynchronize:function(pr,sourceMapping) {
@@ -368,8 +355,9 @@ var nodent = {
 			if (map) {
 				createMappingPadding(map.get()._mappings) ;
 				
-				var jsmap = JSON.parse(map.toString()) ;
+				var jsmap = map.get().toJSON() ;
 				jsmap.sourcesContent = [pr.origCode] ;
+				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
 				var mapUrl = "\n/*"
 					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
 					+"\n*/" ;
@@ -459,6 +447,30 @@ module.exports = function(opts){
 			throw err ;
 		};
 
+		if (!opts.dontMapStackTraces) {
+			// This function is part of the V8 stack trace API, for more info see:
+			// http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+			Error.prepareStackTrace = function(error, stack) {
+				function mappedTrace(frame) {
+					var source = frame.getFileName();
+					if (source && smCache[source]) {
+						var position = smCache[source].smc.originalPositionFor({line: frame.getLineNumber(), column: frame.getColumnNumber()-1});
+						var desc = frame.toString() ;
+						
+						var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
+						for (var i=0; i<s.length && s[i]==d[i]; i++) ;
+						desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
+						
+						return '\n    at '+desc ;
+					}
+					return '\n    at '+frame;
+				}
+
+				return error + stack.map(mappedTrace).join('');
+			}
+
+		}
+		
 		/**
 		 * NoDentify (make async) a general function.
 		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;

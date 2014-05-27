@@ -1,13 +1,14 @@
 {
   "name": "nodent",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "uglify-js": "2.4.x"
+    "uglify-js": "2.4.x",
+    "source-map": ">=0.1.33"
   },
   "repository": {
     "type": "git",
