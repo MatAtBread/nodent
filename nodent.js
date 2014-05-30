@@ -368,8 +368,12 @@ var nodent = {
 			pr.ast.walk(decorate) ;
 		},
 		require:function(cover) {
-			if (!nodent[cover])
-				nodent[cover] = require("./covers/"+cover)(nodent) ;
+			if (!nodent[cover]) {
+				if (cover.indexOf("/")>=0)
+					nodent[cover] = require(cover)(nodent,opts[cover]) ;
+				else
+					nodent[cover] = require("./covers/"+cover)(nodent,opts[cover]) ;
+			}
 			return nodent[cover] ;
 		},
 		generateRequestHandler:function(path, matchRegex, options) {
@@ -560,7 +564,11 @@ module.exports = function(opts){
 		};
 	}
 	
-	opts.use.forEach(nodent.require) ;
+	if (Array.isArray(opts.use))
+		opts.use.forEach(nodent.require) ;
+	else {
+		Object.keys(opts.use).forEach(nodent.require) ;
+	}
 
 	for (var k in opts) {
 		if (!config.hasOwnProperty(k))

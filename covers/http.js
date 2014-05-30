@@ -5,14 +5,35 @@
  * 		undefined <<= res.wait('end') ;
  */
 
-module.exports = function(nodent) {
+module.exports = function(nodent,config) {
 	nodent.require('events') ;
 	var http = require('http') ;
 	var cover = Object.create(http) ;
+	var protocol ;
+	if (config.autoProtocol) {
+		var https = require('https') ;
+		protocol = function(opts){
+			var p ;
+			if (typeof opts==="string") {
+				p = string.split(":")[0] ;
+			} else if (typeof opts==="object") {
+				p = opts.protocol ;
+			} 
+			switch (p) {
+			case 'http':
+				return http;
+			case 'https':
+				return https;
+			}
+			throw new Error("Protocol is not http or https") ;
+		}
+	} else {
+		protocol = function(){return http;} ; 
+	}
 
 	cover.request = function(opts){
 		return function($return,$error){
-			var request = http.request(opts,function(){}) ;
+			var request = protocol(opts).request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
 		}
@@ -20,13 +41,13 @@ module.exports = function(nodent) {
 
 	cover.get = function(opts){
 		return function($return,$error){
-			http.get(opts,$return).on('error',$error) ;
+			protocol(opts).get(opts,$return).on('error',$error) ;
 		}
 	};
 
 	cover.getBody = function(opts){
 		return function($return,$error){
-			http.get(opts,function(res){
+			protocol(opts).get(opts,function(res){
 				try {
 					var enc = "utf8" ;
 					if (res.headers['content-type']) {

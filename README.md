@@ -23,13 +23,18 @@ To use NoDent, you need to:
 	require('nodent')() ;
 	
 This must take place early in your app, and need only happen once per app - there is no need to require('nodent') in more 
-than one file, once it is loaded it will process any files ending in ".njs" or containing the 'use nodent'; at the top
-of a .js file. 
+than one file, once it is loaded it will process any files ending in ".njs" or containing a 
+
+	'use nodent'; 
+
+directive at the top of a .js file. You can't use the driective, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file (either via the ".njs" extension or the "use nodent"; driectove).
 
 That's the basics.
 
 Changelog
 =========
+30May14: Extend the "use" option to accept an object whose keys define which covers to load, and pass the key's value when the cover is loaded as configuration options. See 'autoProtocol' below. The previous style for the use option (an array of values) is still accepted and is the same as providing an undefined configuration object to the cover. Covers can also now be specified through an absolute path so you can load your own.
+
 27May14: Show both mapped and unmapped files & positions in stack traces. Can be suppressed with option {dontMapStackTraces:true}
 
 22May14: Added a real world example. See Before and After below
@@ -282,6 +287,12 @@ Nodent will require and instantiate the http library for you and attach it to th
 
 	var http = require('nodent')({use:['http']}).http ;
 
+Some covers can accept a configuation object, in this case specify the options as a nested object:
+
+	var http = require('nodent')({use:{http:{autoProtocol:true}}}).http ;
+
+The covers to be loaded are in the keys of the "use" option ('http' in the example above) and the configuration for that cover is the key's value ({autoProtocol:true} in the above example).
+
 http(s)
 -------
 The nodent version of http.get has JS "funcback" the signature:
@@ -320,6 +331,13 @@ http.request is similar, but not identical as you will need access to the reques
 	// Wait for the response to be completed
 	undefined <<= response.wait('end') ;
 	console.log('The response is:\n"+body) ;
+
+The convenience function http.getBody(options) asynchronously gets a body encoded in UTF-8:
+
+	body <<= http.getBody("www.example.com/something") ;
+	console.log('The response is:\n"+body) ;
+
+The "http" cover (not https) can accept a single configuration option 'autoProtocol' that makes get(), request() and getBody() examine the passed url string or URL and use either http or https automatically. The default is "false", meaning request URLs via https will fail with a protocol mismatch.
 
 "async"
 -------
