@@ -145,18 +145,18 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 				value:new U2.AST_Call({
 					expression:asyncCall.transform(asyncAssign),
 					args:[cbBody.body.length ?
-						new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: new U2.AST_Function({
-									argnames:(undefinedReturn?[]:[assignee]),
-									body:cbBody.body
+							new U2.AST_Call({
+								expression:new U2.AST_Dot({
+									expression: new U2.AST_Function({
+										argnames:(undefinedReturn?[]:[assignee]),
+										body:cbBody.body
+									}),
+									property: "bind"
 								}),
-								property: "bind"
-							}),
-							args:[new U2.AST_This()]
-						}):new U2.AST_Function({argnames:[],body:[]}),
-						new U2.AST_SymbolRef({name:config.$error})
-					]
+								args:[new U2.AST_This()]
+							}):new U2.AST_Function({argnames:[],body:[]}),
+							new U2.AST_SymbolRef({name:config.$error})
+							]
 				})
 			})
 		});
@@ -245,20 +245,20 @@ function stripBOM(content) {
 }
 
 function btoa(str) {
-    var buffer ;
+	var buffer ;
 
-    if (str instanceof Buffer) {
-      buffer = str;
-    } else {
-      buffer = new Buffer(str.toString(), 'binary');
-    }
+	if (str instanceof Buffer) {
+		buffer = str;
+	} else {
+		buffer = new Buffer(str.toString(), 'binary');
+	}
 
-    return buffer.toString('base64');
+	return buffer.toString('base64');
 }
-// Hack: go though and create "padding" mappings between lines
-// Without this, whole blocks of code resolve to call & return sequences.
-// This has dependency on the implemenation of source-map  which is
-// not a healthy thing to have.
+//Hack: go though and create "padding" mappings between lines
+//Without this, whole blocks of code resolve to call & return sequences.
+//This has dependency on the implemenation of source-map  which is
+//not a healthy thing to have.
 function createMappingPadding(m) {
 	m.sort(function(a,b){
 		if (a.generatedLine < b.generatedLine)
@@ -271,17 +271,17 @@ function createMappingPadding(m) {
 			return 1 ;
 		return (a.name || "").length - (b.name || "").length ;
 	}) ;
-	
+
 	var i = 1 ;
 	while (i<m.length) {
 		if (m[i-1].generatedLine < m[i].generatedLine){
 			m.splice(i,0,{
-		        generatedColumn: 0,
-		        generatedLine: m[i-1].generatedLine+1,
+				generatedColumn: 0,
+				generatedLine: m[i-1].generatedLine+1,
 				originalColumn: 0,
 				originalLine: m[i-1].originalLine+1,
-		        source: m[i-1].source
-		      }) ;
+				source: m[i-1].source
+			}) ;
 			m[i+1].generatedColumn = 0 ;
 			i += 1 ;
 		}
@@ -289,145 +289,20 @@ function createMappingPadding(m) {
 	}
 	if (m.length)
 		m.push({
-	        generatedColumn: 0,
-	        generatedLine: m[m.length-1].generatedLine+1,
+			generatedColumn: 0,
+			generatedLine: m[m.length-1].generatedLine+1,
 			originalColumn: 0,
 			originalLine: m[m.length-1].originalLine+1,
-	        source: m[m.length-1].source
-	      }) ;
+			source: m[m.length-1].source
+		}) ;
 }
 
-var smCache = {} ;
-
-var nodent = {
-		compile:function(code,origFilename,sourceMapping) {
-			try {
-				sourceMapping = sourceMapping || config.sourceMapping ; 
-				var pr = nodent.parse(code,origFilename,sourceMapping);
-				nodent.asynchronize(pr,sourceMapping) ;
-				nodent.prettyPrint(pr,sourceMapping) ;
-				return pr ;
-			} catch (ex) {
-				if (ex.constructor.name=="JS_Parse_Error") 
-					reportParseException(ex,code,origFilename) ;
-				console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
-				if (ex instanceof Error)
-					throw ex ;
-				else {
-					var wrapped = new Error(ex.toString()) ;
-					wrapped.causedBy = ex ;
-					throw wrapped ;
-				}
-			}
-		},
-		parse:function(code,origFilename,sourceMapping) {
-			sourceMapping = sourceMapping || config.sourceMapping ; 
-			if (sourceMapping==2)
-				origFilename = origFilename+".nodent" ;
-			var r = { origCode:code.toString(), filename:origFilename } ;
-			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
-			r.ast.figure_out_scope();
-			return r ;
-		},
-		asynchronize:function(pr,sourceMapping) {
-			sourceMapping = sourceMapping || config.sourceMapping ; 
-
-			if (sourceMapping==2)
-				pr.filename = pr.filename.replace(/\.nodent$/,"") ;
-			if (sourceMapping==1)
-				pr.filename += ".nodent" ;
-			pr.ast = pr.ast.transform(asyncDefine) ; 
-			pr.ast = pr.ast.transform(asyncAssign) ;
-			return pr ;
-		},
-		prettyPrint:function(pr,sourceMapping) {
-			sourceMapping = sourceMapping || config.sourceMapping ; 
-
-			var map ;
-			if (sourceMapping==1 || sourceMapping==2)
-				map = U2.SourceMap({
-					file:pr.filename,
-					orig: pr.origMap?pr.origMap.toString():null}) ;
-			
-			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
-			pr.ast.print(str);
-			
-			if (map) {
-				createMappingPadding(map.get()._mappings) ;
-				
-				var jsmap = map.get().toJSON() ;
-				jsmap.sourcesContent = [pr.origCode] ;
-				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-				var mapUrl = "\n/*"
-					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-					+"\n*/" ;
-			}
-			pr.code = str.toString()+(map?mapUrl:"") ;
-		},
-		decorate:function(pr) {
-			pr.ast.walk(decorate) ;
-		},
-		require:function(cover) {
-			if (!nodent[cover]) {
-				if (cover.indexOf("/")>=0)
-					nodent[cover] = require(cover)(nodent,opts[cover]) ;
-				else
-					nodent[cover] = require("./covers/"+cover)(nodent,opts[cover]) ;
-			}
-			return nodent[cover] ;
-		},
-		generateRequestHandler:function(path, matchRegex, options) {
-			var cache = {} ;
-			
-			if (!matchRegex)
-				matchRegex = /\.njs$/ ;
-			if (!options)
-				options = {} ;
-					
-			return function (req, res, next) {
-				if (!req.url.match(matchRegex))
-					return next && next() ;
-				
-				if (cache[req.url]) {
-					res.setHeader("Content-Type", "application/javascript");
-					options.setHeaders && options.setHeaders(res) ;
-					res.write(cache[req.url]) ;
-					res.end();
-				}
-				
-				function sendException(ex) {
-					res.statusCode = 500 ;
-					res.write(ex.toString()) ;
-					res.end() ;
-				}
-				
-				var filename = path+req.url ;
-				fs.readFile(filename,function(err,content){
-					if (err) {
-						return sendException(err) ;
-					} else {
-						try {
-							var pr = nodent.compile(content.toString(),req.url,2);
-							if (options.enableCache)
-								cache[req.url] = pr.code ; // Don't cache for now
-							res.setHeader("Content-Type", "application/javascript");
-							options.setHeaders && options.setHeaders(res) ;
-							res.write(pr.code) ;
-							res.end();
-						} catch (ex) {
-							return sendException(ex) ;
-						}
-					}
-				}) ;
-			};
-		},
-		AST:U2
-};
+var nodent ;
 
 function reportParseException(ex,content,filename) {
 	var sample = content.substring(ex.pos-30,ex.pos-1)
-			+"^"+content.substring(ex.pos,ex.pos+1)+"^"
-			+content.substring(ex.pos+1,ex.pos+31) ;
+	+"^"+content.substring(ex.pos,ex.pos+1)+"^"
+	+content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
 	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
@@ -436,13 +311,139 @@ var configured = false ;
 module.exports = function(opts){
 	if (!opts)
 		opts = config ;
-	
+
 	if (!configured) {
 		// Fill in default config values
 		for (var k in config) {
 			if (!opts.hasOwnProperty(k))
 				opts[k] = config[k] ;
 		}
+
+		var smCache = {} ;
+		nodent = {
+			compile:function(code,origFilename,sourceMapping) {
+				try {
+					sourceMapping = sourceMapping || config.sourceMapping ; 
+					var pr = nodent.parse(code,origFilename,sourceMapping);
+					nodent.asynchronize(pr,sourceMapping) ;
+					nodent.prettyPrint(pr,sourceMapping) ;
+					return pr ;
+				} catch (ex) {
+					if (ex.constructor.name=="JS_Parse_Error") 
+						reportParseException(ex,code,origFilename) ;
+					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					if (ex instanceof Error)
+						throw ex ;
+					else {
+						var wrapped = new Error(ex.toString()) ;
+						wrapped.causedBy = ex ;
+						throw wrapped ;
+					}
+				}
+			},
+			parse:function(code,origFilename,sourceMapping) {
+				sourceMapping = sourceMapping || config.sourceMapping ; 
+				if (sourceMapping==2)
+					origFilename = origFilename+".nodent" ;
+				var r = { origCode:code.toString(), filename:origFilename } ;
+				r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
+				r.ast.figure_out_scope();
+				return r ;
+			},
+			asynchronize:function(pr,sourceMapping) {
+				sourceMapping = sourceMapping || config.sourceMapping ; 
+
+				if (sourceMapping==2)
+					pr.filename = pr.filename.replace(/\.nodent$/,"") ;
+				if (sourceMapping==1)
+					pr.filename += ".nodent" ;
+				pr.ast = pr.ast.transform(asyncDefine) ; 
+				pr.ast = pr.ast.transform(asyncAssign) ;
+				return pr ;
+			},
+			prettyPrint:function(pr,sourceMapping) {
+				sourceMapping = sourceMapping || config.sourceMapping ; 
+
+				var map ;
+				if (sourceMapping==1 || sourceMapping==2)
+					map = U2.SourceMap({
+						file:pr.filename,
+						orig: pr.origMap?pr.origMap.toString():null}) ;
+
+				var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
+				pr.ast.print(str);
+
+				if (map) {
+					createMappingPadding(map.get()._mappings) ;
+
+					var jsmap = map.get().toJSON() ;
+					jsmap.sourcesContent = [pr.origCode] ;
+					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+					var mapUrl = "\n/*"
+					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+					+"\n*/" ;
+				}
+				pr.code = str.toString()+(map?mapUrl:"") ;
+			},
+			decorate:function(pr) {
+				pr.ast.walk(decorate) ;
+			},
+			require:function(cover) {
+				if (!nodent[cover]) {
+					if (cover.indexOf("/")>=0)
+						nodent[cover] = require(cover)(nodent,opts[cover]) ;
+					else
+						nodent[cover] = require("./covers/"+cover)(nodent,opts[cover]) ;
+				}
+				return nodent[cover] ;
+			},
+			generateRequestHandler:function(path, matchRegex, options) {
+				var cache = {} ;
+
+				if (!matchRegex)
+					matchRegex = /\.njs$/ ;
+				if (!options)
+					options = {} ;
+
+				return function (req, res, next) {
+					if (!req.url.match(matchRegex))
+						return next && next() ;
+
+					if (cache[req.url]) {
+						res.setHeader("Content-Type", "application/javascript");
+						options.setHeaders && options.setHeaders(res) ;
+						res.write(cache[req.url]) ;
+						res.end();
+					}
+
+					function sendException(ex) {
+						res.statusCode = 500 ;
+						res.write(ex.toString()) ;
+						res.end() ;
+					}
+
+					var filename = path+req.url ;
+					fs.readFile(filename,function(err,content){
+						if (err) {
+							return sendException(err) ;
+						} else {
+							try {
+								var pr = nodent.compile(content.toString(),req.url,2);
+								if (options.enableCache)
+									cache[req.url] = pr.code ; // Don't cache for now
+								res.setHeader("Content-Type", "application/javascript");
+								options.setHeaders && options.setHeaders(res) ;
+								res.write(pr.code) ;
+								res.end();
+							} catch (ex) {
+								return sendException(ex) ;
+							}
+						}
+					}) ;
+				};
+			},
+			AST:U2
+		};
 
 		/**
 		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
@@ -460,11 +461,11 @@ module.exports = function(opts){
 					if (source && smCache[source]) {
 						var position = smCache[source].smc.originalPositionFor({line: frame.getLineNumber(), column: frame.getColumnNumber()-1});
 						var desc = frame.toString() ;
-						
+
 						var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
 						for (var i=0; i<s.length && s[i]==d[i]; i++) ;
 						desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
-						
+
 						return '\n    at '+desc ;
 					}
 					return '\n    at '+frame;
@@ -474,7 +475,7 @@ module.exports = function(opts){
 			}
 
 		}
-		
+
 		/**
 		 * NoDentify (make async) a general function.
 		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
@@ -514,7 +515,7 @@ module.exports = function(opts){
 			enumerable:false,
 			writable:true
 		}) ;
-		
+
 		// Method to wrap error handlers
 		Object.defineProperty(Function.prototype,"chain$error",{
 			value:function(handler){ 
@@ -548,7 +549,7 @@ module.exports = function(opts){
 				return stdJSLoader(mod,filename) ;
 			} ;
 		}
-	
+
 		require.extensions[opts.extension] = function(mod, filename) {
 			try {
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
@@ -563,7 +564,7 @@ module.exports = function(opts){
 			}
 		};
 	}
-	
+
 	if (Array.isArray(opts.use))
 		opts.use.forEach(nodent.require) ;
 	else {

@@ -10,7 +10,7 @@ module.exports = function(nodent,config) {
 	var http = require('http') ;
 	var cover = Object.create(http) ;
 	var protocol ;
-	if (config.autoProtocol) {
+	if (config && config.autoProtocol) {
 		var https = require('https') ;
 		protocol = function(opts){
 			var p ;
