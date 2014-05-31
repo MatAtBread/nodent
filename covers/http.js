@@ -7,11 +7,11 @@
 
 module.exports = function(nodent,config) {
 	nodent.require('events') ;
-	var http = require('http') ;
+	var protos = {http:require('http')} ;
 	var cover = Object.create(http) ;
 	var protocol ;
 	if (config && config.autoProtocol) {
-		var https = require('https') ;
+		protos.https = require('https') ;
 		protocol = function(opts){
 			var p ;
 			if (typeof opts==="string") {
@@ -19,12 +19,7 @@ module.exports = function(nodent,config) {
 			} else if (typeof opts==="object") {
 				p = opts.protocol ;
 			} 
-			switch (p) {
-			case 'http':
-				return http;
-			case 'https':
-				return https;
-			}
+			if (p && protos[p]) return protos[p] ;
 			throw new Error("Protocol is not http or https") ;
 		}
 	} else {
