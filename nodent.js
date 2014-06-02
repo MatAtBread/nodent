@@ -391,9 +391,9 @@ module.exports = function(opts){
 			require:function(cover) {
 				if (!nodent[cover]) {
 					if (cover.indexOf("/")>=0)
-						nodent[cover] = require(cover)(nodent,opts[cover]) ;
+						nodent[cover] = require(cover)(nodent,opts.use[cover]) ;
 					else
-						nodent[cover] = require("./covers/"+cover)(nodent,opts[cover]) ;
+						nodent[cover] = require("./covers/"+cover)(nodent,opts.use[cover]) ;
 				}
 				return nodent[cover] ;
 			},

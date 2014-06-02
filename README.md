@@ -33,6 +33,8 @@ That's the basics.
 
 Changelog
 =========
+02Jun14: Previous release (in Github, not npmjs) was broken in covers/http. Now fixed.
+
 30May14: Extend the "use" option to accept an object whose keys define which covers to load, and pass the key's value when the cover is loaded as configuration options. See 'autoProtocol' below. The previous style for the use option (an array of values) is still accepted and is the same as providing an undefined configuration object to the cover. Covers can also now be specified through an absolute path so you can load your own.
 
 27May14: Show both mapped and unmapped files & positions in stack traces. Can be suppressed with option {dontMapStackTraces:true}

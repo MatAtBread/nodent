@@ -8,7 +8,7 @@
 module.exports = function(nodent,config) {
 	nodent.require('events') ;
 	var protos = {http:require('http')} ;
-	var cover = Object.create(http) ;
+	var cover = Object.create(protos.http) ;
 	var protocol ;
 	if (config && config.autoProtocol) {
 		protos.https = require('https') ;
@@ -23,7 +23,7 @@ module.exports = function(nodent,config) {
 			throw new Error("Protocol is not http or https") ;
 		}
 	} else {
-		protocol = function(){return http;} ; 
+		protocol = function(){return protos.http;} ; 
 	}
 
 	cover.request = function(opts){
