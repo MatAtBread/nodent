@@ -33,6 +33,9 @@ That's the basics.
 
 Changelog
 =========
+
+17Jun14: Announcing ApiPublisher - Nodent for Networks. Call your Nodent async-functions from anywhere! [https://www.npmjs.org/package/apipublisher]
+
 02Jun14: Previous release (in Github, not npmjs) was broken in covers/http. Now fixed.
 
 30May14: Extend the "use" option to accept an object whose keys define which covers to load, and pass the key's value when the cover is loaded as configuration options. See 'autoProtocol' below. The previous style for the use option (an array of values) is still accepted and is the same as providing an undefined configuration object to the cover. Covers can also now be specified through an absolute path so you can load your own.
@@ -216,13 +219,13 @@ In Nodent, you have to do this by typing:
 The intermediate variable "result" is pretty harmless, bu the creation of the hidden callback is a small
 overhead that can be avoided by simple passing throw all the async values:
 
-	return a_other(123,$return,$error) ; 	// Callbacks passed as normal JS call to async-call
+	return a_other(123)($return,$error) ; 	// Callbacks passed as normal JS call to async-call
 
 The problem here is it will be wrapped in another call to $return, result in the callback being
 called twice, which is usually a very bad idea. To make this optimisation possible, returning a
 "void" is NOT wrapped so the statement below does what we want:
 
-	return void (a_other(123,$return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
+	return void (a_other(123)($return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
 
 Chaining Errors
 ===============
