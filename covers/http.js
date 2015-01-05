@@ -15,7 +15,7 @@ module.exports = function(nodent,config) {
 		protocol = function(opts){
 			var p ;
 			if (typeof opts==="string") {
-				p = string.split(":")[0] ;
+				p = opts.split(":")[0] ;
 			} else if (typeof opts==="object") {
 				p = opts.protocol ;
 			} 
