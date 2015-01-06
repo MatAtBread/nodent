@@ -17,7 +17,7 @@ module.exports = function(nodent,config) {
 			if (typeof opts==="string") {
 				p = opts.split(":")[0] ;
 			} else if (typeof opts==="object") {
-				p = opts.protocol ;
+				p = opts.protocol.replace(/:?$/,"") ;
 			} 
 			if (p && protos[p]) return protos[p] ;
 			throw new Error("Protocol is not http or https") ;

@@ -34,7 +34,7 @@ That's the basics.
 Changelog
 =========
 
-05Jan15: Fix error when http is used with autoProtocol option and a string URL, as opposed to a Node URL object.
+06Jan15: Fix error when http is used with autoProtocol option
 
 17Jun14: Announcing ApiPublisher - Nodent for Networks. Call your Nodent async-functions from anywhere! [https://www.npmjs.org/package/apipublisher]
 
