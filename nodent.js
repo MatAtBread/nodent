@@ -218,7 +218,7 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 		coerce(node,result) ;
 
 		var stmt = asyncAwait.find_parent(U2.AST_Statement) ;
-		var block = asyncAwait.find_parent(U2.AST_BlockStatement) || asyncAwait.find_parent(U2.AST_Toplevel) ;
+		var block = asyncAwait.find_parent(U2.AST_Block) || asyncAwait.find_parent(U2.AST_BlockStatement) || asyncAwait.find_parent(U2.AST_Toplevel) ;
 		var i = block.body.indexOf(stmt) ;
 		var callBack = block.body.splice(i,block.body.length-i).slice(1) 
 		callBack.unshift(stmt);
@@ -402,7 +402,7 @@ function reportParseException(ex,content,filename) {
 	+"^"+content.substring(ex.pos,ex.pos+1)+"^"
 	+content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
-	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample,ex.stack) ;
+	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
 
 var configured = false ;
@@ -430,7 +430,7 @@ function initialize(opts){
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
 						reportParseException(ex,code,origFilename) ;
-					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message,ex.stack) ;
+					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 					if (ex instanceof Error)
 						throw ex ;
 					else {
@@ -649,11 +649,7 @@ function initialize(opts){
 							}
 						}
 					}
-				} catch (ex) {
-					if (ex.constructor.name=="JS_Parse_Error") 
-						reportParseException(ex,content,filename) ;
-					console.log("NoDent JS: Warning - couldn't parse "+filename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message,ex.stack) ;
-				}
+				} catch (ex) { /* Meh. Try using the JS parser */ }
 				return stdJSLoader(mod,filename) ;
 			} ;
 		}
