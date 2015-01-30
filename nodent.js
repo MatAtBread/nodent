@@ -7,16 +7,16 @@
  */
 
 var fs = require('fs') ;
-	
+
+/* A patch that adds two new keywords to Uglify parsing: async and await, a la ES7 */
 function U2patch(){
-	debugger ;
 	var predicates = {
 		KEYWORDS:KEYWORDS,
 		KEYWORDS_BEFORE_EXPRESSION:KEYWORDS_BEFORE_EXPRESSION,
 		OPERATORS:OPERATORS,
 		UNARY_PREFIX:UNARY_PREFIX
 	} ;
-	var preds = {await:true} ;
+	var preds = {await:true,async:true} ;
 	KEYWORDS = function(str){ return str in preds || predicates.KEYWORDS.apply(this,arguments) ; } ;
 	KEYWORDS_BEFORE_EXPRESSION = function(str){ return str in preds || predicates.KEYWORDS_BEFORE_EXPRESSION.apply(this,arguments) ; } ;
 	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
@@ -35,8 +35,10 @@ var config = {
 		$return:"$return",
 		$error:"$error",
 		$except:"$except",
-		define:"-",
-		async:"async",
+		// Pre-ES7 tokens: for async-function() ** OBSOLOETE **
+		// define:"-",
+		// async:"async",
+		// Pre-ES7 tokens for async assignment
 		assign:"<<=",
 		ltor:true	/* true: val <<= async(),   false: async() <<= val */
 };
@@ -139,7 +141,6 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
  *
  */
 
-
 var asyncAssign = new U2.TreeTransformer(function(node, descend){
 	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
 	var stmt = isSimple?node.body:node ;
@@ -186,8 +187,8 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 	}
 }) ;
 
-/*
- * Transform an AST like:
+/**
+ * ES7 await keyword - transform an AST like:
 console.log("start") ;
 console.log(await test(1)) ;
 console.log("ok") ;
@@ -200,6 +201,12 @@ console.log("ok") ;
 });
 */
 
+function coerce(node,replace) {
+	node.__proto__ = Object.getPrototypeOf(replace) ;
+	Object.keys(node).forEach(function(k){ delete node[k]}) ;
+	Object.keys(replace).forEach(function(k){ node[k] = replace[k]}) ;
+}
+
 var generatedSymbol = 1 ;
 var asyncAwait = new U2.TreeWalker(function(node, descend){
 	if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
@@ -208,9 +215,8 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 		var expr = node.expression.clone() ;
 		/* Bit of a hack: without having to search for references to this
 		 * node, force it to be a SymbolRef which will be generated on the fly */
-		node.__proto__ = Object.getPrototypeOf(result) ;
-		Object.keys(node).forEach(function(k){ delete node[k]}) ;
-		Object.keys(result).forEach(function(k){ node[k] = result[k]}) ;
+		coerce(node,result) ;
+
 		var stmt = asyncAwait.find_parent(U2.AST_Statement) ;
 		var block = asyncAwait.find_parent(U2.AST_BlockStatement) || asyncAwait.find_parent(U2.AST_Toplevel) ;
 		var i = block.body.indexOf(stmt) ;
@@ -241,17 +247,18 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 		});
 
 		block.body.push(replace) ;
-//		debugger;
 		return true ; //new U2.AST_SymbolRef({name:""}) ;
-//	} else {
-//		descend(node, this);
-//		return node ;
 	}
 }) ;
 
 /**
- * Uglify transormer: Transform 
+ * Uglify transormer: Transform (non ES7)
   	async-function test(x) {
+ 		return x*2 ;
+ 	};
+ *
+ * or ES7
+  	async function test(x) {
  		return x*2 ;
  	};
  *
@@ -269,52 +276,59 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
  *
  */
 
-var asyncDefine = new U2.TreeTransformer(function(node, descend){
-	node = node.clone() ;
-	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
-	var stmt = isSimple?node.body:node ;
-	if (stmt instanceof U2.AST_Binary 
-			&& stmt.operator==config.define 
-			&& stmt.left.name==config.async 
-			&& stmt.right instanceof U2.AST_Function) {
-		/*
-		 * "stmt" is an expression of the form "async-function(){}". We're going to lose the "async" entirely, as is 
-		 * used simply to decorate the function, and manipulate the function body as above.
-		 */
-		var replace = stmt.right.clone() ;
-		/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
-		 * with a call to "$return" */
-		var fnBody = stmt.right.body.map(function(sub){
-			return sub.transform(returnMapper).transform(asyncDefine) ;
-		}) ;
-
-		replace.body = [new U2.AST_Return({
-			value:new U2.AST_Call({
-				expression:new U2.AST_Dot({
-					expression: new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
-						body:[new U2.AST_Try({
-							body:fnBody,
-							bcatch:new U2.AST_Catch({
-								argname:new U2.AST_SymbolCatch({name:config.$except}),
-								body:[new U2.AST_Call({
-									expression:new U2.AST_SymbolRef({name:config.$error}),
-									args:[new U2.AST_SymbolRef({name:config.$except})]
+function asyncDefine(opts) {
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
+			// async is unary operator that takes a function as it's right hand side, 
+			// OR, for old-style declarations, a unary negaive expression yielding a function, e.g.
+			// async function(){} or async -function(){}
+			var fn = node.expression ;
+			if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
+				fn = fn.expression.clone() ;
+			if (fn instanceof U2.AST_Function) {
+				var replace = fn.clone() ;
+				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
+				 * with a call to "$return" */
+				var fnBody = fn.body.map(function(sub){
+					var ast = sub.transform(returnMapper)
+					ast.walk(asyncWalk) ;
+					return ast ;
+				}) ;
+	
+				replace.body = [new U2.AST_Return({
+					value:new U2.AST_Call({
+						expression:new U2.AST_Dot({
+							expression: new U2.AST_Function({
+								argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+								body:[new U2.AST_Try({
+									body:fnBody,
+									bcatch:new U2.AST_Catch({
+										argname:new U2.AST_SymbolCatch({name:config.$except}),
+										body:[new U2.AST_Call({
+											expression:new U2.AST_SymbolRef({name:config.$error}),
+											args:[new U2.AST_SymbolRef({name:config.$except})]
+										})]
+									})
 								})]
-							})
-						})]
-					}),
-					property: "bind"
-				}),
-				args:[new U2.AST_This()]
-			})
-		})] ;
-		return replace ;
-	} else {
-		descend(node, this);
-		return node ;
-	}
-});
+							}),
+							property: "bind"
+						}),
+						args:[new U2.AST_This()]
+					})
+				})] ;
+				
+				var parent = asyncWalk.parent(0) ;
+				if (parent instanceof U2.AST_SimpleStatement) {
+					coerce(parent,replace) ;
+				} else {
+					coerce(node,replace) ;
+				}
+				return true ;
+			}
+		}
+	});
+	return asyncWalk ;
+}
 
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
@@ -337,6 +351,7 @@ function btoa(str) {
 
 	return buffer.toString('base64');
 }
+
 //Hack: go though and create "padding" mappings between lines
 //Without this, whole blocks of code resolve to call & return sequences.
 //This has dependency on the implemenation of source-map  which is
@@ -387,11 +402,11 @@ function reportParseException(ex,content,filename) {
 	+"^"+content.substring(ex.pos,ex.pos+1)+"^"
 	+content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
-	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
+	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample,ex.stack) ;
 } 
 
 var configured = false ;
-module.exports = function(opts){
+function initialize(opts){
 	if (!opts)
 		opts = config ;
 
@@ -441,7 +456,7 @@ module.exports = function(opts){
 					pr.filename = pr.filename.replace(/\.nodent$/,"") ;
 				if (sourceMapping==1)
 					pr.filename += ".nodent" ;
-				pr.ast = pr.ast.transform(asyncDefine) ;
+				/* pr.ast = */pr.ast.walk(asyncDefine(opts)) ;
 				if (opts.es7) {
 					/*pr.ast =*/ pr.ast.walk(asyncAwait) ;
 				} else {
@@ -674,6 +689,38 @@ module.exports = function(opts){
 	configured = true ;
 	return nodent ;
 } ;
+
+initialize.asyncify = function asyncify(obj) {
+	var o = Object.create(obj) ;
+	for (var j in o) (function(){
+		var k = j ;
+		if (typeof o[k]==='function' && !o[k].isAsync) {
+			o[k] = function() {
+				var a = Array.prototype.slice.call(arguments) ;
+				return function($return,$error) {
+					a.push(function(err,ok){
+						if (err)
+							return $error(err) ;
+						if (arguments.length==2)
+							return $return(ok) ;
+						return $return(Array.prototype.slice.call(arguments,1)) ;
+					}) ;
+					var ret = obj[k].apply(obj,a) ;
+					/* EXPERIMENTAL !!
+					if (ret !== undefined) {
+						$return(ret) ;
+					}
+					*/
+				}
+			}
+			o[k].isAsync = true ;
+		}
+	})() ;
+	o["super"] = obj ;
+	return o ;
+};
+
+module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv[2]) {
