@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * NoDent - Asynchronous JavaScript Language extensions for Node
  * 
@@ -5,13 +7,30 @@
  */
 
 var fs = require('fs') ;
-var U2 = require("uglify-js");
+	
+function U2patch(){
+	debugger ;
+	var predicates = {
+		KEYWORDS:KEYWORDS,
+		KEYWORDS_BEFORE_EXPRESSION:KEYWORDS_BEFORE_EXPRESSION,
+		OPERATORS:OPERATORS,
+		UNARY_PREFIX:UNARY_PREFIX
+	} ;
+	var preds = {await:true} ;
+	KEYWORDS = function(str){ return str in preds || predicates.KEYWORDS.apply(this,arguments) ; } ;
+	KEYWORDS_BEFORE_EXPRESSION = function(str){ return str in preds || predicates.KEYWORDS_BEFORE_EXPRESSION.apply(this,arguments) ; } ;
+	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
+	UNARY_PREFIX = function(str){ return str in preds || predicates.UNARY_PREFIX.apply(this,arguments) ; } ;
+}
+var U2 = require("./ug2loader").load(U2patch) ;
+
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
 		useDirective:"use nodent",
+		useES7Directive:"use nodent-es7",
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -167,6 +186,69 @@ var asyncAssign = new U2.TreeTransformer(function(node, descend){
 	}
 }) ;
 
+/*
+ * Transform an AST like:
+console.log("start") ;
+console.log(await test(1)) ;
+console.log("ok") ;
+
+ * to:
+console.log("start") ;
+return test(1)(function(_var){
+console.log(_var) ;
+console.log("ok") ;
+});
+*/
+
+var generatedSymbol = 1 ;
+var asyncAwait = new U2.TreeWalker(function(node, descend){
+	if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+//		debugger;
+		var result = new U2.AST_SymbolRef({name:"$"+node.print_to_string().replace(/[^a-zA-Z0-9_]+/g,"_")+"$"+generatedSymbol++}) ;
+		var expr = node.expression.clone() ;
+		/* Bit of a hack: without having to search for references to this
+		 * node, force it to be a SymbolRef which will be generated on the fly */
+		node.__proto__ = Object.getPrototypeOf(result) ;
+		Object.keys(node).forEach(function(k){ delete node[k]}) ;
+		Object.keys(result).forEach(function(k){ node[k] = result[k]}) ;
+		var stmt = asyncAwait.find_parent(U2.AST_Statement) ;
+		var block = asyncAwait.find_parent(U2.AST_BlockStatement) || asyncAwait.find_parent(U2.AST_Toplevel) ;
+		var i = block.body.indexOf(stmt) ;
+		var callBack = block.body.splice(i,block.body.length-i).slice(1) 
+		callBack.unshift(stmt);
+		// Wrap the callback statement(s) in a Block and transform them
+		var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}) ;
+		cbBody.walk(asyncAwait) ;
+		var replace = new U2.AST_SimpleStatement({
+			body:new U2.AST_Return({
+				value:new U2.AST_Call({
+					expression:expr,//asyncCall.transform(asyncAssign),
+					args:[cbBody.body.length ?
+							new U2.AST_Call({
+								expression:new U2.AST_Dot({
+									expression: new U2.AST_Function({
+										argnames:[result.clone()],
+										body:cbBody.body
+									}),
+									property: "bind"
+								}),
+								args:[new U2.AST_This()]
+							}):new U2.AST_Function({argnames:[],body:[]}),
+							new U2.AST_SymbolRef({name:config.$error})
+							]
+				})
+			})
+		});
+
+		block.body.push(replace) ;
+//		debugger;
+		return true ; //new U2.AST_SymbolRef({name:""}) ;
+//	} else {
+//		descend(node, this);
+//		return node ;
+	}
+}) ;
+
 /**
  * Uglify transormer: Transform 
   	async-function test(x) {
@@ -259,7 +341,8 @@ function btoa(str) {
 //Without this, whole blocks of code resolve to call & return sequences.
 //This has dependency on the implemenation of source-map  which is
 //not a healthy thing to have.
-function createMappingPadding(m) {
+function createMappingPadding(mapping) {
+	var m = mapping._mappings._array;
 	m.sort(function(a,b){
 		if (a.generatedLine < b.generatedLine)
 			return -1 ;
@@ -321,17 +404,18 @@ module.exports = function(opts){
 
 		var smCache = {} ;
 		nodent = {
-			compile:function(code,origFilename,sourceMapping) {
+			compile:function(code,origFilename,sourceMapping,opts) {
 				try {
+					opts = opts || {} ;
 					sourceMapping = sourceMapping || config.sourceMapping ; 
-					var pr = nodent.parse(code,origFilename,sourceMapping);
-					nodent.asynchronize(pr,sourceMapping) ;
-					nodent.prettyPrint(pr,sourceMapping) ;
+					var pr = nodent.parse(code,origFilename,sourceMapping,opts);
+					nodent.asynchronize(pr,sourceMapping,opts) ;
+					nodent.prettyPrint(pr,sourceMapping,opts) ;
 					return pr ;
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
 						reportParseException(ex,code,origFilename) ;
-					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message,ex.stack) ;
 					if (ex instanceof Error)
 						throw ex ;
 					else {
@@ -341,7 +425,7 @@ module.exports = function(opts){
 					}
 				}
 			},
-			parse:function(code,origFilename,sourceMapping) {
+			parse:function(code,origFilename,sourceMapping,opts) {
 				sourceMapping = sourceMapping || config.sourceMapping ; 
 				if (sourceMapping==2)
 					origFilename = origFilename+".nodent" ;
@@ -350,18 +434,22 @@ module.exports = function(opts){
 				r.ast.figure_out_scope();
 				return r ;
 			},
-			asynchronize:function(pr,sourceMapping) {
+			asynchronize:function(pr,sourceMapping,opts) {
 				sourceMapping = sourceMapping || config.sourceMapping ; 
 
 				if (sourceMapping==2)
 					pr.filename = pr.filename.replace(/\.nodent$/,"") ;
 				if (sourceMapping==1)
 					pr.filename += ".nodent" ;
-				pr.ast = pr.ast.transform(asyncDefine) ; 
-				pr.ast = pr.ast.transform(asyncAssign) ;
+				pr.ast = pr.ast.transform(asyncDefine) ;
+				if (opts.es7) {
+					/*pr.ast =*/ pr.ast.walk(asyncAwait) ;
+				} else {
+					pr.ast = pr.ast.transform(asyncAssign) ;
+				}
 				return pr ;
 			},
-			prettyPrint:function(pr,sourceMapping) {
+			prettyPrint:function(pr,sourceMapping,opts) {
 				sourceMapping = sourceMapping || config.sourceMapping ; 
 
 				var map ;
@@ -374,7 +462,7 @@ module.exports = function(opts){
 				pr.ast.print(str);
 
 				if (map) {
-					createMappingPadding(map.get()._mappings) ;
+					createMappingPadding(map.get()) ;
 
 					var jsmap = map.get().toJSON() ;
 					jsmap.sourcesContent = [pr.origCode] ;
@@ -531,31 +619,37 @@ module.exports = function(opts){
 		}) ;
 
 		var stdJSLoader = require.extensions['.js'] ; 
-		if (opts.useDirective) {
+		if (opts.useDirective || opts.useES7Directive) {
 			require.extensions['.js'] = function(mod,filename) {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				try {
 					var pr = nodent.parse(content,filename);
 					for (var i=0; i<pr.ast.body.length; i++) {
-						if (pr.ast.body[i] instanceof U2.AST_Directive && pr.ast.body[i].value==opts.useDirective) {
-							return require.extensions[opts.extension](mod,filename) ;
+						if (pr.ast.body[i] instanceof U2.AST_Directive) {
+							if (pr.ast.body[i].value==opts.useDirective) {
+								return require.extensions[opts.extension](mod,filename) ;
+							}
+							if (pr.ast.body[i].value==opts.useES7Directive) {
+								return require.extensions[opts.extension](mod,filename,{es7:true}) ;
+							}
 						}
 					}
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
 						reportParseException(ex,content,filename) ;
-					console.log("NoDent JS: Warning - couldn't parse "+filename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					console.log("NoDent JS: Warning - couldn't parse "+filename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message,ex.stack) ;
 				}
 				return stdJSLoader(mod,filename) ;
 			} ;
 		}
 
-		require.extensions[opts.extension] = function(mod, filename) {
+		require.extensions[opts.extension] = function(mod, filename, opts) {
 			try {
+				opts = opts || {} ;
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var pr = nodent.parse(content,filename);
-				nodent.asynchronize(pr) ;
-				nodent.prettyPrint(pr) ;
+				var pr = nodent.parse(content,filename,opts);
+				nodent.asynchronize(pr,undefined,opts) ;
+				nodent.prettyPrint(pr,undefined,opts) ;
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
@@ -580,3 +674,11 @@ module.exports = function(opts){
 	configured = true ;
 	return nodent ;
 } ;
+
+/* If invoked as the top level module, read the next arg and load it */
+if (require.main===module && process.argv[2]) {
+	module.exports(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	// Initialise nodent
+	var path = require('path') ;
+	var mod = path.resolve(process.argv[2]) ;
+	require(mod);
+}
