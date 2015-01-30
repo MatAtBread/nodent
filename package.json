@@ -16,7 +16,7 @@
   },
   "engine": "node >= 0.10.0",
   "keywords": [
-    "Javascript","ES7","async","await"
+    "Javascript","ES7","async","await",
     "language",
     "extensions",
     "Node",
