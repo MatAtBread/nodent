@@ -201,6 +201,8 @@ console.log("ok") ;
 });
 */
 
+/* Bit of a hack: without having to search for references to this
+ * node, force it to be some replacement node */
 function coerce(node,replace) {
 	node.__proto__ = Object.getPrototypeOf(replace) ;
 	Object.keys(node).forEach(function(k){ delete node[k]}) ;
@@ -210,11 +212,11 @@ function coerce(node,replace) {
 var generatedSymbol = 1 ;
 var asyncAwait = new U2.TreeWalker(function(node, descend){
 	if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-//		debugger;
-		var result = new U2.AST_SymbolRef({name:"$"+node.print_to_string().replace(/[^a-zA-Z0-9_]+/g,"_")+"$"+generatedSymbol++}) ;
+		var result = new U2.AST_SymbolRef({
+			name:"$await_"+
+			node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/,"_")
+			+"$"+generatedSymbol++}) ;
 		var expr = node.expression.clone() ;
-		/* Bit of a hack: without having to search for references to this
-		 * node, force it to be a SymbolRef which will be generated on the fly */
 		coerce(node,result) ;
 
 		var stmt = asyncAwait.find_parent(U2.AST_Statement) ;
@@ -247,7 +249,7 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 		});
 
 		block.body.push(replace) ;
-		return true ; //new U2.AST_SymbolRef({name:""}) ;
+		return true ; 
 	}
 }) ;
 
@@ -279,9 +281,10 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 function asyncDefine(opts) {
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
-			// async is unary operator that takes a function as it's right hand side, 
-			// OR, for old-style declarations, a unary negaive expression yielding a function, e.g.
-			// async function(){} or async -function(){}
+			// 'async' is unary operator that takes a function as it's operand, 
+			// OR, for old-style declarations, a unary negative expression yielding a function, e.g.
+			// async function(){} or async-function(){}
+			// The latter form is deprecated, but has the advantage of being ES5 syntax compatible
 			var fn = node.expression ;
 			if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
 				fn = fn.expression.clone() ;
