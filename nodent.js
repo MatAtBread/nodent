@@ -214,7 +214,7 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
 	if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
 		var result = new U2.AST_SymbolRef({
 			name:"$await_"+
-			node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/,"_")
+			node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")
 			+"$"+generatedSymbol++}) ;
 		var expr = node.expression.clone() ;
 		coerce(node,result) ;
