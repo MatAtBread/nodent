@@ -592,6 +592,7 @@ function initialize(opts){
 		 * 		http.get(opts,function(result){}) ;
 		 * to:
 		 * 		http.aGet(opts)(function(result){}) ;
+		 * 
 		 */
 		Object.defineProperty(Function.prototype,"noDentify",{
 			value:function(idx,errorIdx,resultIdx) {
@@ -689,11 +690,15 @@ function initialize(opts){
 	return nodent ;
 } ;
 
-initialize.asyncify = function asyncify(obj) {
+initialize.asyncify = function asyncify(obj,filter) {
+	filter = filter || function(k,o) {
+		return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
+	};
+	
 	var o = Object.create(obj) ;
 	for (var j in o) (function(){
 		var k = j ;
-		if (typeof o[k]==='function' && !o[k].isAsync) {
+		if (typeof o[k]==='function' && !o[k].isAsync && filter(k,o)) {
 			o[k] = function() {
 				var a = Array.prototype.slice.call(arguments) ;
 				return function($return,$error) {
