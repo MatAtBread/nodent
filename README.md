@@ -5,7 +5,7 @@ NoDent is a small module for Nodejs that extends standard Javascript semantics t
 
 It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are courtesy of Uglify2 http://lisperator.net/uglifyjs/
 
-NB: The code and examples in this README are for nodent with ES7 extensions. To use nodent with the previous ES5-compatible syntax, [see README-v0-1-38](./README-v0-1-38.md)
+NB: The code and examples in this README are for nodent with ES7 extensions. To previous ES5-compatible syntax is described in [README-v0-1-38](./README-v0-1-38.md). This updated version of Nodent is backwards compatible with the earlier ES5 syntax which is enabled with the "use nodent" directive (not "-es7").
 
 Basic Use and Syntax
 ====================
@@ -29,7 +29,7 @@ than one file, once it is loaded it will process any files ending in ".njs" or c
 
 	'use nodent-es7'; 
 
-directive at the top of a .js file. You can't use the directive, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file (either via the ".njs" extension or the "use nodent"; directive), or start your app nodent from the command line:
+directive at the top of a .js file. You can't use the directive, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file (either via the ".njs" extension or the "use nodent-es7"; directive), or start your app nodent from the command line:
 
 	./nodent.js myapp.js
 
