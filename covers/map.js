@@ -1,4 +1,4 @@
-function map(what,result,async) {
+function map(what,result,asyncFn) {
 	if (typeof what=="number") {
 		var period = [] ;
 		period.length = Math.floor(what) ;
@@ -6,13 +6,13 @@ function map(what,result,async) {
 			for (var i=0; i<period.length; i++)
 				fn.apply(null,[i,i,period]) ;
 		} ;
-		return map(period,result,async) ;
+		return map(period,result,asyncFn) ;
 	}
 
 	var isArray = Array.isArray(what) ;
 	var context = new Error() ;
-	if (!async && (typeof result in {'function':true,'undefined':true})) {
-		async = result ;
+	if (!asyncFn && (typeof result in {'function':true,'undefined':true})) {
+		asyncFn = result ;
 		result = isArray?[]:{} ;
 	}
 	var array = isArray?what:Object.keys(what) ;
@@ -46,8 +46,8 @@ function map(what,result,async) {
 					complete(new Error(x)) ;
 			}
 			
-			if (async) {
-				async.apply(this,arguments)(complete,completeError);	
+			if (asyncFn) {
+				asyncFn.apply(this,arguments)(complete,completeError);	
 			} else {
 				(isArray?e:what[e]).call(this,complete,completeError);
 			}
@@ -56,7 +56,5 @@ function map(what,result,async) {
 }
 
 module.exports = function(nodent) {
-	return {
-		map:map
-	} ;
+	return map ;
 }

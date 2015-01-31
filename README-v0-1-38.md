@@ -5,20 +5,18 @@ NoDent is a small module for Nodejs that extends standard Javascript semantics t
 
 It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are courtesy of Uglify2 http://lisperator.net/uglifyjs/
 
-NB: The code and examples in this README are for nodent with ES7 extensions. To use nodent with the previous ES5-compatible syntax, [see README-v0-1-38](./README-v0-1-38.md)
-
 Basic Use and Syntax
 ====================
 Declare an asynchronous function (one that returns "later").
 
-	async function tellYouLater(sayWhat) {
+	async-function tellYouLater(sayWhat) {
 		// Do something asynchronous and terminal, such as DB access, web access, etc.
 		return result ;
 	}
 
 Call an async function:
 	
-	result = await tellYouLater("Hi there") ;
+	result <<= tellYouLater("Hi there") ;
 	
 To use NoDent, you need to:
 
@@ -27,35 +25,18 @@ To use NoDent, you need to:
 This must take place early in your app, and need only happen once per app - there is no need to require('nodent') in more 
 than one file, once it is loaded it will process any files ending in ".njs" or containing a 
 
-	'use nodent-es7'; 
+	'use nodent'; 
 
-directive at the top of a .js file. You can't use the directive, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file (either via the ".njs" extension or the "use nodent"; directive), or start your app nodent from the command line:
-
-	./nodent.js myapp.js
+directive at the top of a .js file. You can't use the driective, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file (either via the ".njs" extension or the "use nodent"; driectove).
 
 That's the basics.
 
-Why Nodent?
-===========
-
-* Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code. 
-* No dependency on ES6, "harmony"
-* No run-time overhead for Promises, Generators or any other feature beyond ES5
-* No 'node-gyp' or similar OS platform requirement for threads or fibers 
-* ES7 async and await on ES5 (most modern browsers and nodejs). For more about ES7 async functions and await see:
-  *  [http://wiki.ecmascript.org/doku.php?id=strawman:async_functions](http://wiki.ecmascript.org/doku.php?id=strawman:async_functions)
-  *  [http://jakearchibald.com/2014/es7-async-functions/](http://jakearchibald.com/2014/es7-async-functions/)
-  *  [https://github.com/lukehoban/ecmascript-asyncawait](https://github.com/lukehoban/ecmascript-asyncawait)
-
-
 Changelog
-==========
-
-30Jan15: Update to support ES7 async and await syntax
+=========
 
 06Jan15: Fix error when http is used with autoProtocol option
 
-17Jun14: Announcing ApiPublisher - Nodent for Networks. Call your Nodent async functions from anywhere! [https://www.npmjs.org/package/apipublisher]
+17Jun14: Announcing ApiPublisher - Nodent for Networks. Call your Nodent async-functions from anywhere! [https://www.npmjs.org/package/apipublisher]
 
 02Jun14: Previous release (in Github, not npmjs) was broken in covers/http. Now fixed.
 
@@ -65,7 +46,7 @@ Changelog
 
 22May14: Added a real world example. See Before and After below
 
-22May14: Update async.map() to accepts an arbitrary set of async functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
+22May14: Update async.map() to accepts an arbitrary set of async-functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
 
 09Apr14: Update async.map() to accept a Number as the first argument. The async-callback is then called with integers from 0 to arg-1 rather than object keys or array elements.
 
@@ -77,7 +58,7 @@ Changelog
 
 12Mar14: Add prototype to allow error handlers to be chained. See "Chaining errors" below.
 
-10Feb14: Add convenience method http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
+10Feb14: Add convenience method body <<= http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
 
 02Feb14: Make compile() log friendly error messages and throw an object of type Error if there is a problem parsing
 
@@ -87,7 +68,7 @@ Changelog
 
 04Jan14: Addition of "async" cover providing async object/array mapping facilities.
 
-29Nov13: Handle the case where we want to chain async functions. See "Return Mapping" below.
+29Nov13: Handle the case where we want to chain async-functions. See "Return Mapping" below.
 
 27Nov13: Change from delegation to prototype inheritance to expose un-nodented http/http functions. Add warning about duplicate augmentation of EventEmitter.wait()
 
@@ -110,7 +91,7 @@ Declaring Async Functions
 
 The async function definition:
 
-		async function myFunc(args) { 
+		async-function myFunc(args) { 
 			body ; 
 			return expr ; 
 		}
@@ -128,18 +109,16 @@ is mapped to:
 			}
 		}
 
-(NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demonstrated in the example above).
+(NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demontsrated in the example above).
 
 Remember, we're simply transforming a syntactic short-cut into a "normal" JS function. Don't be confused by the
-$return and $error identifiers (which are configuarble in any case), they're just normal JS identifiers (in fact,
+$return and $error identifiers (which are all configuarble in any case), they're just normal JS identifiers (in fact,
 they're functions).
 
 NoDent uses the "funcback" pattern, where a function returns a function that expects two callback arguments, 
 one to handle the result, and another to handle exceptions (bear with me - it sounds worse than it is). This pattern
 is great because async calls can be easily chained with one another, in particular the "onError" callback can often 
-just be passed straight through to each function in turn as the error callback. The "funcback" pattern is very similar 
-in concept to Promises, but without the run-time API such as .then(), .reject(), etc., which makes it more efficient as
-there is no object required to represent the state or callbacks.
+just be passed straight through to each function in turn as the error callback. 
 
 "funcback" patterned JS looks like the second function above, and is called like this:
 
@@ -158,10 +137,11 @@ However, as the sample above shows, it's still very "noisy" in code terms - lots
 functions returning functions. AJS introduces two syntactic constructs to make this pattern readable and
 "natural" for all those procedural, synchronous guys out there.
 
-To declare an asynchronous function, put "async" in front of the definition. "async" is an ES7 keyword. You shouldn't
-use it as a top level identifier (variable or function name) in ES7 code. This is how it looks:
+To declare an asynchronous function, put "async-" in front of the definition. Note "async" is like a modifier,
+there's no variable or function called "async", the syntax transformer just checks for that lexical token. This
+is how it looks:
 
-	async function myFunc(args) {
+	async-function myFunc(args) {
 	 	if (!args)
 	 		throw new Error("Missing parameters") ;
 	 	return doSomething(args) ;
@@ -193,48 +173,65 @@ although this is designed for asynchronous callbacks, transforming the source do
 that. The above example looks pretty synchronous to me, and a few lines like those above
 would get pretty messy pretty quickly.
 
-Async invocation
+Async assignment
 ================
 
-The other transformation is a shorter call sequence, through the ES7 keyword 'await'. In Nodent 
-it's implemented as a unary prefix operator (in the same kind of place you might find 'typeof' or
-'delete'). It is this transformation that stops all the crazy indenting that async callbacks generate.
+The other transformation is a shorter call sequence. It's meant to look like a special
+kind of assignment (because it is). It is ithis transformation that stops all the crazy 
+indenting that async callbacks generate.
  
-	var result = await myFunc(args) ;
-	moreStuff(result) ;
+ 	result <<= myFunc(args) ;
+ 	moreStuff(result) ;
  
 This is transformed into the code:
  	
-	return myFunc(args)(function($await_myFunc$1) {
-		var result = $await_myFunc$1 ;
-		moreStuff(result) ;
-	},$error) ;
+ 	return myFunc(args)(function(result) {
+ 		moreStuff(result) ;
+ 	},$error) ;
  
 Yes, it hides a return statement in your code. If you step line by line, you WON'T hit "moreStuff"
-immediately after executing the line, it will be called later, when myFunc invokes your "success" handler.
+immediately after executing "<<=", it will be called later, when myFunc invokes your "success" handler.
+ 
+Note that you don't need to declare the left hand side of "<<=" (i.e. "result" in the example). It's
+actually created as a "parameter" to the rest of the code in the block.
+ 
+Why "<<="? Not modifying JS syntax means existing editors and checkers shouldn't complain.
+Introducing new operators would mean updating the parser and might clash with future JS changes. But won't 
+it break existing JS code? Only code that is already potentially broken - the right hand side of - and <<= 
+are defined by JS not to be function definitions. If you have functions to the right of - and <<=
+your code is already broken (NB: there are some caveats here in that static syntax transformation
+can't tell whats on the right isn't really a number, but we check it looks like a call rather than
+a variable. In this way you can "repair" any broken code). In any case, the file extension for AJS 
+is ".njs", so your shouldn't be running any existing .js files through it in any case. Finally, judicious
+use of parenthesis will allow uou to restore the original functionality.
 
-Awaiting multiple times
-=======================
+Return Mapping
+==============
+The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
+also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
+common optimisation in synchronous code where one routine returns the return of another, such as:
 
-A statement or expression can combine multiple async results, for example:
+	return s_other(123) ;	// Synchronous
 
-	console.log(await as1(1),await as2("hello")+await as1(3)) ;
-	
-This is both syntactically and semantically meaningful, but in the current implementation will
-call the async functions serially (note: the order in which they are invoked is note guaranteed).
-It might well be more efficient in this case to use the 'map' cover function (see below) to execute
-all the functions in parallel first, and use the results:
+In Nodent, you have to do this by typing:
 
-	var map = require('nodent')({use:['map']}).map ;
-	// Execute all the async functions at the same time
-	mapped = await map([as1(1),as2("hello"),as1(3)]) ;
-	// When they're done:
-	console.log(mapped[0],mapped[1]+mapped[2]) ;
+	result <<= a_other(123) ;	// Asynchronous
+	return result ;
 
+The intermediate variable "result" is pretty harmless, bu the creation of the hidden callback is a small
+overhead that can be avoided by simple passing throw all the async values:
+
+	return a_other(123)($return,$error) ; 	// Callbacks passed as normal JS call to async-call
+
+The problem here is it will be wrapped in another call to $return, result in the callback being
+called twice, which is usually a very bad idea. To make this optimisation possible, returning a
+"void" is NOT wrapped so the statement below does what we want:
+
+	return void (a_other(123)($return,$error)) ; 	// Callbacks passed as normal JS call, don't mess with the return
 
 Chaining Errors
 ===============
-Exceptions and other errors are caught and passed to the "hidden" callback function "$error". The automatic chaining of this
+Exceptions and other errors are caught and passed to the "hidden" callbacl function "$error". The automatic chaining of this
 through an async-call path is really useful and one of the reasons Nodent has such a compact syntax. However, sometimes you 
 need to intercept an error and handle it differently rather than just return it to the call chain.
 
@@ -242,9 +239,9 @@ Since "$error" is just a simple paraameter to async calls, this is pretty easy, 
 scope block (e.g. a function) which makes it look messy and verbose. To avoid this a hidden Function prototype chain$error()
 exists to make it quick and easy. 
 
-To handle an exception in the async call-chain, simply redefine $error before invoking the async function, for example:
+To handle an exception in the async call-chain, simply redefine $error before invoking the async-function, for example:
 
-	async function createDBrecord() {
+	async-function createDBrecord() {
 		$error = $error.chain$error(function(ex,chained){
 			if (Error.causedBy(ex,"ConstraintViolation")) {
 				return $return("Thanks. Already exists.") ;
@@ -253,7 +250,7 @@ To handle an exception in the async call-chain, simply redefine $error before in
 			}
 		}) ;
 
-		var data = await sql("...") ;
+		data <<= sql("...") ;
 		if (data) {
 			return data ;
 		} else {
@@ -311,7 +308,7 @@ The nodent version of http.get has JS "funcback" the signature:
 
 Hopefully you'll recognise this and be able to see you can now invoke it like:
 
-	response = await nodent.http.get(options) ;
+	response <<= nodent.http.get(options) ;
 
 To make life even easier, the response is covered too, just before the first callback is invoked with an addition "funcback" called "wait", that waits for a named event. The whole setup is therefore:
 
@@ -319,46 +316,43 @@ To make life even easier, the response is covered too, just before the first cal
 
 	/* Make a request. Nodent creates the callbacks, etc. for you
 	and so you can read the line as "wait for the response to be generated" */	
-	var response = await http.get("http://npmjs.org/~matatbread") ;
+	response <<= http.get("http://npmjs.org/~matatbread") ;
 
 	var body = "" ;
 	response.on('data',function(chunk){ body += chunk ;} ;
 
 	/* Wait for the "end" event */
-	await response.wait('end') ;
+	undefined <<= response.wait('end') ;
 
 	/* The response is complete, print it out */
 	console.log('The response is:\n"+body) ;
 
 http.request is similar, but not identical as you will need access to the request object to end it (amongst other things):
 
-	var req = await http.request(options) ;
+	req <<= http.request(options) ;
 	req.end() ;	 // Do whatever you need to with the request
 	// Wait for the "response" event
-	var response = await req.wait('response') ;
+	response <<= req.wait('response') ;
 	var body = "" ;
 	response.on('data',function(chunk){ body += chunk ;} ;
 	// Wait for the response to be completed
-	await response.wait('end') ;
+	undefined <<= response.wait('end') ;
 	console.log('The response is:\n"+body) ;
 
 The convenience function http.getBody(options) asynchronously gets a body encoded in UTF-8:
 
-	console.log('The response is:",
-		await http.getBody("http://www.example.com/something")) ;
+	body <<= http.getBody("www.example.com/something") ;
+	console.log('The response is:\n"+body) ;
 
 The "http" cover (not https) can accept a single configuration option 'autoProtocol' that makes get(), request() and getBody() examine the passed url string or URL and use either http or https automatically. The default is "false", meaning request URLs via https will fail with a protocol mismatch.
 
-"map"
------
-The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map(). The map function takes three parameters: the entity to iterate over, optionally an object in which to place the results (they are returned from the async map in any case), and the async function to call on each iteration.
- 
-The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as return asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
-
+"async"
+-------
+A nodent cover "async" provides a place to collect useful asynchronous functions with Nodent signatures. Initially, the only supported function is map(), which works like an aynchronous, parallel object/array mapper, similar to Array.map(). The map function takes three parameters: the entity to iterate over, optionally an object in which to place the results, and the async-function to call on each iteration. The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async-function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as return asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
 * An Object - each field is passed to the async-iterator function
-* An Array - each element is passed to the async-iterator function
-* A single Number - the async function is invoked with the integer values 0 to Number-1
-* An array or Object of async functions - each function in the array is invoked asynchronously. In this case the third parameter must be omitted.
+* An array of Objects, Strings or Numbers - each element is passed to the async-iterator function
+* A single Number - the async-function is invoked with the integer values 0 to Number-1
+* An array or Object of async-functions - each function in the array is invoked asynchronously. In this case the third parameter must be omitted.
 
 Example: mapping an object
 
@@ -366,8 +360,8 @@ Example: mapping an object
 	var async = require('nodent')({use:['async']}).async ;
 	
 	// Asynchronously map every key in "myObject" by adding 1 to the value of the key
-	mapped = await async.map(myObject,async function(key){
-		return myObject[key]+1 ;	// This can be async without issues
+	mapped <<= async.map(myObject,async-function(key){
+		return myObject[element]+1 ;	// This can be async without issues
 	}) ;
 	// All done - mapped contains the new object with all the elements "incremeneted"
 
@@ -377,9 +371,9 @@ Example: map an array of URLs to their content
 	// Use nodent.async & http
 	var nodent = require('nodent')({use:['http','async']}) ;
 	
-	mapped = await nodent.async.map(['www.google.com','www.bbc.co.uk'],async function(value,index){
+	mapped <<= nodent.async.map(['www.google.com','www.bbc.co.uk'],async-function(value,index){
 		// Get the URL body asynchronously.
-		body = await nodent.http.getBody("http://"+value) ;
+		body <<= nodent.http.getBody("http://"+value) ;
 		return body ;
 	}) ;
 	// All done - mapped is the new array containing the bodies
@@ -389,9 +383,9 @@ Example: iterate through a set of integer values and do something asynchronous w
 	// Use nodent.async & http
 	var nodent = require('nodent')({use:['http','async']}) ;
 	
-	mapped = await nodent.async.map(3,async function(i){
+	mapped <<= nodent.async.map(3,async-function(i){
 		// Get the URL body asynchronously.
-		body = await nodent.http.getBody("http://example.com/cgi?test="+i) ;
+		body <<= nodent.http.getBody("http://example.com/cgi?test="+i) ;
 		return body ;
 	}) ;
 	// All done - mapped is the new array containing the bodies
@@ -401,21 +395,21 @@ Example: execute arbitrary async functions in parallel and return when they are 
 	// Use nodent.async
 	var nodent = require('nodent')({use:['async']}) ;
 	
-	mapped = await nodent.async.map([asyncFn("abc"),asyncFn2("def")]) ;
+	mapped <<= nodent.async.map([asyncFn("abc"),asyncFn2("def")]) ;
 
-	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to async.map), but the completion routine will only be called when all async functions have finished either via a return or exception. */
+	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to async.map), but the completion routine will only be called when all async-functions have finished either via a return or exception. */
 
-In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The async.map() function only errors if an async function illegal returns more than once (including multiple errors or both an error and normal response).
+In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The async.map() function only errors if an async-function illegal returns more than once (including multiple errors or both an error and normal response).
 
 Function arguments
 ------------------
-Because the async invocation operator maps to the sequence with an embedded function call, it can be used to invoke functions that
-accept function arguments with no mapping layer. A good example is "process.nextTick()" or "setImmediate()". These exepct a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
+Because the assignment operator maps to the sequence with an embedded function call, it can be used to invoke functions that
+accept function arguments with no mapping layer. A good example is "process.nextTick()". It exepcts a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
 
 	doItNow() ;
-	await process.nextTick ;
+	undefined <<= process.nextTick ;
 	doItABitLater();
-	await setImmediate ;
+	undefined <<= process.nextTick ;
 	doItLaterStill() ;
 
 Before and After
@@ -425,14 +419,14 @@ Here's an example from a real-world application. We find the NoDent-style code m
 
 Original code, as supplied to Node:
 
-	clientApi.shareProduct = async function(type,prod,message,img,networks){
+	clientApi.shareProduct = async-function(type,prod,message,img,networks){
 		// Create a link that when clicked on can resolve into 
 		// a (current-user, product) tuple, and which can generate
 		// an affiliation link that itself identified the clicker
 		// as well as the clickee tuple.
 
 		messasge = message.trim() ;
-		var offer = await createOffer(this.request.session.nid,type,prod,message,img,networks) ;
+		offer <<= createOffer(this.request.session.nid,type,prod,message,img,networks) ;
 	
 		sysEvent && sysEvent.emit('offer') ;
 		if (!offer || !offer.p.resolved) 
@@ -441,8 +435,8 @@ Original code, as supplied to Node:
 		// Now post this offer on FB and/or twitter
 		var user = offer.u ;
 
-		var done = await nodent.map(offer.offer.networks,async function(net){
-			var posting = await Networks.get(net).postStatus({
+		done <<= async.map(offer.offer.networks,async-function(net){
+			posting <<= Networks.get(net).postStatus({
 				id:user[net+"-id"],
 				token:user[net+"-token"], 
 				secret:user[net+"-secret"],
@@ -451,7 +445,7 @@ Original code, as supplied to Node:
 			return posting ;
 		}) ;				
 
-		var updated = await offer.offer.update({status:done}) ;
+		updated <<= offer.offer.update({status:done}) ;
 		offer.offer = updated ;
 
 		for (var i=0; i<done.length; i++) {
@@ -484,7 +478,7 @@ Code after cross-compilation by Nodent and as execute by Node:
         	        }
         	        // Now post this offer on FB and/or twitter
         	        var user = offer.u;
-        	        return nodent.map(offer.offer.networks, function(net) {
+        	        return async.map(offer.offer.networks, function(net) {
         	            return function($return, $error) {
         	                try {
         	                    return Networks.get(net).postStatus({
