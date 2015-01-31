@@ -1,3 +1,8 @@
+/*
+ * Uglify2 loader for NodeJS. This file is derived from the Uglify2 library, but is required as Nodent
+ * needs to patch Uglify's keyword list to add 'async' and 'await' within the VM created by Uglify 
+ */
+
 var path = require("path");
 var fs = require("fs");
 var vm = require("vm");
