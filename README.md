@@ -165,7 +165,7 @@ Yes, it hides a return statement in your code. If you step line by line, you WON
 immediately after executing the line, it will be called later, when myFunc invokes your "success" handler.
 
 Awaiting multiple times
-=======================
+-----------------------
 
 A statement or expression can combine multiple async results, for example:
 
@@ -181,6 +181,35 @@ all the functions in parallel first, and use the results:
 	mapped = await map([as1(1),as2("hello"),as1(3)]) ;
 	// When they're done:
 	console.log(mapped[0],mapped[1]+mapped[2]) ;
+
+Return Mapping
+==============
+The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
+also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
+common optimization in synchronous code where one routine returns the result of another, such as:
+
+	return s_other(123) ;	// Synchronous
+
+In Nodent, can do this by typing:
+
+	return await a_other(123) ;	// Asynchronous
+
+The creation of the hidden callback is a small overhead that can be avoided by simply passing the
+callbacks to the inner async call:
+
+	return a_other(123)($return,$error) ; 	// Callbacks passed as normal JS call to async-call
+
+You could just return the un-awaited inner call, and the caller uses 'await' to evaluate it.
+
+	return a_other(123) ; 	// Return the reference to the async call
+
+If both caller and callee are async, the problem here is it will be wrapped in another call to $return. To avoid this,
+use the "void" keyword in the return:
+
+	return void a_other(123) ; 
+
+Under normal circumstances you won't need to do this, but it can be useful in cases where you need to return
+async functions which can be stored and deferred for later invocation.
 
 Exceptions and $error
 =====================
@@ -298,7 +327,7 @@ Intentionally omit the return as we want another function to do it later:
 
 Conditionals & missing returns
 ------------------------------
-Becuase async invocation inserts a 'return' into your code (so it can be completed later), the semantics of if/else
+Becuase async invocation inserts a 'return' into your code (so it can be completed later), the semantics of if/else and loops
 need some care:
 
 	function f(x) {
@@ -328,16 +357,33 @@ On return, "truthy" is output, but then the async call chain is broken - neither
 To fix this, ensure you have a return (or throw) in all code paths and don't rely on conditional blocks falling through
 into their containing block. Full use of if/else makes this explicit:
 
-function f(x) {
-	if (x) {
-		await myFunc(1) ;
-		console.log("truthy") ;
-		// We obviously need to return something here, since there's no implicit return
-		return "ok" ;
-	} else {
-		return "done" ;
+	function f(x) {
+		if (x) {
+			await myFunc(1) ;
+			console.log("truthy") ;
+			// We obviously need to return something here, since there's no implicit return
+			return "ok" ;
+		} else {
+			return "done" ;
+		}
 	}
-}
+
+The same is true of for loops - the synthetic return exits the loop on the first pass:
+
+	// Doesn't work
+	for (var i in fs) {
+		await log(i) ;	// Causes a return - for exists after 1 loop
+		console.log("loop") ; // Only printed once
+	}
+
+The solution, as with any loop requiring a scope is to enclose the loop in a self-calling function:
+
+	// Works fine
+	for (var i in fs) (function(){
+		await log(i) ;	// 'return' is captured and handled
+		console.log("loop") ;
+	})()
+
 
 Missing await & async function references
 -----------------------------------------
@@ -526,6 +572,29 @@ accept function arguments with no mapping layer. A good example is "process.next
 	doItABitLater();
 	await setImmediate ;
 	doItLaterStill() ;
+
+nodent.asyncify
+---------------
+This helper function wraps "normal" Node asynchronous functions (i.e. those whose final paramter is of the form `function(err,data)`)
+to make them usuable with 'await'. For example, to asyncify the standard Node module 'fs':
+
+	// Require 'fs'
+	var fs = require('fs') ;
+	// Get a reference to nodent.asyncify
+	var asyncify = require('../nodent').asyncify ;
+	// Asyncify 'fs'
+	var afs = asyncify(fs) ;
+	console.log((await afs.readFile("./test/a.js")).toString()) ;
+
+By default, asyncify creates an object that has it's ancestor as its prototype with functions members mapped to the await call signature.
+Internally, asyncify filters these so that only functions that don't end in 'Sync' and that have a member named the same without 'Sync'. 
+For 'fs', this works (readFile does not end in Sync, and so is mapped, readFileSync ends in 'Sync' and a member called 'readFile' exists).
+
+You can supply your own filter to asyncify. For example to only map a function called 'queryDb':
+
+	var aDB = asyncify(DB,function(name,newObject){
+		return name=="queryDb" ;
+	}) ;
 
 Before and After
 ================
