@@ -154,6 +154,10 @@ function coerce(node,replace) {
 }
 
 var generatedSymbol = 1 ;
+function generateSymbol(node) {
+	return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
+}
+
 function asyncAwait(ast,opts) {
 	if (!opts.es7) {
 		// Only load deprecated ES5 behaviour if the app uses it.
@@ -163,10 +167,7 @@ function asyncAwait(ast,opts) {
 	
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-			var result = new U2.AST_SymbolRef({
-				name:"$await_"+
-				node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")
-				+"$"+generatedSymbol++}) ;
+			var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 			var expr = node.expression.clone() ;
 			coerce(node,result) ;
 
@@ -181,6 +182,8 @@ function asyncAwait(ast,opts) {
 
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
 				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
+					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
+					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
 					block = new U2.AST_BlockStatement({body:[asyncWalk.stack[n].body]}) ;
 					asyncWalk.stack[n].body = block ;
@@ -192,19 +195,45 @@ function asyncAwait(ast,opts) {
 					block = asyncWalk.stack[n] ;
 					break ;
 				}
-				/* TODO: // Finish switch block await
+				/* TODO: // Finish switch block await */
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
+					var switchStmt = asyncWalk.stack[n-1] ;
 					debugger;
+					if (!switchStmt.postSwitch) {
+						var j = asyncWalk.stack[n-2].body.indexOf(switchStmt)+1 ;
+						var postSwitchCode = asyncWalk.stack[n-2].body.splice(j,asyncWalk.stack[n-2].body.length-j) ;  
+						var symName = "$post_switch_"+generateSymbol(asyncWalk.stack[n-1].expression) ;
+						var postSwitch = new U2.AST_SymbolRef({name:symName}) ;
+						var postSwitchDef = new U2.AST_Defun({argnames:[],
+							name:new U2.AST_SymbolDeclaration({name:symName}),
+							body:postSwitchCode.map(function(n){ return n.clone() })}) ;
+						var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone(),postSwitchDef,
+						    new U2.AST_SimpleStatement({body:new U2.AST_Call({
+								expression:postSwitch.clone(),
+								args:[]
+							})})
+						]}) ; 
+						coerce(asyncWalk.stack[n-1], synthBlock) ;
+						switchStmt.postSwitch = postSwitch ;
+					}
+					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
+					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
 					terminate = function terminateSwitchBranch(call) {
-						block.body.push(new U2.AST_SimpleStatement({body:call})) ;
-						block.body.push(new U2.AST_Break()) ;
+						block.body.push(new U2.AST_Return({ value:call })) ;
+//						block.body.push(new U2.AST_SimpleStatement({body:call})) ;
+//						block.body.push(new U2.AST_Break()) ;
 					} ;
-					var block = asyncWalk.stack[n].body ;
+					var caseBody = asyncWalk.stack[n].body ;
 					// TODO: Enforce 'break' as final statement
-					block.pop() ; // Remove final 'break'
-					asyncWalk.stack[n].body = [new U2.AST_BlockStatement({body:block})] ;
+					caseBody.pop() ; // Remove final 'break'
+					caseBody.push(new U2.AST_Call({
+						expression:switchStmt.postSwitch.clone(),
+						args:[]
+					})) ;
+					block = new U2.AST_BlockStatement({body:caseBody}) ;
+					asyncWalk.stack[n].body = [block/*,new U2.AST_Break()*/] ;
 					break ;
-				}*/
+				}
 				if (asyncWalk.stack[n] instanceof U2.AST_Block) {
 					terminate = function terminateBlock(call) {
 						block.body.push(new U2.AST_Return({ value:call })) ;
