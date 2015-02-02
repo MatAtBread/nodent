@@ -129,63 +129,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		return node ;
 	}
 });
-/**
- * Uglify transormer: Transform
- * 
- 	x <<= y ;
- 	body ;
- *
- * to
- * 
-	return y(f(x){ body },bind(this),$error) ; 
- *
- */
 
-var asyncAssign = new U2.TreeTransformer(function(node, descend){
-	var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
-	var stmt = isSimple?node.body:node ;
-
-	var assignee = stmt[config.ltor?"left":"right"] ; 
-	var asyncCall = stmt[!config.ltor?"left":"right"] ;
-
-	if (stmt instanceof U2.AST_Binary && stmt.operator==config.assign) {
-		// Check LHS is an assignable identifier and RHS is a function call 
-		if (!(assignee instanceof U2.AST_SymbolRef))
-			throw new Error("Assignee of "+config.assign+" async operator must be an identifier") ;
-
-		var undefinedReturn = assignee.name=="undefined" ;
-
-		var block = asyncAssign.find_parent(U2.AST_Block) ;
-		var i = block.body.indexOf(isSimple?node:asyncAssign.parent()) ;
-		var callBack = block.body.splice(i,block.body.length-i).slice(1) ;
-		// Wrap the callback statement(s) in a Block and transform them
-		var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}).transform(asyncAssign) ;
-		var replace = new U2.AST_SimpleStatement({
-			body:new U2.AST_Return({
-				value:new U2.AST_Call({
-					expression:asyncCall.transform(asyncAssign),
-					args:[cbBody.body.length ?
-							new U2.AST_Call({
-								expression:new U2.AST_Dot({
-									expression: new U2.AST_Function({
-										argnames:(undefinedReturn?[]:[assignee]),
-										body:cbBody.body
-									}),
-									property: "bind"
-								}),
-								args:[new U2.AST_This()]
-							}):new U2.AST_Function({argnames:[],body:[]}),
-							new U2.AST_SymbolRef({name:config.$error})
-						]
-				})
-			})
-		});
-		return replace ;
-	} else {
-		descend(node, this);
-		return node ;
-	}
-}) ;
 
 /**
  * ES7 await keyword - transform an AST like:
@@ -210,94 +154,104 @@ function coerce(node,replace) {
 }
 
 var generatedSymbol = 1 ;
-var asyncAwait = new U2.TreeWalker(function(node, descend){
-	if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-		var result = new U2.AST_SymbolRef({
-			name:"$await_"+
-			node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")
-			+"$"+generatedSymbol++}) ;
-		var expr = node.expression.clone() ;
-		coerce(node,result) ;
+function asyncAwait(ast,opts) {
+	if (!opts.es7) {
+		// Only load deprecated ES5 behaviour if the app uses it.
+		var asyncAssignTransfom = require('./es5plus')(U2,config) ;
+		return ast.transform(asyncAssignTransfom) ;
+	}
+	
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+			var result = new U2.AST_SymbolRef({
+				name:"$await_"+
+				node.expression.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")
+				+"$"+generatedSymbol++}) ;
+			var expr = node.expression.clone() ;
+			coerce(node,result) ;
 
-		var stmt = asyncAwait.find_parent(U2.AST_Statement) ;
-		var block ;
-		var terminate ;
-		
-		function terminateLoop(call) {
-			block.body.push(new U2.AST_SimpleStatement({body:call})) ;
-			block.body.push(new U2.AST_Continue()) ;
-		} 
+			var stmt = asyncWalk.find_parent(U2.AST_Statement) ;
+			var block ;
+			var terminate ;
 
-		for (var n=asyncAwait.stack.length-1; n>=0; n--) {
-			if (asyncAwait.stack[n] instanceof U2.AST_IterationStatement) {
-				terminate = terminateLoop ;
-				block = new U2.AST_BlockStatement({body:[asyncAwait.stack[n].body]}) ;
-				asyncAwait.stack[n].body = block ;
-				break ;
+			function terminateLoop(call) {
+				block.body.push(new U2.AST_SimpleStatement({body:call})) ;
+				block.body.push(new U2.AST_Continue()) ;
+			} 
+
+			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
+				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
+					terminate = terminateLoop ;
+					block = new U2.AST_BlockStatement({body:[asyncWalk.stack[n].body]}) ;
+					asyncWalk.stack[n].body = block ;
+					break ;
+				}
+				if (n>0 && (asyncWalk.stack[n-1] instanceof U2.AST_IterationStatement)
+						&& (asyncWalk.stack[n] instanceof U2.AST_Block)) {
+					terminate = terminateLoop ;
+					block = asyncWalk.stack[n] ;
+					break ;
+				}
+				/* TODO: // Finish switch block await
+				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
+					debugger;
+					terminate = function terminateSwitchBranch(call) {
+						block.body.push(new U2.AST_SimpleStatement({body:call})) ;
+						block.body.push(new U2.AST_Break()) ;
+					} ;
+					var block = asyncWalk.stack[n].body ;
+					// TODO: Enforce 'break' as final statement
+					block.pop() ; // Remove final 'break'
+					asyncWalk.stack[n].body = [new U2.AST_BlockStatement({body:block})] ;
+					break ;
+				}*/
+				if (asyncWalk.stack[n] instanceof U2.AST_Block) {
+					terminate = function terminateBlock(call) {
+						block.body.push(new U2.AST_Return({ value:call })) ;
+					} ;
+					block = asyncWalk.stack[n] ;
+					break ;
+				}
 			}
-			if (n>0 && (asyncAwait.stack[n-1] instanceof U2.AST_IterationStatement)
-					&& (asyncAwait.stack[n] instanceof U2.AST_Block)) {
-				terminate = terminateLoop ;
-				block = asyncAwait.stack[n] ;
-				break ;
-			}
-			/* TODO: // Finish switch block await
-			if (asyncAwait.stack[n] instanceof U2.AST_SwitchBranch) {
-				debugger;
-				terminate = function terminateSwitchBranch(call) {
-					block.body.push(new U2.AST_SimpleStatement({body:call})) ;
-					block.body.push(new U2.AST_Break()) ;
-				} ;
-				var block = asyncAwait.stack[n].body ;
-				// TODO: Enforce 'break' as final statement
-				block.pop() ; // Remove final 'break'
-				asyncAwait.stack[n].body = [new U2.AST_BlockStatement({body:block})] ;
-				break ;
-			}*/
-			if (asyncAwait.stack[n] instanceof U2.AST_Block) {
-				terminate = function terminateBlock(call) {
-					block.body.push(new U2.AST_Return({ value:call })) ;
-				} ;
-				block = asyncAwait.stack[n] ;
-				break ;
-			}
-		}
-		if (!terminate)
-			throw new Error("Block termination error") ;
-		
-		var i = block.body.indexOf(stmt) ;
-		if (i<0)
-			throw new Error("Block nesting error") ;
-		
-		var callBack = block.body.splice(i,block.body.length-i).slice(1); 
-		// If stmt is only a reference to the result, suppress the result reference as it does nothing
-		if (!stmt.equivalent_to(result))
-			callBack.unshift(stmt);
-		// Wrap the callback statement(s) in a Block and transform them
-		var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}) ;
-		cbBody.walk(asyncAwait) ;
-		
-		var call = new U2.AST_Call({
-			expression:expr,//asyncCall.transform(asyncAssign),
-			args:[cbBody.body.length ?
-					new U2.AST_Call({
-						expression:new U2.AST_Dot({
-							expression: new U2.AST_Function({
-								argnames:[result.clone()],
-								body:cbBody.body
+			if (!terminate)
+				throw new Error("Block termination error") ;
+
+			var i = block.body.indexOf(stmt) ;
+			if (i<0)
+				throw new Error("Block nesting error") ;
+
+			var callBack = block.body.splice(i,block.body.length-i).slice(1); 
+			// If stmt is only a reference to the result, suppress the result reference as it does nothing
+			if (!stmt.equivalent_to(result))
+				callBack.unshift(stmt);
+			// Wrap the callback statement(s) in a Block and transform them
+			var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}) ;
+			cbBody.walk(asyncWalk) ;
+
+			var call = new U2.AST_Call({
+				expression:expr,//asyncCall.transform(asyncAssignTransfom),
+				args:[cbBody.body.length ?
+						new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: new U2.AST_Function({
+									argnames:[result.clone()],
+									body:cbBody.body
+								}),
+								property: "bind"
 							}),
-							property: "bind"
-						}),
-						args:[new U2.AST_This()]
-					}):new U2.AST_Function({argnames:[],body:[]}),
-					new U2.AST_SymbolRef({name:config.$error})
-				]
+							args:[new U2.AST_This()]
+						}):new U2.AST_Function({argnames:[],body:[]}),
+						new U2.AST_SymbolRef({name:config.$error})
+						]
 			}) ;
 
-		terminate(call) ;
-		return true ; 
-	}
-}) ;
+			terminate(call) ;
+			return true ; 
+		}
+	}) ;
+	ast.walk(asyncWalk) ;
+	return ast ;
+}
 
 /**
  * Uglify transormer: Transform (non ES7)
@@ -324,7 +278,7 @@ var asyncAwait = new U2.TreeWalker(function(node, descend){
  *
  */
 
-function asyncDefine(opts) {
+function asyncDefine(ast,opts) {
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
 			// 'async' is unary operator that takes a function as it's operand, 
@@ -376,7 +330,8 @@ function asyncDefine(opts) {
 			}
 		}
 	});
-	return asyncWalk ;
+	ast.walk(asyncWalk) ;
+	return ast ;
 }
 
 function stripBOM(content) {
@@ -505,12 +460,8 @@ function initialize(opts){
 					pr.filename = pr.filename.replace(/\.nodent$/,"") ;
 				if (sourceMapping==1)
 					pr.filename += ".nodent" ;
-				/* pr.ast = */pr.ast.walk(asyncDefine(opts)) ;
-				if (opts.es7) {
-					/*pr.ast =*/ pr.ast.walk(asyncAwait) ;
-				} else {
-					pr.ast = pr.ast.transform(asyncAssign) ;
-				}
+				pr.ast = asyncDefine(pr.ast,opts) ;
+				pr.ast = asyncAwait(pr.ast,opts) ;
 				return pr ;
 			},
 			prettyPrint:function(pr,sourceMapping,opts) {
