@@ -229,7 +229,7 @@ function asyncAwait(ast,opts) {
 		var asyncAssignTransfom = require('./es5plus')(U2,config) ;
 		return ast.transform(asyncAssignTransfom) ;
 	}
-	debugger;
+
 	ast = switchTransformer(ast) ;
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
@@ -248,7 +248,6 @@ function asyncAwait(ast,opts) {
 
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
 				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
-					debugger;
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
 					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
