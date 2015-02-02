@@ -26,6 +26,21 @@ var U2 = require("./ug2loader").load(U2patch) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 
+/** Helpers **/
+function pretty(node) {
+	if (Array.isArray(node))
+		return node.map(pretty) ;
+	var str = U2.OutputStream({beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
+	node.print(str);
+	return str.toString() ;
+}
+function info(node) {
+	if (Array.isArray(node))
+		return node.forEach(info) ;
+	return node.TYPE+":"+node.print_to_string() ;
+}
+
+
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
@@ -158,13 +173,64 @@ function generateSymbol(node) {
 	return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
 }
 
+/*
+ * Translate:
+	switch () { case:...; } more... ;
+ * into
+	switch () { case:...; } function $more() { more... } $more() ;
+ *
+ * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
+ * callback to continue execution after the case.
+ */
+function switchTransformer(ast){
+	var asyncWalk ;
+	ast.walk(asyncWalk = new U2.TreeWalker(function(switchStmt, descend){
+		if (switchStmt instanceof U2.AST_Switch) {
+			if (switchStmt.deferred) {
+				throw new Error("Duplicate switch dissection") ;
+			}
+			var parent = asyncWalk.parent(0) ;
+			if (!Array.isArray(parent.body)) {
+				parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
+				parent = parent.body ;
+			} 
+			var j = parent.body.indexOf(switchStmt)+1 ;
+			var deferredCode = parent.body.splice(j,parent.body.length-j) ;  
+			if (deferredCode[deferredCode.length-1] instanceof U2.AST_Break)
+				parent.body.push(deferredCode.pop()) ;
+			var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
+			var deferred = new U2.AST_SymbolRef({name:symName}) ;
+			var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone()]}) ; 
+
+			if (deferredCode.length) {
+				synthBlock.body.push(new U2.AST_Defun({argnames:[],
+					name:new U2.AST_SymbolDeclaration({name:symName}),
+					body:deferredCode.map(function(n){ return n.clone() })})) ;
+				synthBlock.body.push(new U2.AST_SimpleStatement({body:new U2.AST_Call({
+					expression:deferred.clone(),
+					args:[]
+				})})) ;
+			} else {
+				deferred = null ;
+			}
+
+			coerce(switchStmt, synthBlock) ;
+			switchStmt.body[0].deferred = deferred ;
+			switchStmt.body[0].body.forEach(switchTransformer) ;
+			return true ;
+		}
+	})) ;
+	return ast ;
+}
+
 function asyncAwait(ast,opts) {
 	if (!opts.es7) {
 		// Only load deprecated ES5 behaviour if the app uses it.
 		var asyncAssignTransfom = require('./es5plus')(U2,config) ;
 		return ast.transform(asyncAssignTransfom) ;
 	}
-	
+	debugger;
+	ast = switchTransformer(ast) ;
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
 			var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
@@ -195,43 +261,27 @@ function asyncAwait(ast,opts) {
 					block = asyncWalk.stack[n] ;
 					break ;
 				}
-				/* TODO: // Finish switch block await */
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
-					var switchStmt = asyncWalk.stack[n-1] ;
 					debugger;
-					if (!switchStmt.postSwitch) {
-						var j = asyncWalk.stack[n-2].body.indexOf(switchStmt)+1 ;
-						var postSwitchCode = asyncWalk.stack[n-2].body.splice(j,asyncWalk.stack[n-2].body.length-j) ;  
-						var symName = "$post_switch_"+generateSymbol(asyncWalk.stack[n-1].expression) ;
-						var postSwitch = new U2.AST_SymbolRef({name:symName}) ;
-						var postSwitchDef = new U2.AST_Defun({argnames:[],
-							name:new U2.AST_SymbolDeclaration({name:symName}),
-							body:postSwitchCode.map(function(n){ return n.clone() })}) ;
-						var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone(),postSwitchDef,
-						    new U2.AST_SimpleStatement({body:new U2.AST_Call({
-								expression:postSwitch.clone(),
-								args:[]
-							})})
-						]}) ; 
-						coerce(asyncWalk.stack[n-1], synthBlock) ;
-						switchStmt.postSwitch = postSwitch ;
-					}
+
+					var switchStmt = asyncWalk.stack[n-1] ;
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
 					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
 					terminate = function terminateSwitchBranch(call) {
 						block.body.push(new U2.AST_Return({ value:call })) ;
-//						block.body.push(new U2.AST_SimpleStatement({body:call})) ;
-//						block.body.push(new U2.AST_Break()) ;
 					} ;
 					var caseBody = asyncWalk.stack[n].body ;
 					// TODO: Enforce 'break' as final statement
 					caseBody.pop() ; // Remove final 'break'
-					caseBody.push(new U2.AST_Call({
-						expression:switchStmt.postSwitch.clone(),
-						args:[]
-					})) ;
+					// Call the post-switch code
+					if (switchStmt.deferred) {
+						caseBody.push(new U2.AST_Call({
+							expression:switchStmt.deferred.clone(),
+							args:[]
+						})) ;
+					}
 					block = new U2.AST_BlockStatement({body:caseBody}) ;
-					asyncWalk.stack[n].body = [block/*,new U2.AST_Break()*/] ;
+					asyncWalk.stack[n].body = [block] ;
 					break ;
 				}
 				if (asyncWalk.stack[n] instanceof U2.AST_Block) {
@@ -273,7 +323,6 @@ function asyncAwait(ast,opts) {
 						new U2.AST_SymbolRef({name:config.$error})
 						]
 			}) ;
-
 			terminate(call) ;
 			return true ; 
 		}
