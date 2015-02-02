@@ -59,7 +59,7 @@ var config = {
 };
 
 var decorate = new U2.TreeWalker(function(node) {
-	node.$ = "------------".substring(0,decorate.stack.length)+"\t"+node.CTOR.name+"\t"+node.print_to_string() ;
+	node.$ = "------------".substring(0,decorate.stack.length)+"\t"+node.TYPE+"\t"+node.print_to_string() ;
 	console.log(node.$) ;
 });
 
@@ -248,6 +248,7 @@ function asyncAwait(ast,opts) {
 
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
 				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
+					debugger;
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
 					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
@@ -257,13 +258,13 @@ function asyncAwait(ast,opts) {
 				}
 				if (n>0 && (asyncWalk.stack[n-1] instanceof U2.AST_IterationStatement)
 						&& (asyncWalk.stack[n] instanceof U2.AST_Block)) {
+					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
+					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
 					block = asyncWalk.stack[n] ;
 					break ;
 				}
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
-					debugger;
-
 					var switchStmt = asyncWalk.stack[n-1] ;
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
 					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
@@ -512,7 +513,7 @@ function initialize(opts){
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
 						reportParseException(ex,code,origFilename) ;
-					console.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					console.warn("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 					if (ex instanceof Error)
 						throw ex ;
 					else {
