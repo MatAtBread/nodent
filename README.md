@@ -385,8 +385,8 @@ The solution, as with any loop requiring a scope is to enclose the loop in a sel
 	})()
 
 
-Missing await & async function references
------------------------------------------
+Missing await, async function references & Promises
+---------------------------------------------------
 Forgetting to put 'await' in front of an async call is easy. And usually not what you want - you'll get a reference
 to the inner 'function($return,$error)'. However, this can be useful to help out with the above conditional/return problem, or
 anywhere else you need a reference to an async function.
@@ -397,6 +397,18 @@ anywhere else you need a reference to an async function.
 	else
 		fn = testDefault() ;	// testDefault is async
 	return await fn ;
+
+As discussed at the beginning, the type funcback signature means that the un-awaited return from an async 
+function is directly compatible with Promises, so that you can pass them into the Promise constructor:
+
+	async function myFunc(arg) {
+		// ...
+	} 
+
+	var p = new Promise(myFunc(100)) ;
+	p.then(...);
+
+Nodent async functions don't themselves require Promises - their use if entirely optional.
 
 Function.prototype.toString & arguments
 ---------------------------------------
