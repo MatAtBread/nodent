@@ -368,22 +368,35 @@ into their containing block. Full use of if/else makes this explicit:
 		}
 	}
 
-The same is true of for loops - the synthetic return exits the loop on the first pass:
+For loops, the semantics of nodent do NOT meet the ES7 standard. Using await in a loop makes the loop
+block work as expected, but each iteration of the loop is started immediately, whether or not the
+contents of the block have returned to the await.
 
-	// Doesn't work
-	for (var i in fs) {
-		await log(i) ;	// Causes a return - for exists after 1 loop
-		console.log("loop") ; // Only printed once
+	async function x(y) { await setImmediate ; return y+1 } ;
+	
+	for (var i=0; i<3; i++) {
+		console.log("start "+i) ;
+		console.log(await x(i)) ;	
+		console.log("end "+i) ;
 	}
+	console.log("done") ;
 
-The solution, as with any loop requiring a scope is to enclose the loop in a self-calling function:
+Output:
 
-	// Works fine
-	for (var i in fs) (function(){
-		await log(i) ;	// 'return' is captured and handled
-		console.log("loop") ;
-	})()
+	start 0
+	start 1
+	start 2
+	done
+	1
+	end 3
+	2
+	end 3
+	3
+	end 3
 
+Note that although each iteration works in sequence (start,n,end), all the iterations start synchronously and the
+responses can finish in any order. The statement after the loop ("done") is executed as soon as all the iterations are
+started. Nodent prints a warning when you use await inside a loop liek this as the behaviour is non-standard.
 
 Missing await, async function references & Promises
 ---------------------------------------------------

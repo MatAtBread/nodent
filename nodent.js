@@ -284,8 +284,8 @@ function asyncAwait(ast,opts) {
 				}
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
 					var switchStmt = asyncWalk.stack[n-1] ;
-					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
+//					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
+//					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
 					terminate = function terminateSwitchBranch(call) {
 						block.body.push(new U2.AST_Return({ value:call })) ;
 					} ;
