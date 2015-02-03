@@ -37,7 +37,10 @@ function pretty(node) {
 function info(node) {
 	if (Array.isArray(node))
 		return node.forEach(info) ;
-	return node.TYPE+":"+node.print_to_string() ;
+	var s = "" ;
+	for (var q = node; q.TYPE; q=q.__proto__)
+		s += q.TYPE+"." ;
+	return s+":"+node.print_to_string() ;
 }
 
 
@@ -173,6 +176,22 @@ function generateSymbol(node) {
 	return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
 }
 
+// Return if the current node has an await statement within it's execution path (i.e. excluding function declarations)
+function containsAwait(ast){
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await")
+			throw true ;
+		if (node instanceof U2.AST_Lambda)
+			return true ;
+	}) ;
+	
+	try {
+		ast.walk(asyncWalk)
+	} catch (ex) {
+		return ex ;
+	}
+	return false ;
+}
 /*
  * Translate:
 	switch () { case:...; } more... ;
@@ -249,7 +268,7 @@ function asyncAwait(ast,opts) {
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
 				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
+					console.warn("Nodent JS: Warning - await inside iteration statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
 					block = new U2.AST_BlockStatement({body:[asyncWalk.stack[n].body]}) ;
 					asyncWalk.stack[n].body = block ;
@@ -258,7 +277,7 @@ function asyncAwait(ast,opts) {
 				if (n>0 && (asyncWalk.stack[n-1] instanceof U2.AST_IterationStatement)
 						&& (asyncWalk.stack[n] instanceof U2.AST_Block)) {
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-					console.warn("Nodent JS: Warning - await inside interation statement "+start.file+":"+start.line) ;
+					console.warn("Nodent JS: Warning - await inside iteration statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
 					block = asyncWalk.stack[n] ;
 					break ;
@@ -272,7 +291,12 @@ function asyncAwait(ast,opts) {
 					} ;
 					var caseBody = asyncWalk.stack[n].body ;
 					// TODO: Enforce 'break' as final statement
-					caseBody.pop() ; // Remove final 'break'
+					var endBody = caseBody.pop() ;
+					if (!(endBody instanceof U2.AST_Break)) {
+						var start = caseBody.start || {file:'?',line:'?'} ;
+						console.warn("Nodent JS: Warning - switch-case missing break"+start.file+":"+start.line) ;
+						caseBody.push(endBody) ; // Put it back!
+					}
 					// Call the post-switch code
 					if (switchStmt.deferred) {
 						caseBody.push(new U2.AST_Call({
@@ -359,6 +383,8 @@ function asyncAwait(ast,opts) {
 function asyncDefine(ast,opts) {
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
+			console.log(info(node));
+			debugger ;
 			// 'async' is unary operator that takes a function as it's operand, 
 			// OR, for old-style declarations, a unary negative expression yielding a function, e.g.
 			// async function(){} or async-function(){}
@@ -366,6 +392,8 @@ function asyncDefine(ast,opts) {
 			var fn = node.expression ;
 			if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
 				fn = fn.expression.clone() ;
+//			if (fn instanceof U2.AST_IterationStatement)
+//				coerce(node,fn) ;
 			if (fn instanceof U2.AST_Function) {
 				var replace = fn.clone() ;
 				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
