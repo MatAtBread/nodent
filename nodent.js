@@ -383,8 +383,6 @@ function asyncAwait(ast,opts) {
 function asyncDefine(ast,opts) {
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
-			console.log(info(node));
-			debugger ;
 			// 'async' is unary operator that takes a function as it's operand, 
 			// OR, for old-style declarations, a unary negative expression yielding a function, e.g.
 			// async function(){} or async-function(){}
