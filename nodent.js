@@ -47,8 +47,9 @@ function info(node) {
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
-		useDirective:"use nodent",
-		useES7Directive:"use nodent-es7",
+		useDirective:/^use\s+nodent$/,
+		useES7Directive:/^use\s+nodent\-es7$/,
+		usePromisesDirective:/^use\s+nodent\-promise$/,
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -331,22 +332,31 @@ function asyncAwait(ast,opts) {
 			var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}) ;
 			cbBody.walk(asyncWalk) ;
 
+			var returner = cbBody.body.length ?
+					new U2.AST_Call({
+						expression:new U2.AST_Dot({
+							expression: new U2.AST_Function({
+								argnames:[result.clone()],
+								body:cbBody.body
+							}),
+							property: "bind"
+						}),
+						args:[new U2.AST_This()]
+					}):new U2.AST_Function({argnames:[],body:[]}) ;
+					
+			debugger ;
+			if (opts.promises) {
+				expr = new U2.AST_Dot({
+					expression:expr.clone(),
+					property:"then"
+				}) ;
+			}
+			
 			var call = new U2.AST_Call({
 				expression:expr,//asyncCall.transform(asyncAssignTransfom),
-				args:[cbBody.body.length ?
-						new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: new U2.AST_Function({
-									argnames:[result.clone()],
-									body:cbBody.body
-								}),
-								property: "bind"
-							}),
-							args:[new U2.AST_This()]
-						}):new U2.AST_Function({argnames:[],body:[]}),
-						new U2.AST_SymbolRef({name:config.$error})
-						]
+				args:[returner,new U2.AST_SymbolRef({name:config.$error})]
 			}) ;
+			
 			terminate(call) ;
 			return true ; 
 		}
@@ -402,27 +412,40 @@ function asyncDefine(ast,opts) {
 					return ast ;
 				}) ;
 	
-				replace.body = [new U2.AST_Return({
-					value:new U2.AST_Call({
-						expression:new U2.AST_Dot({
-							expression: new U2.AST_Function({
-								argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
-								body:[new U2.AST_Try({
-									body:fnBody,
-									bcatch:new U2.AST_Catch({
-										argname:new U2.AST_SymbolCatch({name:config.$except}),
-										body:[new U2.AST_Call({
-											expression:new U2.AST_SymbolRef({name:config.$error}),
-											args:[new U2.AST_SymbolRef({name:config.$except})]
-										})]
-									})
-								})]
+				var funcback = new U2.AST_Function({
+					argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+					body:[new U2.AST_Try({
+						body:fnBody,
+						bcatch:new U2.AST_Catch({
+							argname:new U2.AST_SymbolCatch({name:config.$except}),
+							body:[
+							      new U2.AST_Return({value:
+							    	  new U2.AST_Call({
+							    		  expression:new U2.AST_SymbolRef({name:config.$error}),
+							    		  args:[new U2.AST_SymbolRef({name:config.$except})]
+							    	  })})]
+						})
+					})]
+				}) ;
+				
+				if (opts.promises) {
+					replace.body = [new U2.AST_Return({
+						value:new U2.AST_New({
+							expression:new U2.AST_SymbolRef({name:"Promise"}),
+							args:[funcback]
+						})
+					})] ;
+				} else {
+					replace.body = [new U2.AST_Return({
+						value:new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: funcback,
+								property: "bind"
 							}),
-							property: "bind"
-						}),
-						args:[new U2.AST_This()]
-					})
-				})] ;
+							args:[new U2.AST_This()]
+						})
+					})] ;
+				}
 				
 				var parent = asyncWalk.parent(0) ;
 				if (parent instanceof U2.AST_SimpleStatement) {
@@ -510,7 +533,7 @@ function reportParseException(ex,content,filename) {
 	+"^"+content.substring(ex.pos,ex.pos+1)+"^"
 	+content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
-	console.error("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
+	return ("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
 
 var configured = false ;
@@ -537,8 +560,9 @@ function initialize(opts){
 					return pr ;
 				} catch (ex) {
 					if (ex.constructor.name=="JS_Parse_Error") 
-						reportParseException(ex,code,origFilename) ;
-					console.warn("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+						console.warn(reportParseException(ex,code,origFilename)) ;
+					else
+						console.warn("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 					if (ex instanceof Error)
 						throw ex ;
 					else {
@@ -738,24 +762,43 @@ function initialize(opts){
 			writable:true
 		}) ;
 
+		function matches(str,match){
+			if (!match)
+				return false ;
+			if (typeof match==="string")
+				return match==str ;
+			if ("test" in match)
+				return match.test(str) ;
+		}
+		
 		var stdJSLoader = require.extensions['.js'] ; 
-		if (opts.useDirective || opts.useES7Directive) {
+		if (opts.useDirective || opts.useES7Directive || opts.usePromisesDirective) {
 			require.extensions['.js'] = function(mod,filename) {
 				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				try {
 					var pr = nodent.parse(content,filename);
 					for (var i=0; i<pr.ast.body.length; i++) {
 						if (pr.ast.body[i] instanceof U2.AST_Directive) {
-							if (pr.ast.body[i].value==opts.useDirective) {
-								return require.extensions[opts.extension](mod,filename) ;
-							}
-							if (pr.ast.body[i].value==opts.useES7Directive) {
-								return require.extensions[opts.extension](mod,filename,{es7:true}) ;
-							}
+							
+							var parseOpts = {} ;
+							parseOpts.promises = matches(pr.ast.body[i].value,opts.usePromisesDirective) ;
+							parseOpts.es7 = parseOpts.promises || matches(pr.ast.body[i].value,opts.useES7Directive) ;
+							return require.extensions[opts.extension](mod,filename,parseOpts) ;
 						}
 					}
-				} catch (ex) { /* Meh. Try using the JS parser */ }
-				return stdJSLoader(mod,filename) ;
+					return stdJSLoader(mod,filename) ;
+				} catch (ex) {
+					try {
+						/* Meh. Try using the JS parser */
+						return stdJSLoader(mod,filename) ;
+					} catch (exjs) {
+						if (ex.constructor.name=="JS_Parse_Error") { 
+							throw reportParseException(ex,content,filename) ;
+						}
+						else
+							throw exjs ;
+					}
+				}
 			} ;
 		}
 
@@ -769,7 +812,7 @@ function initialize(opts){
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
-					reportParseException(ex,content,filename) ;
+					console.warn(reportParseException(ex,content,filename)) ;
 				throw ex ;
 			}
 		};
