@@ -344,7 +344,6 @@ function asyncAwait(ast,opts) {
 						args:[new U2.AST_This()]
 					}):new U2.AST_Function({argnames:[],body:[]}) ;
 					
-			debugger ;
 			if (opts.promises) {
 				expr = new U2.AST_Dot({
 					expression:expr.clone(),
