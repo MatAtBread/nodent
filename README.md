@@ -48,12 +48,30 @@ Why Nodent?
 
 How (and why) it works
 ======================
-NoDent carries out two transformations on your JavaScript source as it is loaded into Node:
+NoDent carries out transformations on your JavaScript source as it is loaded into Node:
 one to declare functions and one to call them (called an "Async Invocation" here). In each
 case, normal, JavaScript functions are what are loaded into Node and executed. Node itself
 is not modified in anyway.
 
 NoDent is a not a "framework" - there is no runtime JavaScript to include in your project and it does not execute other than at load time to transform your NoDented files into standard JavaScript.
+
+ES7 and Promises
+================
+The ES7 proposal for async and await specified not only the syntactic elements 'async' and 'await' (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, 'async' functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
+
+Nodent can operate either with of without Promises as this type. The pros and cons are:
+* Using promises makes it easy to, in particular, 'await' on third-party code that returns a Promise, and create Promises by invoking an async function. The downside is your execution environment must somehow support Promises at run-time. Some browsers have Promises built in (later versions of Chrome and Firefox) as does Node v11. In other environments you must include a third-party implementation of Promises. Promises also make debugging a little more tricky as stepping in and out of async functions will go into your Promise implementation.
+* Not using Promises requires no run-time support, is easier to debug (pairs of callbacks are used to enter and exit async functions), but provides no compatibility with Nodent async functions.
+
+To specify that you wish to use Promises, make the first directive in your file:
+
+	"use nodent-promises";
+
+as opposed to:
+
+	"use nodent-es7";
+
+In the examples in this readme, Promises are not used. Changing the directive will change the generated ES5 JavaScript code, but nothing else.
 
 Declaring Async Functions
 =========================
