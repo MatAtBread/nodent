@@ -633,11 +633,17 @@ By default, asyncify creates an object that has it's ancestor as its prototype w
 Internally, asyncify filters these so that only functions that don't end in 'Sync' and that have a member named the same without 'Sync'. 
 For 'fs', this works (readFile does not end in Sync, and so is mapped, readFileSync ends in 'Sync' and a member called 'readFile' exists).
 
-You can supply your own filter to asyncify. For example to only map a function called 'queryDb':
+You can optionally supply your own filter to asyncify. For example to only map a function called 'queryDb':
 
 	var aDB = asyncify(DB,function(name,newObject){
 		return name=="queryDb" ;
 	}) ;
+
+You can also supply an option third parameter to asyncify() to avoid name-clashes (you often won't need this as asyncify builds a new object with the original as the prototype).
+
+	var afs = asyncify(require('fs',null,"Async") ;
+	// Async version of readFile() has "Async" appended
+	await afs.readFileAsync("./mydata.txt") ;
 
 Before and After
 ================

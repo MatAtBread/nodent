@@ -843,16 +843,26 @@ function initialize(opts){
 	return nodent ;
 } ;
 
-initialize.asyncify = function asyncify(obj,filter) {
-	filter = filter || function(k,o) {
-		return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
-	};
+initialize.asyncify = function asyncify(obj,filter,suffix) {
+	if (Array.isArray(filter)) {
+		var names = filter ;
+		filter = function(k,o) {
+			return names.indexOf(k)>=0 ;
+		}
+	} else {
+		filter = filter || function(k,o) {
+			return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
+		};
+	}
+	
+	if (!suffix)
+		suffix = "" ;
 	
 	var o = Object.create(obj) ;
 	for (var j in o) (function(){
 		var k = j ;
-		if (typeof o[k]==='function' && !o[k].isAsync && filter(k,o)) {
-			o[k] = function() {
+		if (typeof o[k+suffix]==='function' && !o[k+suffix].isAsync && filter(k,o)) {
+			o[k+suffix] = function() {
 				var a = Array.prototype.slice.call(arguments) ;
 				return function($return,$error) {
 					a[obj[k].length-1] = function(err,ok){
@@ -870,7 +880,7 @@ initialize.asyncify = function asyncify(obj,filter) {
 					*/
 				}
 			}
-			o[k].isAsync = true ;
+			o[k+suffix].isAsync = true ;
 		}
 	})() ;
 	o["super"] = obj ;
