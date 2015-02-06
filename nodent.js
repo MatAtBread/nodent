@@ -172,27 +172,8 @@ function coerce(node,replace) {
 	Object.keys(replace).forEach(function(k){ node[k] = replace[k]}) ;
 }
 
-var generatedSymbol = 1 ;
-function generateSymbol(node) {
-	return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
-}
+var generateSymbol ;
 
-// Return if the current node has an await statement within it's execution path (i.e. excluding function declarations)
-function containsAwait(ast){
-	var asyncWalk = new U2.TreeWalker(function(node, descend){
-		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await")
-			throw true ;
-		if (node instanceof U2.AST_Lambda)
-			return true ;
-	}) ;
-	
-	try {
-		ast.walk(asyncWalk)
-	} catch (ex) {
-		return ex ;
-	}
-	return false ;
-}
 /*
  * Translate:
 	switch () { case:...; } more... ;
@@ -576,6 +557,12 @@ function initialize(opts){
 					if (opts.promises)
 						opts.es7 = true ;
 					sourceMapping = sourceMapping || config.sourceMapping ; 
+					
+					var generatedSymbol = 1 ;
+					generateSymbol = function (node) {
+						return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
+					}
+
 					var pr = nodent.parse(code,origFilename,sourceMapping,opts);
 					nodent.asynchronize(pr,sourceMapping,opts) ;
 					nodent.prettyPrint(pr,sourceMapping,opts) ;
