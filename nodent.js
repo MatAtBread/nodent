@@ -558,11 +558,6 @@ function initialize(opts){
 						opts.es7 = true ;
 					sourceMapping = sourceMapping || config.sourceMapping ; 
 					
-					var generatedSymbol = 1 ;
-					generateSymbol = function (node) {
-						return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
-					}
-
 					var pr = nodent.parse(code,origFilename,sourceMapping,opts);
 					nodent.asynchronize(pr,sourceMapping,opts) ;
 					nodent.prettyPrint(pr,sourceMapping,opts) ;
@@ -597,6 +592,11 @@ function initialize(opts){
 					pr.filename = pr.filename.replace(/\.nodent$/,"") ;
 				if (sourceMapping==1)
 					pr.filename += ".nodent" ;
+
+				var generatedSymbol = 1 ;
+				generateSymbol = function (node) {
+					return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
+				}
 				pr.ast = asyncDefine(pr.ast,opts) ;
 				pr.ast = asyncAwait(pr.ast,opts) ;
 				return pr ;
@@ -861,17 +861,24 @@ initialize.asyncify = function asyncify(obj,filter,suffix) {
 	var o = Object.create(obj) ;
 	for (var j in o) (function(){
 		var k = j ;
-		if (typeof o[k+suffix]==='function' && !o[k+suffix].isAsync && filter(k,o)) {
+		if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
 			o[k+suffix] = function() {
 				var a = Array.prototype.slice.call(arguments) ;
 				return function($return,$error) {
-					a[obj[k].length-1] = function(err,ok){
+					var cb = function(err,ok){
 						if (err)
 							return $error(err) ;
 						if (arguments.length==2)
 							return $return(ok) ;
 						return $return(Array.prototype.slice.call(arguments,1)) ;
 					} ;
+					// If more args were supplied than declared, push the CB
+					if (a.length > obj[k].length) {
+						a.push(cb) ;
+					} else {
+						// Assume the CB is the final arg
+						a[obj[k].length-1] = cb ;
+					}
 					var ret = obj[k].apply(obj,a) ;
 					/* EXPERIMENTAL !!
 					if (ret !== undefined) {
