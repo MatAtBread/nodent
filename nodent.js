@@ -632,9 +632,9 @@ function initialize(opts){
 					var jsmap = map.get().toJSON() ;
 					jsmap.sourcesContent = [pr.origCode] ;
 					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-					var mapUrl = "\n/*"
+					var mapUrl = "\n"
 					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-					+"\n*/" ;
+					+"\n" ;
 				}
 				pr.code = str.toString()+(map?mapUrl:"") ;
 			},
