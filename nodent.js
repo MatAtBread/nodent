@@ -868,13 +868,13 @@ initialize.asyncify = function asyncify(obj,filter) {
 			o[k] = function() {
 				var a = Array.prototype.slice.call(arguments) ;
 				return function($return,$error) {
-					a.push(function(err,ok){
+					a[obj[k].length-1] = function(err,ok){
 						if (err)
 							return $error(err) ;
 						if (arguments.length==2)
 							return $return(ok) ;
 						return $return(Array.prototype.slice.call(arguments,1)) ;
-					}) ;
+					} ;
 					var ret = obj[k].apply(obj,a) ;
 					/* EXPERIMENTAL !!
 					if (ret !== undefined) {
