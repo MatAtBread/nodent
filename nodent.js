@@ -428,6 +428,11 @@ function asyncDefine(ast,opts) {
 				}) ;
 				
 				if (opts.promises) {
+					var funcback = new U2.AST_Function({
+						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+						body:fnBody
+					}) ;
+					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_New({
 							expression:new U2.AST_SymbolRef({name:"Promise"}),
@@ -435,6 +440,22 @@ function asyncDefine(ast,opts) {
 						})
 					})] ;
 				} else {
+					var funcback = new U2.AST_Function({
+						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+						body:[new U2.AST_Try({
+							body:fnBody,
+							bcatch:new U2.AST_Catch({
+								argname:new U2.AST_SymbolCatch({name:config.$except}),
+								body:[
+								      new U2.AST_Return({value:
+								    	  new U2.AST_Call({
+								    		  expression:new U2.AST_SymbolRef({name:config.$error}),
+								    		  args:[new U2.AST_SymbolRef({name:config.$except})]
+								    	  })})]
+							})
+						})]
+					}) ;
+					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_Call({
 							expression:new U2.AST_Dot({
@@ -552,6 +573,8 @@ function initialize(opts){
 			compile:function(code,origFilename,sourceMapping,opts) {
 				try {
 					opts = opts || {} ;
+					if (opts.promises)
+						opts.es7 = true ;
 					sourceMapping = sourceMapping || config.sourceMapping ; 
 					var pr = nodent.parse(code,origFilename,sourceMapping,opts);
 					nodent.asynchronize(pr,sourceMapping,opts) ;
@@ -658,7 +681,7 @@ function initialize(opts){
 							return sendException(err) ;
 						} else {
 							try {
-								var pr = nodent.compile(content.toString(),req.url,2);
+								var pr = nodent.compile(content.toString(),req.url,2,options.compiler);
 								if (options.enableCache)
 									cache[req.url] = pr.code ; // Don't cache for now
 								res.setHeader("Content-Type", "application/javascript");
