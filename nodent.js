@@ -871,7 +871,7 @@ function initialize(opts){
 } ;
 
 initialize.asyncify = function(promiseProvider) {
-	promiseProvider = promiseProvider || nodent.Provider ;
+	promiseProvider = promiseProvider || nodent.Promise ;
 	return function asyncify(obj,filter,suffix) {
 		if (Array.isArray(filter)) {
 			var names = filter ;
