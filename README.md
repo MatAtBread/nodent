@@ -757,6 +757,8 @@ Code after cross-compilation by Nodent and as execute by Node:
 Changelog
 ==========
 
+09Feb15: Handle cases where nodent covers are used with code compiled for use with Promises. Implement thunking Promise class (nodent.Promise) that provides the bare minimum Promise API (construction, .then) to be callable within the cover classes.
+
 06Feb15: Implement correct code-lifting for switch. Implement (optional) use of Promises. Fix sourceMap for Chrome 38+. Fix asyncify when an asyncified function is called with insufficient parameters.
 
 30Jan15: Update to support ES7 async and await syntax. The code and examples in this README are for nodent with ES7 extensions. To previous ES5-compatible syntax is described in [README-v0-1-38](./README-v0-1-38.md). This updated version of Nodent is backwards compatible with the earlier ES5 syntax which is enabled with the "use nodent" directive (not "-es7").
