@@ -12,21 +12,21 @@ module.exports = function(nodent) {
 	var cover = Object.create(http) ;
 
 	cover.request = function(opts){
-		return function($return,$error){
+		return new nodent.Promise(function($return,$error){
 			var request = http.request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
-		}
+		}) ;
 	};
 	
 	cover.get = function(opts){
-		return function($return,$error){
+		return new nodenr.Promise(function($return,$error){
 			http.get(opts,$return).on('error',$error) ;
-		}
+		}) ;
 	};
 	
 	cover.getBody = function(opts){
-		return function($return,$error){
+		return new nodent.Promise(function($return,$error){
 			http.get(opts,function(res){
 				try {
 					res.setEncoding('utf8');
@@ -46,7 +46,7 @@ module.exports = function(nodent) {
 					$error(ex) ;
 				}
 			}).on('error',$error) ;
-		}
+		}) ;
 	};
 	
 	return cover ;

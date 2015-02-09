@@ -27,21 +27,21 @@ module.exports = function(nodent,config) {
 	}
 
 	cover.request = function(opts){
-		return function($return,$error){
+		return new nodent.Promise(function($return,$error){
 			var request = protocol(opts).request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
-		}
+		}) ;
 	};
 
 	cover.get = function(opts){
-		return function($return,$error){
+		return new nodent.Promis(function($return,$error){
 			protocol(opts).get(opts,$return).on('error',$error) ;
-		}
+		}) ;
 	};
 
 	cover.getBody = function(opts){
-		return function($return,$error){
+		return new nodent.Promise(function($return,$error){
 			protocol(opts).get(opts,function(res){
 				try {
 					var enc = "utf8" ;
@@ -86,7 +86,7 @@ module.exports = function(nodent,config) {
 					$error(ex) ;
 				}
 			}).on('error',$error) ;
-		}
+		}) ;
 	};
 	return cover ;
 };

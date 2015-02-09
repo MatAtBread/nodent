@@ -538,6 +538,7 @@ function reportParseException(ex,content,filename) {
 } 
 
 var configured = false ;
+var asynchronized = {} ;
 function initialize(opts){
 	if (!opts)
 		opts = config ;
@@ -586,6 +587,7 @@ function initialize(opts){
 				return r ;
 			},
 			asynchronize:function(pr,sourceMapping,opts) {
+				asynchronized[pr.filename] = opts ;
 				sourceMapping = sourceMapping || config.sourceMapping ; 
 
 				if (sourceMapping==2)
@@ -685,6 +687,20 @@ function initialize(opts){
 			AST:U2
 		};
 
+		/* Sync implementation of:
+		 	f(args)(t,x)
+		 	(new f(args)).then(t,x)
+		 */
+		nodent.Promise = nodent.SyncPromise = function(resolver) {
+			resolver.then = function(result,error){
+				return resolver.apply(this,arguments) ;
+			};
+			return resolver ;
+		}
+		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
+			return f.then?f.then(complete,completeError):f(complete,completeError)
+		}
+
 		/**
 		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
 		 */
@@ -727,14 +743,20 @@ function initialize(opts){
 		 * to:
 		 * 		http.aGet(opts)(function(result){}) ;
 		 * 
+		 * @params
+		 * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
+		 * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
+		 * resultIdx 	The argument index of the callback that holds the result. 'undefined' for the argument after the errorIdx (errorIdx != undefined)
+		 * promiseProvider	For promises, set this to the module providing Promises.
 		 */
 		Object.defineProperty(Function.prototype,"noDentify",{
-			value:function(idx,errorIdx,resultIdx) {
+			value:function(idx,errorIdx,resultIdx,promiseProvider) {
+				promiseProvider = promiseProvider || nodent.Promise ;
 				var fn = this ;
 				return function() {
 					var scope = this ;
 					var args = Array.prototype.slice.apply(arguments) ;
-					return function(ok,error) {
+					var resolver = function(ok,error) {
 						if (undefined==idx)	// No index specified - use the final (unspecified) parameter
 							idx = args.length ;
 						if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
@@ -750,6 +772,7 @@ function initialize(opts){
 						}
 						return fn.apply(scope,args) ;
 					}
+					return new promiseProvider(resolver) ;
 				};
 			},
 			configurable:false,
@@ -843,55 +866,59 @@ function initialize(opts){
 	return nodent ;
 } ;
 
-initialize.asyncify = function asyncify(obj,filter,suffix) {
-	if (Array.isArray(filter)) {
-		var names = filter ;
-		filter = function(k,o) {
-			return names.indexOf(k)>=0 ;
-		}
-	} else {
-		filter = filter || function(k,o) {
-			return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
-		};
-	}
-	
-	if (!suffix)
-		suffix = "" ;
-	
-	var o = Object.create(obj) ;
-	for (var j in o) (function(){
-		var k = j ;
-		if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
-			o[k+suffix] = function() {
-				var a = Array.prototype.slice.call(arguments) ;
-				return function($return,$error) {
-					var cb = function(err,ok){
-						if (err)
-							return $error(err) ;
-						if (arguments.length==2)
-							return $return(ok) ;
-						return $return(Array.prototype.slice.call(arguments,1)) ;
-					} ;
-					// If more args were supplied than declared, push the CB
-					if (a.length > obj[k].length) {
-						a.push(cb) ;
-					} else {
-						// Assume the CB is the final arg
-						a[obj[k].length-1] = cb ;
-					}
-					var ret = obj[k].apply(obj,a) ;
-					/* EXPERIMENTAL !!
-					if (ret !== undefined) {
-						$return(ret) ;
-					}
-					*/
-				}
+initialize.asyncify = function(promiseProvider) {
+	promiseProvider = promiseProvider || nodent.promiseProvider ;
+	return function asyncify(obj,filter,suffix) {
+		if (Array.isArray(filter)) {
+			var names = filter ;
+			filter = function(k,o) {
+				return names.indexOf(k)>=0 ;
 			}
-			o[k+suffix].isAsync = true ;
+		} else {
+			filter = filter || function(k,o) {
+				return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
+			};
 		}
-	})() ;
-	o["super"] = obj ;
-	return o ;
+		
+		if (!suffix)
+			suffix = "" ;
+		
+		var o = Object.create(obj) ;
+		for (var j in o) (function(){
+			var k = j ;
+			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
+				o[k+suffix] = function() {
+					var a = Array.prototype.slice.call(arguments) ;
+					var resolver = function($return,$error) {
+						var cb = function(err,ok){
+							if (err)
+								return $error(err) ;
+							if (arguments.length==2)
+								return $return(ok) ;
+							return $return(Array.prototype.slice.call(arguments,1)) ;
+						} ;
+						// If more args were supplied than declared, push the CB
+						if (a.length > obj[k].length) {
+							a.push(cb) ;
+						} else {
+							// Assume the CB is the final arg
+							a[obj[k].length-1] = cb ;
+						}
+						var ret = obj[k].apply(obj,a) ;
+						/* EXPERIMENTAL !!
+						if (ret !== undefined) {
+							$return(ret) ;
+						}
+						*/
+					} ;
+					return new promiseProvider(resolver) ;
+				}
+				o[k+suffix].isAsync = true ;
+			}
+		})() ;
+		o["super"] = obj ;
+		return o ;
+	}
 };
 
 module.exports = initialize ;
