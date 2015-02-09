@@ -693,7 +693,11 @@ function initialize(opts){
 		 */
 		nodent.Promise = nodent.SyncPromise = function(resolver) {
 			resolver.then = function(result,error){
-				return resolver.apply(this,arguments) ;
+				try {
+					return resolver.apply(this,arguments) ;
+				} catch(ex) {
+					return error.apply(this,ex) ;
+				}
 			};
 			return resolver ;
 		}
