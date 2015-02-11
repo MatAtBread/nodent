@@ -184,6 +184,66 @@ var generateSymbol ;
  * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
  * callback to continue execution after the case.
  */
+function ifTransformer(ast){
+	var asyncWalk ;
+	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
+		if (ifStmt instanceof U2.AST_If) {
+			debugger ;
+//			if (ifStmt.deferred) {
+//				throw new Error("Duplicate if dissection") ;
+//			}
+			var parent = asyncWalk.parent(0) ;
+			if (!Array.isArray(parent.body)) {
+				parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
+				parent = parent.body ;
+			} 
+			var j = parent.body.indexOf(ifStmt)+1 ;
+			var deferredCode = parent.body.splice(j,parent.body.length-j) ;  
+
+			var symName = "$post_if_"+generateSymbol(ifStmt.condition) ;
+			var deferred = new U2.AST_SymbolRef({name:symName}) ;
+			var synthBlock = new U2.AST_BlockStatement({body:[ifStmt.clone()]}) ; 
+			coerce(ifStmt, synthBlock) ;
+			ifStmt = synthBlock.body[0] ;
+			
+			if (deferredCode.length) {
+				var call = new U2.AST_Return({value:new U2.AST_Call({
+					expression:deferred.clone(),
+					args:[]
+				})}) ;
+				synthBlock.body.push(ifTransformer(new U2.AST_Defun({argnames:[],
+					name:new U2.AST_SymbolDeclaration({name:symName}),
+					body:deferredCode.map(function(n){ return n.clone() })}))) ;
+				synthBlock.body.push(call.clone()) ;
+				if (!(ifStmt.body.body[ifStmt.body.body.length-1] instanceof U2.AST_Return))
+					ifStmt.body.body.push(call.clone()) ;
+				ifTransformer(ifStmt.body) ;
+				if (ifStmt.alternative) {
+					if (!(ifStmt.alternative.body[ifStmt.alternative.body.length-1] instanceof U2.AST_Return))
+						ifStmt.alternative.body.push(call.clone()) ;
+					ifTransformer(ifStmt.alternative) ;
+				}
+			} else {
+				deferred = null ;
+			}
+
+//			ifStmt.body[0].deferred = deferred ;
+//			switchStmt.body[0].body.forEach(switchTransformer) ;
+			return true ;
+		}
+	})) ;
+	return ast ;
+}
+
+/*
+ * Translate:
+	switch () { case:...; } more... ;
+ * into
+	switch () { case:...; } function $more() { more... } $more() ;
+ *
+ * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
+ * callback to continue execution after the case.
+ */
 function switchTransformer(ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(switchStmt, descend){
@@ -232,6 +292,7 @@ function asyncAwait(ast,opts) {
 		return ast.transform(asyncAssignTransfom) ;
 	}
 
+	ast = ifTransformer(ast) ;
 	ast = switchTransformer(ast) ;
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
