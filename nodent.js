@@ -81,7 +81,7 @@ var lambdaNesting = 0 ;
 var tryNesting = 0 ;
 
 var returnMapper = new U2.TreeTransformer(function(node,descend) {
-	if (!lambdaNesting && (node instanceof U2.AST_Return)) {
+	if (!lambdaNesting && (node instanceof U2.AST_Return) && !node.mapped) {
 		var repl = node.clone() ;
 		var value = repl.value?[repl.value.clone()]:[] ;
 		/*
@@ -132,6 +132,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		}) ;
 		repl.start = repl.value.start = node.start ;
 		repl.end = repl.value.end = node.end ;
+		repl.mapped = true ;
 		return repl ;
 	} else if (node instanceof U2.AST_Lambda) {
 		lambdaNesting++ ;
@@ -490,7 +491,8 @@ function btoa(str) {
 //not a healthy thing to have.
 function createMappingPadding(mapping) {
 	var m = mapping._mappings._array;
-	m.sort(function(a,b){
+
+	function sortMap(a,b){
 		if (a.generatedLine < b.generatedLine)
 			return -1 ;
 		if (a.generatedLine > b.generatedLine)
@@ -500,9 +502,19 @@ function createMappingPadding(mapping) {
 		if (a.generatedColumn > b.generatedColumn)
 			return 1 ;
 		return (a.name || "").length - (b.name || "").length ;
-	}) ;
+	}
+	m.sort(sortMap) ;
 
-	var i = 1 ;
+	var i = 0 ;
+	while (i<m.length-1) {
+		if (!m[i].name) {
+			m.splice(i,1) ;
+		} else {
+			i++ ;
+		}
+	}
+	
+	i = 1 ;
 	while (i<m.length) {
 		if (m[i-1].generatedLine < m[i].generatedLine){
 			m.splice(i,0,{
@@ -517,6 +529,29 @@ function createMappingPadding(mapping) {
 		}
 		i += 1 ;
 	}
+
+	var lastOrigLine = -1 ;
+	var lastOrigLine = -1 ;
+	for (i=0;i<m.length; i++) {
+		if (m[i].originalLine != lastOrigLine) {
+			m[i].originalColumn = 0 ;
+			lastOrigLine = m[i].originalLine ; 
+		}
+	}
+
+	var i = 0 ;
+	while (i<m.length-1) {
+		if (((m[i].originalLine == m[i+1].originalLine)
+				&& (m[i].originalColumn == m[i+1].originalColumn))
+		|| ((m[i].generatedLine == m[i+1].generatedLine)
+				&& (m[i].generatedColumn == m[i+1].generatedColumn))) {
+			m.splice(i,1) ;
+		} else {
+			i++ ;
+		}
+	}
+	m.sort(sortMap) ;
+
 	if (m.length)
 		m.push({
 			generatedColumn: 0,
@@ -832,7 +867,7 @@ function initialize(opts){
 							throw reportParseException(ex,content,filename) ;
 						}
 						else
-							throw exjs ;
+							throw ex ;
 					}
 				}
 			} ;

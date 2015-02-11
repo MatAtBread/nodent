@@ -757,6 +757,8 @@ Code after cross-compilation by Nodent and as execute by Node:
 Changelog
 ==========
 
+11Feb15: Fix case where a throw inside a nested async function is mapped twice - first to "return $error(x)", then to "return $return($error(x))".
+
 09Feb15: Handle cases where nodent covers are used with code compiled for use with Promises. Implement thunking Promise class (nodent.Promise) that provides the bare minimum Promise API (construction, .then) to be callable within the cover classes.
 
 06Feb15: Implement correct code-lifting for switch. Implement (optional) use of Promises. Fix sourceMap for Chrome 38+. Fix asyncify when an asyncified function is called with insufficient parameters.
