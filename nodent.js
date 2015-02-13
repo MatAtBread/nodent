@@ -188,7 +188,7 @@ function ifTransformer(ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
 		if (ifStmt instanceof U2.AST_If) {
-			debugger ;
+//			debugger ;
 //			if (ifStmt.deferred) {
 //				throw new Error("Duplicate if dissection") ;
 //			}
@@ -296,8 +296,15 @@ function asyncAwait(ast,opts) {
 	ast = switchTransformer(ast) ;
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-			var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
-			var expr = node.expression.clone() ;
+//			debugger ;
+			// TODO: Handle case of "await fn(await...)
+			//expr = asyncAwait(expr,opts);
+//			var nested = asyncAwait(new U2.AST_BlockStatement({body:[node.expression.clone()]}),opts) ;
+//			node.expression = nested.body[0] ;
+//			debugger ;
+			var result,expr ;
+			result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
+			expr = node.expression.clone() ;
 			coerce(node,result) ;
 
 			var stmt = asyncWalk.find_parent(U2.AST_Statement) ;
