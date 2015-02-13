@@ -15,6 +15,7 @@
  */
 
 module.exports = function(U2,config) {
+	console.warn("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords") ;
 	var asyncAssignTransfom = new U2.TreeTransformer(function(node, descend){
 		var isSimple = (node  instanceof U2.AST_SimpleStatement) ;
 		var stmt = isSimple?node.body:node ;
