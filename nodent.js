@@ -6,8 +6,6 @@
  * AST transforms and node loader extension 
  */
 
-var fs = require('fs') ;
-
 /* A patch that adds two new keywords to Uglify parsing: async and await, a la ES7 */
 function U2patch(){
 	var predicates = {
@@ -25,6 +23,7 @@ function U2patch(){
 var U2 = require("./ug2loader").load(U2patch) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
+var fs = require('fs') ;
 
 /** Helpers **/
 function pretty(node) {
@@ -441,7 +440,8 @@ function asyncDefine(ast,opts) {
 				}) ;
 	
 				var funcback = new U2.AST_Function({
-					argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+					argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
+					          new U2.AST_SymbolFunarg({name:config.$error})],
 					body:[new U2.AST_Try({
 						body:fnBody,
 						bcatch:new U2.AST_Catch({
@@ -469,22 +469,6 @@ function asyncDefine(ast,opts) {
 						})
 					})] ;
 				} else {
-					var funcback = new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
-						body:[new U2.AST_Try({
-							body:fnBody,
-							bcatch:new U2.AST_Catch({
-								argname:new U2.AST_SymbolCatch({name:config.$except}),
-								body:[
-								      new U2.AST_Return({value:
-								    	  new U2.AST_Call({
-								    		  expression:new U2.AST_SymbolRef({name:config.$error}),
-								    		  args:[new U2.AST_SymbolRef({name:config.$except})]
-								    	  })})]
-							})
-						})]
-					}) ;
-					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_Call({
 							expression:new U2.AST_Dot({
@@ -618,6 +602,61 @@ function reportParseException(ex,content,filename) {
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
 	return ("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
+
+function asyncify(promiseProvider) {
+	promiseProvider = promiseProvider || nodent.Promise ;
+	return function asyncify(obj,filter,suffix) {
+		if (Array.isArray(filter)) {
+			var names = filter ;
+			filter = function(k,o) {
+				return names.indexOf(k)>=0 ;
+			}
+		} else {
+			filter = filter || function(k,o) {
+				return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
+			};
+		}
+		
+		if (!suffix)
+			suffix = "" ;
+		
+		var o = Object.create(obj) ;
+		for (var j in o) (function(){
+			var k = j ;
+			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
+				o[k+suffix] = function() {
+					var a = Array.prototype.slice.call(arguments) ;
+					var resolver = function($return,$error) {
+						var cb = function(err,ok){
+							if (err)
+								return $error(err) ;
+							if (arguments.length==2)
+								return $return(ok) ;
+							return $return(Array.prototype.slice.call(arguments,1)) ;
+						} ;
+						// If more args were supplied than declared, push the CB
+						if (a.length > obj[k].length) {
+							a.push(cb) ;
+						} else {
+							// Assume the CB is the final arg
+							a[obj[k].length-1] = cb ;
+						}
+						var ret = obj[k].apply(obj,a) ;
+						/* EXPERIMENTAL !!
+						if (ret !== undefined) {
+							$return(ret) ;
+						}
+						*/
+					} ;
+					return new promiseProvider(resolver) ;
+				}
+				o[k+suffix].isAsync = true ;
+			}
+		})() ;
+		o["super"] = obj ;
+		return o ;
+	}
+};
 
 var configured = false ;
 var asynchronized = {} ;
@@ -774,19 +813,22 @@ function initialize(opts){
 		 	(new f(args)).then(t,x)
 		 */
 		nodent.Promise = nodent.SyncPromise = function(resolver) {
-			resolver.then = function(result,error){
-				try {
-					return resolver.apply(this,arguments) ;
-				} catch(ex) {
-					return error.apply(this,ex) ;
+			return {then: 
+				function(result,error){
+					try {
+						return resolver.apply(this,arguments) ;
+					} catch(ex) {
+						return error.apply(this,ex) ;
+					}
 				}
-			};
-			return resolver ;
+			}
 		}
+		
 		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
 			return f.then?f.then(complete,completeError):f(complete,completeError)
 		}
 
+		nodent.asyncify = asyncify ;
 		/**
 		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
 		 */
@@ -952,66 +994,13 @@ function initialize(opts){
 	return nodent ;
 } ;
 
-initialize.asyncify = function(promiseProvider) {
-	promiseProvider = promiseProvider || nodent.Promise ;
-	return function asyncify(obj,filter,suffix) {
-		if (Array.isArray(filter)) {
-			var names = filter ;
-			filter = function(k,o) {
-				return names.indexOf(k)>=0 ;
-			}
-		} else {
-			filter = filter || function(k,o) {
-				return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
-			};
-		}
-		
-		if (!suffix)
-			suffix = "" ;
-		
-		var o = Object.create(obj) ;
-		for (var j in o) (function(){
-			var k = j ;
-			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
-				o[k+suffix] = function() {
-					var a = Array.prototype.slice.call(arguments) ;
-					var resolver = function($return,$error) {
-						var cb = function(err,ok){
-							if (err)
-								return $error(err) ;
-							if (arguments.length==2)
-								return $return(ok) ;
-							return $return(Array.prototype.slice.call(arguments,1)) ;
-						} ;
-						// If more args were supplied than declared, push the CB
-						if (a.length > obj[k].length) {
-							a.push(cb) ;
-						} else {
-							// Assume the CB is the final arg
-							a[obj[k].length-1] = cb ;
-						}
-						var ret = obj[k].apply(obj,a) ;
-						/* EXPERIMENTAL !!
-						if (ret !== undefined) {
-							$return(ret) ;
-						}
-						*/
-					} ;
-					return new promiseProvider(resolver) ;
-				}
-				o[k+suffix].isAsync = true ;
-			}
-		})() ;
-		o["super"] = obj ;
-		return o ;
-	}
-};
-
+initialize.asyncify = asyncify ;
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv[2]) {
-	module.exports(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	// Initialise nodent
+	// Initialise nodent
+	initialize(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	
 	var path = require('path') ;
 	var mod = path.resolve(process.argv[2]) ;
 	require(mod);
