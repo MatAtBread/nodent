@@ -57,10 +57,10 @@ NoDent is a not a "framework" - there is no runtime JavaScript to include in you
 
 ES7 and Promises
 ================
-The ES7 proposal for async and await specified not only the syntactic elements 'async' and 'await' (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, 'async' functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
+The ES7 proposal for async and await specified not only the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
 
 Nodent can operate either with of without Promises as this type. The pros and cons are:
-* Using promises makes it easy to, in particular, 'await' on third-party code that returns a Promise, and create Promises by invoking an async function. The downside is your execution environment must somehow support Promises at run-time. Some browsers have Promises built in (later versions of Chrome and Firefox) as does Node v11. In other environments you must include a third-party implementation of Promises. Promises also make debugging a little more tricky as stepping in and out of async functions will go into your Promise implementation.
+* Using promises makes it easy to, in particular, `await` on third-party code that returns a Promise, and create Promises by invoking an async function. The downside is your execution environment must somehow support Promises at run-time. Some browsers have Promises built in (later versions of Chrome and Firefox) as does Node v11. In other environments you must include a third-party implementation of Promises. Promises also make debugging a little more tricky as stepping in and out of async functions will go into your Promise implementation.
 * Not using Promises requires no run-time support, is easier to debug (pairs of callbacks are used to enter and exit async functions), but provides no compatibility with Nodent async functions.
 
 To specify that you wish to use Promises, make the first directive in your file:
@@ -165,7 +165,7 @@ would get pretty messy pretty quickly.
 Async invocation
 ================
 
-The other transformation is a shorter call sequence, through the ES7 keyword 'await'. In Nodent
+The other transformation is a shorter call sequence, through the ES7 keyword `await`. In Nodent
 it's implemented as a unary prefix operator (in the same kind of place you might find 'typeof' or
 'delete'). It is this transformation that stops all the crazy indenting that async callbacks generate.
 
@@ -203,36 +203,34 @@ all the functions in parallel first, and use the results:
 Return Mapping
 ==============
 The process which transforms "return 123" into "return $return(123)" is called Return Mapping. It
-also maps the other kind of returns (exceptions) and handles nested returns. However, there is an
-common optimization in synchronous code where one routine returns the result of another, such as:
+also maps the other kind of returns (exceptions) and handles nested returns. For async functions, the
+plain return statement is mapped to the ES5 statement `return $return(...)`. 
 
-	return s_other(123) ;	// Synchronous
+Sometimes, for example if you want to return some mechanism for aborting an async function, you may wish to return a synchronous value as well. You can achieve this in a nodent async function by preceding synchronous return value with a `void` keyword. For example:
 
-In Nodent, can do this by typing:
+	async function getSlowRemote() {
+		// Do the async return after 60 seconds
+		var timer = setTimeout($return,1000) ;
+		// Return a synchronous value too:
+		return void function() {
+			console.log("aborted") ;
+			clearTimeout(timer) ;
+		}
+	}  
 
-	return await a_other(123) ;	// Asynchronous
+	// Invoke the async function using ES5 syntax, retainig the synchronous return value	
+	var abort = getSlowRemote()(function(){
+		console.log("done") ;
+	}) ; 
+	
+	// Abort the slow operation - "done" is not logged
+	abort() ;
 
-The creation of the hidden callback is a small overhead that can be avoided by simply passing the
-callbacks to the inner async call:
-
-	return a_other(123)($return,$error) ; 	// Callbacks passed as normal JS call to async-call
-
-You could just return the un-awaited inner call, and the caller uses 'await' to evaluate it.
-
-	return a_other(123) ; 	// Return the reference to the async call
-
-If both caller and callee are async, the problem here is it will be wrapped in another call to $return. To avoid this,
-use the "void" keyword in the return:
-
-	return void a_other(123) ; 
-
-Under normal circumstances you won't need to do this, but it can be useful in cases where you need to return
-async functions which can be stored and deferred for later invocation.
+Note that this behaviour (use of the "void" keyword to return a synchronous value) is NOT and ES7 standard. 
 
 Exceptions and $error
 =====================
-Nodent defines a default error handler (as global.$error) which throws an exception. This allows you to catch exceptions for
-async functions in the caller, just as you'd expect:
+Nodent defines a default error handler (as global.$error) which throws an exception. This allows you to catch exceptions for async functions in the caller, just as you'd expect:
 
 	async function test(x) {
 		if (!x)
@@ -306,13 +304,11 @@ the final parameter to the overidden $error handler).
 Gotchas
 =======
 
-Async programming with Nodent is much easier and simpler to debug than doing it by hand, or even using run-time constructs
-such as generators and promises, which have a complex implementation of the their own. However, a couple of common cases are
-important to avoid:
+Async programming with Nodent is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as generators and promises, which have a complex implementation of the their own. However, a couple of common cases are important to avoid:
 
 Implicit return
 ---------------
-Async functions do NOT have an implicit return - i.e. not using the return keyword at the end of an async function means that the caller will never emerge from the 'await'. This is intentional, without this behaviour, it would be difficult to have one async function call another (since the first would eventually return, as well as the second).
+Async functions do NOT have an implicit return - i.e. not using the return keyword at the end of an async function means that the caller will never emerge from the `await`. This is intentional, without this behaviour, it would be difficult to have one async function call another (since the first would eventually return, as well as the second).
 
 	async function test2(x) {
 		if (x)
@@ -345,46 +341,7 @@ Intentionally omit the return as we want another function to do it later:
 
 Conditionals & missing returns
 ------------------------------
-Becuase async invocation inserts a 'return' into your code (so it can be completed later), the semantics of if/else and loops
-need some care:
-
-	function f(x) {
-		if (x) {
-			await myFunc(1) ;
-			console.log("truthy") ;
-		}
-		return "done" ;
-	}
-
-If x is truthy, Nodent returns, and on callback proceeds after the 'await'. In the above case, there is nothing in
-the containing block which actually returns. Here's how the compiled function looks:
-
-	function f(x) {
-			if (x) {
-					// Call myFunc, passing the callback formed between the 'await'
-					// and the end of its containing block
-					return myFunc(1)(function($await_myFunc$1) {
-						console.log("truthy") ;
-					}.bind(this), $error);;
-			}
-			return "done";
-	}
-
-On return, "truthy" is output, but then the async call chain is broken - neither $return or $error have been invoked.
-
-To fix this, ensure you have a return (or throw) in all code paths and don't rely on conditional blocks falling through
-into their containing block. Full use of if/else makes this explicit:
-
-	function f(x) {
-		if (x) {
-			await myFunc(1) ;
-			console.log("truthy") ;
-			// We obviously need to return something here, since there's no implicit return
-			return "ok" ;
-		} else {
-			return "done" ;
-		}
-	}
+Nodent versions 1.0.11 and earlier required some thought when using conditionals such as switch and if - specifically the "early return" on an awaited expression meant conditional blocks did not "fall-through" into the surroudning block. This has been fixed in 1.0.12 and later. 
 
 For loops, the semantics of nodent do NOT meet the ES7 standard. Using await in a loop makes the loop
 block work as expected, but each iteration of the loop is started immediately, whether or not the
@@ -418,7 +375,7 @@ started. Nodent prints a warning when you use await inside a loop liek this as t
 
 Missing await, async function references & Promises
 ---------------------------------------------------
-Forgetting to put 'await' in front of an async call is easy. And usually not what you want - you'll get a reference
+Forgetting to put `await` in front of an async call is easy. And usually not what you want - you'll get a reference
 to the inner 'function($return,$error)'. However, this can be useful to help out with the above conditional/return problem, or
 anywhere else you need a reference to an async function.
 
@@ -429,26 +386,34 @@ anywhere else you need a reference to an async function.
 		fn = testDefault() ;	// testDefault is async
 	return await fn ;
 
-As discussed at the beginning, the type funcback signature means that the un-awaited return from an async 
-function is directly compatible with Promises, so that you can pass them into the Promise constructor:
+As discussed at the beginning, the ES5 type of an async function depends on whether the directive is `"use nodent-es7"` or `"use nodent-promises"`. For the -es7 directive the ES5 type is a 'funcback' function: 
 
-	async function myFunc(arg) {
-		// ...
-	} 
+	"use nodent-es7" ;
+	async function f() { return true ; }
+	var x = f ;	// 'x' = function($return,$error) { ... }
+	// Call x via compilation
+	await x ;
+	// Call x from ES5
+	x(function(result){ ... },function(error){ ... }) ;
+	 
+For -promises the return is Promise, in line with the ES7 specification:
 
-	var p = new Promise(myFunc(100)) ;
-	p.then(...);
-
+	"use nodent-promise" ;
+	async function f() { return true ; }
+	var x = f ;	// 'x' = a Promise
+	// Call x
+	await x ;
+	// Call x from ES5
+	x.then(function(result){ ... },function(error){ ... }) ;
+	
 Nodent async functions don't themselves require Promises - their use if entirely optional.
 
 Function.prototype.toString & arguments
 ---------------------------------------
-Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source,
-not the original source. This can be useful to see what Nodent did to your code.
+Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
 
 The JavaScript arguments value is problematic in async functions. Typically you will only ever see two
-values - $return and $error. This can make implementing variable argument functions difficult. If you must do this either
-use type-testing of each parameter, or implement your async function 'by hand':
+values - $return and $error. This can make implementing variable argument functions difficult. If you must do this either use type-testing of each parameter, or implement your async function 'by hand':
 
 	// Can be 'await'ed like an async function
 	function varArgs() {
@@ -560,11 +525,11 @@ The function completes when all the aync-iteration function calls have completed
 
 Example: mapping an object
 
-	// Use nodent.async
-	var async = require('nodent')({use:['async']}).async ;
+	// Use nodent.map
+	var map = require('nodent')({use:['map']}).map ;
 
 	// Asynchronously map every key in "myObject" by adding 1 to the value of the key
-	mapped = await async.map(myObject,async function(key){
+	mapped = await map(myObject,async function(key){
 		return myObject[key]+1 ;	// This can be async without issues
 	}) ;
 	// All done - mapped contains the new object with all the elements "incremeneted"
@@ -572,10 +537,10 @@ Example: mapping an object
 
 Example: map an array of URLs to their content
 
-	// Use nodent.async & http
-	var nodent = require('nodent')({use:['http','async']}) ;
+	// Use nodent.map & http
+	var nodent = require('nodent')({use:['http','map']}) ;
 
-	mapped = await nodent.async.map(['www.google.com','www.bbc.co.uk'],async function(value,index){
+	mapped = await nodent.map(['www.google.com','www.bbc.co.uk'],async function(value,index){
 		// Get the URL body asynchronously.
 		body = await nodent.http.getBody("http://"+value) ;
 		return body ;
@@ -584,10 +549,10 @@ Example: map an array of URLs to their content
 
 Example: iterate through a set of integer values and do something asynchronous with each one.
 
-	// Use nodent.async & http
-	var nodent = require('nodent')({use:['http','async']}) ;
+	// Use nodent.map & http
+	var nodent = require('nodent')({use:['http','map']}) ;
 
-	mapped = await nodent.async.map(3,async function(i){
+	mapped = await nodent.map(3,async function(i){
 		// Get the URL body asynchronously.
 		body = await nodent.http.getBody("http://example.com/cgi?test="+i) ;
 		return body ;
@@ -596,14 +561,14 @@ Example: iterate through a set of integer values and do something asynchronous w
 
 Example: execute arbitrary async functions in parallel and return when they are all complete
 
-	// Use nodent.async
-	var nodent = require('nodent')({use:['async']}) ;
+	// Use nodent.map
+	var nodent = require('nodent')({use:['map']}) ;
 
-	mapped = await nodent.async.map([asyncFn("abc"),asyncFn2("def")]) ;
+	mapped = await nodent.map([asyncFn("abc"),asyncFn2("def")]) ;
 
-	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to async.map), but the completion routine will only be called when all async functions have finished either via a return or exception. */
+	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception. */
 
-In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The async.map() function only errors if an async function illegal returns more than once (including multiple errors or both an error and normal response).
+In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
 
 Function arguments
 ------------------
@@ -619,7 +584,7 @@ accept function arguments with no mapping layer. A good example is "process.next
 nodent.asyncify
 ---------------
 This helper function wraps "normal" Node asynchronous functions (i.e. those whose final paramter is of the form `function(err,data)`)
-to make them usuable with 'await'. For example, to asyncify the standard Node module 'fs':
+to make them usuable with `await`. For example, to asyncify the standard Node module 'fs':
 
 	// Require 'fs'
 	var fs = require('fs') ;
@@ -757,6 +722,8 @@ Code after cross-compilation by Nodent and as execute by Node:
 Changelog
 ==========
 
+14Feb15: Implement correct return sematics for if...else... and switch. Correctly compile nested `await` expressions of the form x = await f(await g()) ;
+
 11Feb15: Fix case where a throw inside a nested async function is mapped twice - first to "return $error(x)", then to "return $return($error(x))".
 
 09Feb15: Handle cases where nodent covers are used with code compiled for use with Promises. Implement thunking Promise class (nodent.Promise) that provides the bare minimum Promise API (construction, .then) to be callable within the cover classes.
@@ -777,7 +744,7 @@ Changelog
 
 22May14: Added a real world example. See Before and After below
 
-22May14: Update async.map() to accepts an arbitrary set of async functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
+22May14: Update map() to accept an arbitrary set of async functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
 
 09Apr14: Update async.map() to accept a Number as the first argument. The async-callback is then called with integers from 0 to arg-1 rather than object keys or array elements.
 
