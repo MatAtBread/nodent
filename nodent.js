@@ -106,7 +106,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		 * 
 		 * 	return (expr) ;
 		 * 
-		 * Note that the parenthesis are necessary in the case of anything except a single sumbol as "void" binds to
+		 * Note that the parenthesis are necessary in the case of anything except a single symbol as "void" binds to
 		 * values before operator.
 		 *  
 		 * In the case where we REALLY want to return undefined to the callback, a simple "return" or "return undefined" 
@@ -177,21 +177,17 @@ var generateSymbol ;
 
 /*
  * Translate:
-	switch () { case:...; } more... ;
+	if (x) { y; } more... ;
  * into
-	switch () { case:...; } function $more() { more... } $more() ;
+	if (x) { y; return $more(); } function $more() { more... } $more() ;
  *
- * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
+ * ...in case 'y' uses await, in which case we need to invoke $more() at the end of the
  * callback to continue execution after the case.
  */
 function ifTransformer(ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
 		if (ifStmt instanceof U2.AST_If) {
-//			debugger ;
-//			if (ifStmt.deferred) {
-//				throw new Error("Duplicate if dissection") ;
-//			}
 			var parent = asyncWalk.parent(0) ;
 			if (!Array.isArray(parent.body)) {
 				parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
@@ -226,9 +222,6 @@ function ifTransformer(ast){
 			} else {
 				deferred = null ;
 			}
-
-//			ifStmt.body[0].deferred = deferred ;
-//			switchStmt.body[0].body.forEach(switchTransformer) ;
 			return true ;
 		}
 	})) ;
@@ -237,9 +230,9 @@ function ifTransformer(ast){
 
 /*
  * Translate:
-	switch () { case:...; } more... ;
+	switch () { case:...; break; } more... ;
  * into
-	switch () { case:...; } function $more() { more... } $more() ;
+	switch () { case:...; return $more(); } function $more() { more... } $more() ;
  *
  * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
  * callback to continue execution after the case.
@@ -329,8 +322,6 @@ function asyncAwait(ast,opts) {
 				}
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
 					var switchStmt = asyncWalk.stack[n-1] ;
-//					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-//					console.warn("Nodent JS: Warning - await inside switch-case "+start.file+":"+start.line) ;
 					terminate = function terminateSwitchBranch(call) {
 						block.body.push(new U2.AST_Return({ value:call })) ;
 					} ;
@@ -396,7 +387,7 @@ function asyncAwait(ast,opts) {
 			}
 			
 			var call = new U2.AST_Call({
-				expression:expr,//asyncCall.transform(asyncAssignTransfom),
+				expression:expr,
 				args:[returner,new U2.AST_SymbolRef({name:config.$error})]
 			}) ;
 			
@@ -409,13 +400,9 @@ function asyncAwait(ast,opts) {
 }
 
 /**
- * Uglify transormer: Transform (non ES7)
-  	async-function test(x) {
- 		return x*2 ;
- 	};
- *
- * or ES7
-  	async function test(x) {
+ * Uglify transormer: Transform 
+ * 
+    async function test(x) {
  		return x*2 ;
  	};
  *
@@ -443,8 +430,6 @@ function asyncDefine(ast,opts) {
 			var fn = node.expression ;
 			if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
 				fn = fn.expression.clone() ;
-//			if (fn instanceof U2.AST_IterationStatement)
-//				coerce(node,fn) ;
 			if (fn instanceof U2.AST_Function) {
 				var replace = fn.clone() ;
 				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
