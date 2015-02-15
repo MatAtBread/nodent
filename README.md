@@ -1,9 +1,14 @@
 NoDent
 ======
 
-NoDent is a small module for Nodejs that extends standard Javascript semantics to make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language.
+NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language.
 
 It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are courtesy of Uglify2 http://lisperator.net/uglifyjs/
+
+Online demo
+===========
+
+You can now see what Nodent does to your ES7 code with an online demo at [here](http://nodent.mailed.me.uk). Within the examples in this README, click on [_*_](http://nodent.mailed.me.uk) to see the code live.
 
 Basic Use and Syntax
 ====================
@@ -13,6 +18,7 @@ Declare an asynchronous function (one that returns "later").
 		// Do something asynchronous and terminal, such as DB access, web access, etc.
 		return result ;
 	}
+[_*_](http://nodent.mailed.me.uk)
 
 Call an async function:
 
@@ -609,13 +615,6 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 	var afs = asyncify(require('fs',null,"Async") ;
 	// Async version of readFile() has "Async" appended
 	await afs.readFileAsync("./mydata.txt") ;
-
-Online demo
-===========
-
-You can now see what Nodent does to your ES7 code with an online demo at [here](http://nodent.mailed.me.uk)
-
-Here's a basic example of an async definition and await. [Try it online](http://nodent.mailed.me.uk/#async%20function%20inc(x)%20%7B%0A%20%20%20%20return%20x%2B1%20%3B%20%0A%7D%0A%0Aconsole.log(await%20inc(10))%20%3B%0Aalert(await%20inc(123)%2Bawait%20inc(456))%20%3B%0A%0A)
 
 Changelog
 ==========
