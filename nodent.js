@@ -210,13 +210,25 @@ function ifTransformer(ast){
 					name:new U2.AST_SymbolDeclaration({name:symName}),
 					body:deferredCode.map(function(n){ return n.clone() })}))) ;
 				synthBlock.body.push(call.clone()) ;
-				if (!(ifStmt.body.body[ifStmt.body.body.length-1] instanceof U2.AST_Return))
-					ifStmt.body.body.push(call.clone()) ;
-				ifTransformer(ifStmt.body) ;
+
+				function transformConditional(cond) {
+					var blockEnd ;
+					if (!(cond instanceof U2.AST_BlockStatement))
+						blockEnd = cond ;
+					else
+						blockEnd = cond.body[cond.body.length-1] ; 
+					if (!(blockEnd instanceof U2.AST_Return)) {
+						if (!(cond instanceof U2.AST_BlockStatement)) {
+							coerce(cond,new U2.AST_BlockStatement({body:[cond.clone()]})) ;
+						}
+						cond.body.push(call.clone()) ;
+					}
+					ifTransformer(cond) ;
+				}
+
+				transformConditional(ifStmt.body) ;
 				if (ifStmt.alternative) {
-					if (!(ifStmt.alternative.body[ifStmt.alternative.body.length-1] instanceof U2.AST_Return))
-						ifStmt.alternative.body.push(call.clone()) ;
-					ifTransformer(ifStmt.alternative) ;
+					transformConditional(ifStmt.alternative) ;
 				}
 			} else {
 				deferred = null ;
@@ -494,6 +506,48 @@ function asyncDefine(ast,opts) {
 	return ast ;
 }
 
+/* Remove un-necessary nested blocks and crunch down empty function implementations */
+function cleanCode(ast,opts) {
+	var nullFunctions = {} ;
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		descend();
+		if (node instanceof U2.AST_BlockStatement) {
+			if (node.body.length==0)
+		    	coerce(node,new U2.AST_EmptyStatement()) ;
+		    else if (node.body.length==1)
+		    	coerce(node,new U2.AST_SimpleStatement({body:node.body[0]})) ;
+		}
+
+		if ((node instanceof U2.AST_Defun) 
+			&& (node.body[0] instanceof U2.AST_Return)
+			&& (node.body[0].value instanceof U2.AST_Call)
+			&& (node.body[0].value.args.length==0)) {
+			var call = node.body[0].value ;
+			nullFunctions[node.name.name] = call ; 
+			coerce(node,new U2.AST_EmptyStatement()) ;
+		}
+		return true ;
+	}) ;
+	ast.walk(asyncWalk) ;
+
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		descend();
+		if ((node instanceof U2.AST_Call) 
+			&& (node.expression instanceof U2.AST_SymbolRef)
+			&& nullFunctions[node.expression.name]) {
+			var call = node ;
+			while (nullFunctions[call.expression.name]) {
+				call = nullFunctions[call.expression.name] ;
+			}
+			node.expression = call.expression.clone() ; 
+			node.args = call.args.map(function(n){return n.clone()}) ; 
+		}
+		return true ;
+	}) ;
+	ast.walk(asyncWalk) ;
+	return ast ;
+}
+
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
 	// because the buffer-to-string conversion in `fs.readFileSync()`
@@ -658,6 +712,61 @@ function asyncify(promiseProvider) {
 	}
 };
 
+function asyncify(promiseProvider) {
+	promiseProvider = promiseProvider || nodent.Promise ;
+	return function asyncify(obj,filter,suffix) {
+		if (Array.isArray(filter)) {
+			var names = filter ;
+			filter = function(k,o) {
+				return names.indexOf(k)>=0 ;
+			}
+		} else {
+			filter = filter || function(k,o) {
+				return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
+			};
+		}
+		
+		if (!suffix)
+			suffix = "" ;
+		
+		var o = Object.create(obj) ;
+		for (var j in o) (function(){
+			var k = j ;
+			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
+				o[k+suffix] = function() {
+					var a = Array.prototype.slice.call(arguments) ;
+					var resolver = function($return,$error) {
+						var cb = function(err,ok){
+							if (err)
+								return $error(err) ;
+							if (arguments.length==2)
+								return $return(ok) ;
+							return $return(Array.prototype.slice.call(arguments,1)) ;
+						} ;
+						// If more args were supplied than declared, push the CB
+						if (a.length > obj[k].length) {
+							a.push(cb) ;
+						} else {
+							// Assume the CB is the final arg
+							a[obj[k].length-1] = cb ;
+						}
+						var ret = obj[k].apply(obj,a) ;
+						/* EXPERIMENTAL !!
+						if (ret !== undefined) {
+							$return(ret) ;
+						}
+						*/
+					} ;
+					return new promiseProvider(resolver) ;
+				}
+				o[k+suffix].isAsync = true ;
+			}
+		})() ;
+		o["super"] = obj ;
+		return o ;
+	}
+};
+
 var configured = false ;
 var asynchronized = {} ;
 function initialize(opts){
@@ -722,6 +831,7 @@ function initialize(opts){
 				}
 				pr.ast = asyncDefine(pr.ast,opts) ;
 				pr.ast = asyncAwait(pr.ast,opts) ;
+				pr.ast = cleanCode(pr.ast,opts) ;
 				return pr ;
 			},
 			prettyPrint:function(pr,sourceMapping,opts) {
