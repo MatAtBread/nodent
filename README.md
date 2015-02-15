@@ -8,7 +8,7 @@ It works by (optionally) transforming JavaScript when it is loaded into Node. Th
 Online demo
 ===========
 
-You can now see what Nodent does to your ES7 code with an online demo at [here](http://nodent.mailed.me.uk). Within the examples in this README, click on [_*_](http://nodent.mailed.me.uk) to see the code live.
+You can now see what Nodent does to your ES7 code with an online demo at [here](http://nodent.mailed.me.uk). Within the examples in this README, click on [_TRY-IT_](http://nodent.mailed.me.uk) to see the code live.
 
 Basic Use and Syntax
 ====================
@@ -18,11 +18,12 @@ Declare an asynchronous function (one that returns "later").
 		// Do something asynchronous and terminal, such as DB access, web access, etc.
 		return result ;
 	}
-[_*_](http://nodent.mailed.me.uk)
+[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20tellYouLater(sayWhat)%20%7B%0A%20%20%2F%2F%20Do%20something%20asynchronous%20and%20terminal%2C%20such%20as%20DB%20access%2C%20web%20access%2C%20etc.%0A%20%20return%20result%20%3B%0A%7D%0A)
 
 Call an async function:
 
 	result = await tellYouLater("Hi there") ;
+[_TRY-IT_](http://nodent.mailed.me.uk/#result%20%3D%20await%20tellYouLater(%22Hi%20there%22)%20%3B)
 
 To use NoDent, you need to:
 
@@ -101,6 +102,7 @@ is mapped to:
 				}
 			}
 		}
+[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20myFunc(args)%20%7B%0A%20%20body%20%3B%0A%20%20return%20expr%20%3B%0A%7D)
 
 (NB: There are other mappings too, like checking for nested functions and try catch blocks, but the essence is demonstrated in the example above).
 
@@ -155,6 +157,7 @@ The ACTUAL function created will be:
 			}
 		}.bind(this) ;
 	}
+[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20myFunc(args)%20%7B%0A%20%20if%20(!args)%0A%20%20%20%20throw%20new%20Error(%22Missing%20parameters%22)%20%3B%0A%20%20return%20doSomething(args)%20%3B%0A%7D%0A)
 
 This is just a normal JS function, that you can call like:
 
@@ -184,6 +187,7 @@ This is transformed into the code:
 		var result = $await_myFunc$1 ;
 		moreStuff(result) ;
 	},$error) ;
+[_TRY-IT_](http://nodent.mailed.me.uk/#var%20result%20%3D%20await%20myFunc(args)%20%3B%0AmoreStuff(result)%20%3B%0A)
 
 Yes, it hides a return statement in your code. If you step line by line, you WON'T hit "moreStuff"
 immediately after executing the line, it will be called later, when myFunc invokes your "success" handler.
@@ -194,6 +198,7 @@ Awaiting multiple times
 A statement or expression can combine multiple async results, for example:
 
 	console.log(await as1(1),await as2("hello")+await as1(3)) ;
+[_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%20%3B)
 
 This is both syntactically and semantically meaningful, but in the current implementation will
 call the async functions serially (note: the order in which they are invoked is note guaranteed).
@@ -424,6 +429,7 @@ values - $return and $error. This can make implementing variable argument functi
 	// Can be 'await'ed like an async function
 	function varArgs() {
 		var args = arguments ; // Capture the arguments
+		// For -es7; for -promise need to wrap the returned function in a Promise
 		return function($return,$error) {
 			return $return("You passed "+args.length+" parameters") ;
 		}
@@ -578,14 +584,14 @@ In the event of an error or exception in the async-mapping function, the error v
 
 Function arguments
 ------------------
-Because the async invocation operator maps to the sequence with an embedded function call, it can be used to invoke functions that
-accept function arguments with no mapping layer. A good example is "process.nextTick()" or "setImmediate()". These exepct a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
+When you're NOT using Promises, `await` maps to the sequence with an embedded function call, it can be used to invoke functions that accept function arguments. A good example is "process.nextTick()" or "setImmediate()". These exepct a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
 
 	doItNow() ;
 	await process.nextTick ;
 	doItABitLater();
 	await setImmediate ;
 	doItLaterStill() ;
+[_TRY-IT_ uncheck 'Use Promises'](http://nodent.mailed.me.uk/#doItNow()%20%3B%0Aawait%20process.nextTick%20%3B%0AdoItABitLater()%3B%0Aawait%20setImmediate%20%3B%0AdoItLaterStill()%20%3B%0A)	
 
 nodent.asyncify
 ---------------
@@ -619,7 +625,7 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 Changelog
 ==========
 
-15Feb15: Implement online demo
+15Feb15: Implement online demo. Fix transformations of un-nested conditional blocks such as '...else if ...'
 
 14Feb15: Implement correct return sematics for if...else... and switch. Correctly compile nested `await` expressions of the form x = await f(await g()) ;
 
