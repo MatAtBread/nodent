@@ -414,14 +414,24 @@ function asyncAwait(ast,opts) {
 /* Map loops:
 
 	for (init;cond;step) body ;
-
  * to:
-
 	init;
 	await (async function $for_i_0_i_10_i$1() {
 	 if (cond) {
 	   body;
 	   step;
+	   return void $for_i_0_i_10_i$1()($return,$error) ;
+	 } else {
+	  $return();
+	 } 
+	})() ;
+	
+ * Also: 
+ 	do { body } while (cond) ;
+ * to:
+ 	await (async function $for_i_0_i_10_i$1() {
+	  body;
+	  if (cond) {
 	   return void $for_i_0_i_10_i$1()($return,$error) ;
 	 } else {
 	  $return();
@@ -441,43 +451,93 @@ function asyncLoops(ast,opts) {
     	if (ex===foundAwait) {
     		asyncWalk = new U2.TreeWalker(function(node, descend){
         		descend() ;
-    			if (node instanceof U2.AST_For/*AST_IterationStatement*/) {
-    				//debugger ;
-    				var symName = "$loop_"+generateSymbol(node.condition) ;
+				function transformLoop() {
+					var init = node.init ;
+					var condition = node.condition ;
+					var step = node.step ;
+					var body = node.body ;
+					
+    				if (init && (!init instanceof U2.AST_Statement))
+    					init = new U2.AST_SimpleStatement({body:init}) ;
+    				step = step?new U2.AST_SimpleStatement({body:step}):null ;
+    				body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
+    				
+    				var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
     				var loop = new U2.AST_SymbolRef({name:symName}) ;
 
-    				var init = node.init ;
-    				if ((!init instanceof U2.AST_Statement))
-    					new U2.AST_SimpleStatement({body:init}) ;
-    				var condition = node.condition ;
-    				var step = node.step ;
-    				var body = [node.body.clone()] ;
+    				// How to exit the loop
+    				var mapBreak = new U2.AST_Return() ;
+
+    				// How to continue the loop
+    				var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
+    				var defContinue = new U2.AST_Defun({
+    					name:symContinue.clone(),
+    					argnames:[],
+    					body:[new U2.AST_Return({value:
+    			    		new U2.AST_Call({
+    				    		args:[new U2.AST_SymbolRef({name:config.$return}),
+    						        new U2.AST_SymbolRef({name:config.$error})],
+    						    expression:
+    				    			opts.promises 
+    					    			?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
+    				    				:new U2.AST_Call({args:[],expression:loop.clone()})
+    				    		})
+    					    })]
+    					}) ;
     				if (step)
-    					body.push(new U2.AST_SimpleStatement({body:node.step})) ;
-    				body.push(new U2.AST_Return({value:
-				    	new U2.AST_UnaryPrefix({operator:"void",expression:
-				    		new U2.AST_Call({
-				    		args:[
-						    	new U2.AST_SymbolRef({name:config.$return}),
-						        new U2.AST_SymbolRef({name:config.$error})],
-						    expression:
-				    			new U2.AST_Call({args:[],expression:loop.clone()})
-				    		})
-				    	})
-				    }));
+    					defContinue.body.unshift(step) ;
+
+    				var mapContinue = new U2.AST_Return({
+    					value:new U2.AST_UnaryPrefix({
+    						operator:"void",
+    						expression:new U2.AST_Call({
+    							args:[],
+    							expression:symContinue.clone()
+    				})})}) ; 
+
+    				for (var i=0; i<body.length;i++) {
+    					var w ;
+						body[i].walk(w = new U2.TreeWalker(function(n,descend){
+    						if (n instanceof U2.AST_Break) {
+    							coerce(n,mapBreak.clone()) ;
+    						} else if (n instanceof U2.AST_Continue) {
+   								coerce(n,mapContinue.clone()) ;
+    						} else if (n instanceof U2.AST_Lambda) {
+    							return true ;
+    						} 
+    					})) ;
+        			}
+
+    				body.push(mapContinue.clone());
+
     				var subCall = new U2.AST_UnaryPrefix({
 						operator:'async',
 						expression: new U2.AST_Defun({
 							name:loop.clone(),
 							argnames:[],
-							body:[new U2.AST_If({condition:condition.clone(),
-								body:new U2.AST_BlockStatement({body:body}),
-		                       alternative:new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:config.$return})})
-							})],
+							body:[defContinue]
 						})
 					});
-    				debugger ;
     				subCall.needs_parens = function(){ return true };
+
+    				var nextTest ;
+    				if (node instanceof U2.AST_Do) {
+    					defContinue.body = [new U2.AST_If({condition:condition.clone(),
+    				    	body:new U2.AST_BlockStatement({body:defContinue.body}),
+    				    	alternative:new U2.AST_Return({value:new U2.AST_Call({
+    				    		expression:new U2.AST_SymbolRef({name:config.$return}),
+    				    		args:[]
+    				    	})})
+    				    })] ;
+    					subCall.expression.body = [defContinue].concat(body) ;
+    				} else {
+        				var nextTest = new U2.AST_If({condition:condition.clone(),
+    				    	body:new U2.AST_BlockStatement({body:body}),
+    				    	alternative:mapBreak.clone()
+    				    }) ;
+    					subCall.expression.body.push(nextTest) ;
+    				}
+    				
     				var replace = new U2.AST_SimpleStatement({body:
     					new U2.AST_UnaryPrefix({operator:'await',expression:
     					new U2.AST_Call({
@@ -490,11 +550,23 @@ function asyncLoops(ast,opts) {
     				var parent = asyncWalk.parent() ;
     				if (Array.isArray(parent.body)) {
     					var i = parent.body.indexOf(node) ;
-    					parent.body.splice(i,1,init.clone(),replace) ;
+    					if (init)
+    						parent.body.splice(i,1,init.clone(),replace) ;
+    					else
+    						parent.body[i] = replace ;
     				} else {
-    					parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
+    					if (init)
+    						parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
+    					else
+    						parent.body = replace ;
     				}
-    			}
+				}
+    			if (node instanceof U2.AST_For)
+    				transformLoop() ;
+    			else if (node instanceof U2.AST_While)
+    				transformLoop() ;
+    			else if (node instanceof U2.AST_DWLoop)
+    				transformLoop() ;
     			return true ;
     		});
     		ast.walk(asyncWalk) ;
@@ -923,7 +995,7 @@ function initialize(opts){
 
 				var generatedSymbol = 1 ;
 				generateSymbol = function (node) {
-					return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
+					return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;	
 				}
 				pr.ast = asyncLoops(pr.ast,opts) ;
 				pr.ast = asyncDefine(pr.ast,opts) ;

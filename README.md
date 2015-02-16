@@ -198,7 +198,7 @@ Awaiting multiple times
 A statement or expression can combine multiple async results, for example:
 
 	console.log(await as1(1),await as2("hello")+await as1(3)) ;
-[_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%20%3B)
+[_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%20)
 
 This is both syntactically and semantically meaningful, but in the current implementation will
 call the async functions serially (note: the order in which they are invoked is note guaranteed).
@@ -354,41 +354,18 @@ Conditionals & missing returns
 ------------------------------
 Nodent versions 1.0.11 and earlier required some thought when using conditionals such as switch and if - specifically the "early return" on an awaited expression meant conditional blocks did not "fall-through" into the surroudning block. This has been fixed in 1.0.12 and later. 
 
-For loops, the semantics of nodent do NOT meet the ES7 standard. Using await in a loop makes the loop
-block work as expected, but each iteration of the loop is started immediately, whether or not the
-contents of the block have returned to the await.
+Nodent versions prior to 1.0.14 did not meet the ES7 standard for loops: using await in a loop made the loop
+block work as expected, but each iteration of the loop was started immediately. As of Nodent v1.0.14
+`while(){} do{}while for(;;){}` loops behave as per the ES7 standard (i.e. as if they were synchronous).
 
-	async function x(y) { await setImmediate ; return y+1 } ;
-	
-	for (var i=0; i<3; i++) {
-		console.log("start "+i) ;
-		console.log(await x(i)) ;	
-		console.log("end "+i) ;
-	}
-	console.log("done") ;
-
-Output:
-
-	start 0
-	start 1
-	start 2
-	done
-	1
-	end 3
-	2
-	end 3
-	3
-	end 3
-
-Note that although each iteration works in sequence (start,n,end), all the iterations start synchronously and the
-responses can finish in any order. The statement after the loop ("done") is executed as soon as all the iterations are
-started. Nodent prints a warning when you use await inside a loop liek this as the behaviour is non-standard.
+The `for (..in..)` construct DOES NOT meet the ES7 standard - each iteration of the loop body is synchronized
+as expected, but individual iterations may be interleaved and the loop may complete before some or all of the individual
+keys are enumerated. This behaviour can be ameliorated using the "map" cover (see later).
 
 Missing await, async function references & Promises
 ---------------------------------------------------
 Forgetting to put `await` in front of an async call is easy. And usually not what you want - you'll get a reference
-to the inner 'function($return,$error)'. However, this can be useful to help out with the above conditional/return problem, or
-anywhere else you need a reference to an async function.
+to the inner 'function($return,$error)' (or a Promise). This can be useful to where else you need a reference to an async function:
 
 	var fn ;
 	if (x)
@@ -624,6 +601,8 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 
 Changelog
 ==========
+
+16Feb15: Implement looping execution semantics (except `for(...in...)`)
 
 15Feb15: Implement online demo. Fix transformations of un-nested conditional blocks such as '...else if ...'
 
