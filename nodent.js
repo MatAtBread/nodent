@@ -37,7 +37,7 @@ function info(node) {
 	if (Array.isArray(node))
 		return node.forEach(info) ;
 	var s = "" ;
-	for (var q = node; q.TYPE; q=q.__proto__)
+	for (var q = node.__proto__; q.TYPE; q=q.__proto__)
 		s += q.TYPE+"." ;
 	return s+":"+node.print_to_string() ;
 }
@@ -360,7 +360,8 @@ function asyncAwait(ast,opts) {
 						block.body.push(new U2.AST_Return({ value:call })) ;
 					} ;
 					block = asyncWalk.stack[n] ;
-					break ;
+					if (block!==stmt)
+						break ;
 				}
 			}
 			if (!terminate)
@@ -410,6 +411,99 @@ function asyncAwait(ast,opts) {
 	return ast ;
 }
 
+/* Map loops:
+
+	for (init;cond;step) body ;
+
+ * to:
+
+	init;
+	await (async function $for_i_0_i_10_i$1() {
+	 if (cond) {
+	   body;
+	   step;
+	   return void $for_i_0_i_10_i$1()($return,$error) ;
+	 } else {
+	  $return();
+	 } 
+	})() ;
+ */
+function asyncLoops(ast,opts) {
+    var foundAwait = {} ;
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
+		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+			throw foundAwait ;
+		}
+	});
+    try {
+    	ast.walk(asyncWalk) ;
+    } catch (ex) {
+    	if (ex===foundAwait) {
+    		asyncWalk = new U2.TreeWalker(function(node, descend){
+        		descend() ;
+    			if (node instanceof U2.AST_For/*AST_IterationStatement*/) {
+    				//debugger ;
+    				var symName = "$loop_"+generateSymbol(node.condition) ;
+    				var loop = new U2.AST_SymbolRef({name:symName}) ;
+
+    				var init = node.init ;
+    				if ((!init instanceof U2.AST_Statement))
+    					new U2.AST_SimpleStatement({body:init}) ;
+    				var condition = node.condition ;
+    				var step = node.step ;
+    				var body = [node.body.clone()] ;
+    				if (step)
+    					body.push(new U2.AST_SimpleStatement({body:node.step})) ;
+    				body.push(new U2.AST_Return({value:
+				    	new U2.AST_UnaryPrefix({operator:"void",expression:
+				    		new U2.AST_Call({
+				    		args:[
+						    	new U2.AST_SymbolRef({name:config.$return}),
+						        new U2.AST_SymbolRef({name:config.$error})],
+						    expression:
+				    			new U2.AST_Call({args:[],expression:loop.clone()})
+				    		})
+				    	})
+				    }));
+    				var subCall = new U2.AST_UnaryPrefix({
+						operator:'async',
+						expression: new U2.AST_Defun({
+							name:loop.clone(),
+							argnames:[],
+							body:[new U2.AST_If({condition:condition.clone(),
+								body:new U2.AST_BlockStatement({body:body}),
+		                       alternative:new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:config.$return})})
+							})],
+						})
+					});
+    				debugger ;
+    				subCall.needs_parens = function(){ return true };
+    				var replace = new U2.AST_SimpleStatement({body:
+    					new U2.AST_UnaryPrefix({operator:'await',expression:
+    					new U2.AST_Call({
+    						args:[],
+    						expression:subCall,
+    						})
+    					})
+    				});
+
+    				var parent = asyncWalk.parent() ;
+    				if (Array.isArray(parent.body)) {
+    					var i = parent.body.indexOf(node) ;
+    					parent.body.splice(i,1,init.clone(),replace) ;
+    				} else {
+    					parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
+    				}
+    			}
+    			return true ;
+    		});
+    		ast.walk(asyncWalk) ;
+    	}
+    	else throw ex ;
+    }
+	return ast ;
+}
+
 /**
  * Uglify transormer: Transform 
  * 
@@ -441,8 +535,10 @@ function asyncDefine(ast,opts) {
 			var fn = node.expression ;
 			if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
 				fn = fn.expression.clone() ;
-			if (fn instanceof U2.AST_Function) {
+			if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
 				var replace = fn.clone() ;
+				if (replace instanceof U2.AST_Defun)
+					replace.needs_parens = function(){ return true };
 				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 				 * with a call to "$return" */
 				var fnBody = fn.body.map(function(sub){
@@ -829,6 +925,7 @@ function initialize(opts){
 				generateSymbol = function (node) {
 					return node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_")+"$"+generatedSymbol++ ;	
 				}
+				pr.ast = asyncLoops(pr.ast,opts) ;
 				pr.ast = asyncDefine(pr.ast,opts) ;
 				pr.ast = asyncAwait(pr.ast,opts) ;
 				pr.ast = cleanCode(pr.ast,opts) ;
