@@ -45,7 +45,8 @@ Why Nodent?
 
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
 * No dependency on ES6, "harmony"
-* No run-time overhead for Promises, Generators or any other feature beyond ES5
+* No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
+* No execution framework needed as with traceur or regenerator 
 * No 'node-gyp' or similar OS platform requirement for threads or fibers
 * ES7 async and await on ES5 (most modern browsers and nodejs).
 * For more about ES7 async functions and await see:
