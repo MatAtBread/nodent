@@ -698,7 +698,7 @@ function cleanCode(ast,opts) {
 	}) ;
 	ast.walk(asyncWalk) ;
 
-	var asyncWalk = new U2.TreeWalker(function(node, descend){
+	asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend();
 		if ((node instanceof U2.AST_Call) 
 			&& (node.expression instanceof U2.AST_SymbolRef)
@@ -709,6 +709,20 @@ function cleanCode(ast,opts) {
 			}
 			node.expression = call.expression.clone() ; 
 			node.args = call.args.map(function(n){return n.clone()}) ; 
+		}
+		return true ;
+	}) ;
+	ast.walk(asyncWalk) ;
+
+	asyncWalk = new U2.TreeWalker(function(node, descend){
+		descend();
+		if (node instanceof U2.AST_Exit) {
+			var parent = asyncWalk.parent(0) ;
+			if (Array.isArray(parent.body)) {
+				var i = parent.body.indexOf(node) ;
+				if (i>=0) 
+					parent.body.splice(i+1,parent.body.length-(i+1)) ;
+			}
 		}
 		return true ;
 	}) ;

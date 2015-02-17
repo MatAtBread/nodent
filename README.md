@@ -603,6 +603,8 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 Changelog
 ==========
 
+17Feb15: Optimize away any statements in a block after a `return` or `throw`
+
 16Feb15: Implement looping execution semantics (except `for(...in...)`)
 
 15Feb15: Implement online demo. Fix transformations of un-nested conditional blocks such as '...else if ...'
