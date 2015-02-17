@@ -1106,16 +1106,16 @@ function initialize(opts){
 		 	(new f(args)).then(t,x)
 		 */
 		nodent.Promise = nodent.SyncPromise = function(resolver) {
-			return {then: 
-				function(result,error){
-					try {
-						return resolver.apply(this,arguments) ;
-					} catch(ex) {
-						return error.apply(this,ex) ;
-					}
+			var fn = function(result,error){
+				try {
+					return resolver.apply(this,arguments) ;
+				} catch(ex) {
+					return error.apply(this,ex) ;
 				}
-			}
-		}
+			} ;
+			fn.then = function(ret,err){ return fn(ret,err); }
+			return fn ;
+		};
 		
 		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
 			return f.then?f.then(complete,completeError):f(complete,completeError)
