@@ -1,5 +1,6 @@
-"use nodent-es7";
+"use nodent-promise";
 
+Promise = require('../nodent')().Promise ;
 console.log(arguments.callee.toString()) ;
 
 async function inc(x) {

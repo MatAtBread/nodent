@@ -1,4 +1,5 @@
 "use nodent-promise";
+Promise = require('../nodent')().Promise ;
 
 global.Promise = require('../nodent')().Promise ;
 console.log(arguments.callee.toString()) ;

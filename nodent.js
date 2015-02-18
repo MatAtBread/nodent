@@ -841,7 +841,7 @@ function reportParseException(ex,content,filename) {
 
 function asyncify(promiseProvider) {
 	promiseProvider = promiseProvider || nodent.Promise ;
-	return function asyncify(obj,filter,suffix) {
+	return function(obj,filter,suffix) {
 		if (Array.isArray(filter)) {
 			var names = filter ;
 			filter = function(k,o) {
@@ -894,68 +894,12 @@ function asyncify(promiseProvider) {
 	}
 };
 
-function asyncify(promiseProvider) {
-	promiseProvider = promiseProvider || nodent.Promise ;
-	return function asyncify(obj,filter,suffix) {
-		if (Array.isArray(filter)) {
-			var names = filter ;
-			filter = function(k,o) {
-				return names.indexOf(k)>=0 ;
-			}
-		} else {
-			filter = filter || function(k,o) {
-				return (!k.match(/Sync$/) || !(k.replace(/Sync$/,"") in o)) ;
-			};
-		}
-		
-		if (!suffix)
-			suffix = "" ;
-		
-		var o = Object.create(obj) ;
-		for (var j in o) (function(){
-			var k = j ;
-			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
-				o[k+suffix] = function() {
-					var a = Array.prototype.slice.call(arguments) ;
-					var resolver = function($return,$error) {
-						var cb = function(err,ok){
-							if (err)
-								return $error(err) ;
-							if (arguments.length==2)
-								return $return(ok) ;
-							return $return(Array.prototype.slice.call(arguments,1)) ;
-						} ;
-						// If more args were supplied than declared, push the CB
-						if (a.length > obj[k].length) {
-							a.push(cb) ;
-						} else {
-							// Assume the CB is the final arg
-							a[obj[k].length-1] = cb ;
-						}
-						var ret = obj[k].apply(obj,a) ;
-						/* EXPERIMENTAL !!
-						if (ret !== undefined) {
-							$return(ret) ;
-						}
-						*/
-					} ;
-					return new promiseProvider(resolver) ;
-				}
-				o[k+suffix].isAsync = true ;
-			}
-		})() ;
-		o["super"] = obj ;
-		return o ;
-	}
-};
-
-var configured = false ;
 var asynchronized = {} ;
 function initialize(opts){
 	if (!opts)
 		opts = config ;
 
-	if (!configured) {
+	if (!initialize.configured) {
 		// Fill in default config values
 		for (var k in config) {
 			if (!opts.hasOwnProperty(k))
@@ -1105,20 +1049,22 @@ function initialize(opts){
 		 	f(args)(t,x)
 		 	(new f(args)).then(t,x)
 		 */
+		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.Promise = nodent.SyncPromise = function(resolver) {
 			var fn = function(result,error){
 				try {
 					return resolver.apply(this,arguments) ;
 				} catch(ex) {
-					return error.apply(this,ex) ;
+					return error.apply(this,[ex]) ;
 				}
 			} ;
-			fn.then = function(ret,err){ return fn(ret,err); }
+			fn.then = nodent.Promise.thenCall ;
 			return fn ;
 		};
-		
+		nodent.Promise.thenCall = function(ret,err){ return this(ret,err); } ;
+		// Auto-call funcback or Promise if thenable 
 		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
-			return f.then?f.then(complete,completeError):f(complete,completeError)
+			return (f.then?f.then:f)(complete,completeError);
 		}
 
 		nodent.asyncify = asyncify ;
@@ -1283,7 +1229,7 @@ function initialize(opts){
 		if (k!="use") 
 			config[k] = opts[k] ;
 	}
-	configured = true ;
+	initialize.configured = true ;
 	return nodent ;
 } ;
 
