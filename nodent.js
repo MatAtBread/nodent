@@ -609,8 +609,9 @@ function asyncDefine(ast,opts) {
 				fn = fn.expression.clone() ;
 			if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
 				var replace = fn.clone() ;
-				if (replace instanceof U2.AST_Defun)
+				if (replace instanceof U2.AST_Defun) {
 					replace.needs_parens = function(){ return true };
+				}
 				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 				 * with a call to "$return" */
 				var fnBody = fn.body.map(function(sub){
@@ -638,7 +639,8 @@ function asyncDefine(ast,opts) {
 				
 				if (opts.promises) {
 					var funcback = new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),new U2.AST_SymbolFunarg({name:config.$error})],
+						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
+						          new U2.AST_SymbolFunarg({name:config.$error})],
 						body:fnBody
 					}) ;
 					
