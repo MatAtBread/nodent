@@ -438,141 +438,147 @@ function asyncAwait(ast,opts) {
 	 } 
 	})() ;
  */
-function asyncLoops(ast,opts) {
+function containsAwait(ast) {
     var foundAwait = {} ;
-	var asyncWalk = new U2.TreeWalker(function(node, descend){
-		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-			throw foundAwait ;
+	try {
+		var asyncWalk = new U2.TreeWalker(function(node, descend){
+			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+				throw foundAwait ;
+			}
+		});
+		ast.walk(asyncWalk) ;
+	} catch (ex) {
+		if (ex===foundAwait)
+			return true ;
+		throw ex ;
+	}
+	return false ;
+}
+
+function asyncLoops(ast,opts) {
+	asyncWalk = new U2.TreeWalker(function(node, descend){
+		descend() ;
+		function transformLoop() {
+			if (!containsAwait(node))
+				return ;
+			var init = node.init ;
+			var condition = node.condition ;
+			var step = node.step ;
+			var body = node.body ;
+
+			if (init && (!init instanceof U2.AST_Statement))
+				init = new U2.AST_SimpleStatement({body:init}) ;
+			step = step?new U2.AST_SimpleStatement({body:step}):null ;
+			body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
+
+			var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
+			var loop = new U2.AST_SymbolRef({name:symName}) ;
+
+			// How to exit the loop
+			var mapBreak = new U2.AST_Return() ;
+
+			// How to continue the loop
+			var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
+			var defContinue = new U2.AST_Defun({
+				name:symContinue.clone(),
+				argnames:[],
+				body:[new U2.AST_Return({value:
+					new U2.AST_Call({
+						args:[new U2.AST_SymbolRef({name:config.$return}),
+						      new U2.AST_SymbolRef({name:config.$error})],
+						      expression:
+						    	  opts.promises 
+						    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
+					:new U2.AST_Call({args:[],expression:loop.clone()})
+					})
+				})]
+			}) ;
+			if (step)
+				defContinue.body.unshift(step) ;
+
+			var mapContinue = new U2.AST_Return({
+				value:new U2.AST_UnaryPrefix({
+					operator:"void",
+					expression:new U2.AST_Call({
+						args:[],
+						expression:symContinue.clone()
+					})})}) ; 
+
+			for (var i=0; i<body.length;i++) {
+				var w ;
+				body[i].walk(w = new U2.TreeWalker(function(n,descend){
+					if (n instanceof U2.AST_Break) {
+						coerce(n,mapBreak.clone()) ;
+					} else if (n instanceof U2.AST_Continue) {
+						coerce(n,mapContinue.clone()) ;
+					} else if (n instanceof U2.AST_Lambda) {
+						return true ;
+					} 
+				})) ;
+			}
+
+			body.push(mapContinue.clone());
+
+			var subCall = new U2.AST_UnaryPrefix({
+				operator:'async',
+				expression: new U2.AST_Defun({
+					name:loop.clone(),
+					argnames:[],
+					body:[defContinue]
+				})
+			});
+			subCall.needs_parens = function(){ return true };
+
+			var nextTest ;
+			if (node instanceof U2.AST_Do) {
+				defContinue.body = [new U2.AST_If({condition:condition.clone(),
+					body:new U2.AST_BlockStatement({body:defContinue.body}),
+					alternative:new U2.AST_Return({value:new U2.AST_Call({
+						expression:new U2.AST_SymbolRef({name:config.$return}),
+						args:[]
+					})})
+				})] ;
+				subCall.expression.body = [defContinue].concat(body) ;
+			} else {
+				var nextTest = new U2.AST_If({condition:condition.clone(),
+					body:new U2.AST_BlockStatement({body:body}),
+					alternative:mapBreak.clone()
+				}) ;
+				subCall.expression.body.push(nextTest) ;
+			}
+
+			var replace = new U2.AST_SimpleStatement({body:
+				new U2.AST_UnaryPrefix({operator:'await',expression:
+					new U2.AST_Call({
+						args:[],
+						expression:subCall,
+					})
+				})
+			});
+
+			var parent = asyncWalk.parent() ;
+			if (Array.isArray(parent.body)) {
+				var i = parent.body.indexOf(node) ;
+				if (init)
+					parent.body.splice(i,1,init.clone(),replace) ;
+				else
+					parent.body[i] = replace ;
+			} else {
+				if (init)
+					parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
+				else
+					parent.body = replace ;
+			}
 		}
+		if (node instanceof U2.AST_For)
+			transformLoop() ;
+		else if (node instanceof U2.AST_While)
+			transformLoop() ;
+		else if (node instanceof U2.AST_DWLoop)
+			transformLoop() ;
+		return true ;
 	});
-    try {
-    	ast.walk(asyncWalk) ;
-    } catch (ex) {
-    	if (ex===foundAwait) {
-    		asyncWalk = new U2.TreeWalker(function(node, descend){
-        		descend() ;
-				function transformLoop() {
-					var init = node.init ;
-					var condition = node.condition ;
-					var step = node.step ;
-					var body = node.body ;
-					
-    				if (init && (!init instanceof U2.AST_Statement))
-    					init = new U2.AST_SimpleStatement({body:init}) ;
-    				step = step?new U2.AST_SimpleStatement({body:step}):null ;
-    				body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
-    				
-    				var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
-    				var loop = new U2.AST_SymbolRef({name:symName}) ;
-
-    				// How to exit the loop
-    				var mapBreak = new U2.AST_Return() ;
-
-    				// How to continue the loop
-    				var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
-    				var defContinue = new U2.AST_Defun({
-    					name:symContinue.clone(),
-    					argnames:[],
-    					body:[new U2.AST_Return({value:
-    			    		new U2.AST_Call({
-    				    		args:[new U2.AST_SymbolRef({name:config.$return}),
-    						        new U2.AST_SymbolRef({name:config.$error})],
-    						    expression:
-    				    			opts.promises 
-    					    			?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
-    				    				:new U2.AST_Call({args:[],expression:loop.clone()})
-    				    		})
-    					    })]
-    					}) ;
-    				if (step)
-    					defContinue.body.unshift(step) ;
-
-    				var mapContinue = new U2.AST_Return({
-    					value:new U2.AST_UnaryPrefix({
-    						operator:"void",
-    						expression:new U2.AST_Call({
-    							args:[],
-    							expression:symContinue.clone()
-    				})})}) ; 
-
-    				for (var i=0; i<body.length;i++) {
-    					var w ;
-						body[i].walk(w = new U2.TreeWalker(function(n,descend){
-    						if (n instanceof U2.AST_Break) {
-    							coerce(n,mapBreak.clone()) ;
-    						} else if (n instanceof U2.AST_Continue) {
-   								coerce(n,mapContinue.clone()) ;
-    						} else if (n instanceof U2.AST_Lambda) {
-    							return true ;
-    						} 
-    					})) ;
-        			}
-
-    				body.push(mapContinue.clone());
-
-    				var subCall = new U2.AST_UnaryPrefix({
-						operator:'async',
-						expression: new U2.AST_Defun({
-							name:loop.clone(),
-							argnames:[],
-							body:[defContinue]
-						})
-					});
-    				subCall.needs_parens = function(){ return true };
-
-    				var nextTest ;
-    				if (node instanceof U2.AST_Do) {
-    					defContinue.body = [new U2.AST_If({condition:condition.clone(),
-    				    	body:new U2.AST_BlockStatement({body:defContinue.body}),
-    				    	alternative:new U2.AST_Return({value:new U2.AST_Call({
-    				    		expression:new U2.AST_SymbolRef({name:config.$return}),
-    				    		args:[]
-    				    	})})
-    				    })] ;
-    					subCall.expression.body = [defContinue].concat(body) ;
-    				} else {
-        				var nextTest = new U2.AST_If({condition:condition.clone(),
-    				    	body:new U2.AST_BlockStatement({body:body}),
-    				    	alternative:mapBreak.clone()
-    				    }) ;
-    					subCall.expression.body.push(nextTest) ;
-    				}
-    				
-    				var replace = new U2.AST_SimpleStatement({body:
-    					new U2.AST_UnaryPrefix({operator:'await',expression:
-    					new U2.AST_Call({
-    						args:[],
-    						expression:subCall,
-    						})
-    					})
-    				});
-
-    				var parent = asyncWalk.parent() ;
-    				if (Array.isArray(parent.body)) {
-    					var i = parent.body.indexOf(node) ;
-    					if (init)
-    						parent.body.splice(i,1,init.clone(),replace) ;
-    					else
-    						parent.body[i] = replace ;
-    				} else {
-    					if (init)
-    						parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
-    					else
-    						parent.body = replace ;
-    				}
-				}
-    			if (node instanceof U2.AST_For)
-    				transformLoop() ;
-    			else if (node instanceof U2.AST_While)
-    				transformLoop() ;
-    			else if (node instanceof U2.AST_DWLoop)
-    				transformLoop() ;
-    			return true ;
-    		});
-    		ast.walk(asyncWalk) ;
-    	}
-    	else throw ex ;
-    }
+	ast.walk(asyncWalk) ;
 	return ast ;
 }
 
