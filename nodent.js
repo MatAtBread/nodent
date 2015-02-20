@@ -41,6 +41,26 @@ function info(node) {
 		s += q.TYPE+"." ;
 	return s+":"+node.print_to_string() ;
 }
+function cloneNodes(nodes) {
+	return nodes.map(function(n){return n.clone()}) ;
+}
+
+function toArray(ast) {
+	if (ast instanceof U2.AST_BlockStatement)
+		ast = ast.body ;
+	if (!Array.isArray(ast))
+		ast = [ast] ;
+	
+	return cloneNodes(ast) ;
+}
+
+function makeScope(ast,names,values) {
+	names = names?names.map(function(name){ return new U2.AST_SymbolFunarg({name:name})}):[] ; 
+	values = values?values.map(function(name){ return new U2.AST_SymbolRef({name:name})}):[] ;
+	var fn = new U2.AST_Defun({argnames:names,body:cloneNodes(toArray(ast))}) ;
+	fn.needs_parens = function(){ return true };
+	return new U2.AST_Call({args:values,expression:fn}) ;
+}
 
 
 var config = {
@@ -208,7 +228,7 @@ function ifTransformer(ast){
 				})}) ;
 				synthBlock.body.push(ifTransformer(new U2.AST_Defun({argnames:[],
 					name:new U2.AST_SymbolDeclaration({name:symName}),
-					body:deferredCode.map(function(n){ return n.clone() })}))) ;
+					body:cloneNodes(deferredCode)}))) ;
 				synthBlock.body.push(call.clone()) ;
 
 				function transformConditional(cond) {
@@ -271,7 +291,7 @@ function switchTransformer(ast){
 			if (deferredCode.length) {
 				synthBlock.body.push(new U2.AST_Defun({argnames:[],
 					name:new U2.AST_SymbolDeclaration({name:symName}),
-					body:deferredCode.map(function(n){ return n.clone() })})) ;
+					body:cloneNodes(deferredCode)})) ;
 				synthBlock.body.push(new U2.AST_SimpleStatement({body:new U2.AST_Call({
 					expression:deferred.clone(),
 					args:[]
@@ -293,149 +313,69 @@ function switchTransformer(ast){
  * 
  * Needs to transform:
 
+   stmt1 ;
    try { body } catch (ex) { except } 
+   stmt2 ;
 
   * to
 
-	(function(){
-		function $$catch(ex) { except } ; 
+	stm1;
+	(function($chain){
+		function $error(ex) {
+		 	var $error = $chain ;
+			except 
+		} 
 		try { 
 			(function(){
 		    	body ;
 		    })() ;
 	    } catch (ex) {
-	        $$catch(ex) ;
+	        $error(ex) ;
 	    }
-	})() 
-	
- *
+	})($error) 
+	stm2;
+ */
+
 function asyncTryCatch(ast,opts) {
 	asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend() ;
-		function transformLoop() {
-			if (!containsAwait(node))
-				return ;
-			var init = node.init ;
-			var condition = node.condition ;
-			var step = node.step ;
-			var body = node.body ;
 
-			if (init && (!init instanceof U2.AST_Statement))
-				init = new U2.AST_SimpleStatement({body:init}) ;
-			step = step?new U2.AST_SimpleStatement({body:step}):null ;
-			body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
-
-			var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
-			var loop = new U2.AST_SymbolRef({name:symName}) ;
-
-			// How to exit the loop
-			var mapBreak = new U2.AST_Return() ;
-
-			// How to continue the loop
-			var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
-			var defContinue = new U2.AST_Defun({
-				name:symContinue.clone(),
-				argnames:[],
-				body:[new U2.AST_Return({value:
-					new U2.AST_Call({
-						args:[new U2.AST_SymbolRef({name:config.$return}),
-						      new U2.AST_SymbolRef({name:config.$error})],
-						      expression:
-						    	  opts.promises 
-						    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
-					:new U2.AST_Call({args:[],expression:loop.clone()})
-					})
-				})]
-			}) ;
-			if (step)
-				defContinue.body.unshift(step) ;
-
-			var mapContinue = new U2.AST_Return({
-				value:new U2.AST_UnaryPrefix({
-					operator:"void",
-					expression:new U2.AST_Call({
-						args:[],
-						expression:symContinue.clone()
-					})})}) ; 
-
-			for (var i=0; i<body.length;i++) {
-				var w ;
-				body[i].walk(w = new U2.TreeWalker(function(n,descend){
-					if (n instanceof U2.AST_Break) {
-						coerce(n,mapBreak.clone()) ;
-					} else if (n instanceof U2.AST_Continue) {
-						coerce(n,mapContinue.clone()) ;
-					} else if (n instanceof U2.AST_Lambda) {
-						return true ;
-					} 
-				})) ;
+		if ((node instanceof U2.AST_Try) && containsAwait(node)) {
+//			debugger ;
+			node.body = [makeScope(node.body)] ;
+			if (node.bcatch) {
+				var catcher = new U2.AST_Defun({
+					name:new U2.AST_SymbolDefun({name:"$error"}),
+					argnames:[
+					    node.bcatch.argname.clone()
+					],
+					body:[]}) ;
+				catcher.body.push(new U2.AST_Var({definitions:[
+                    new U2.AST_VarDef({
+                    	name:new U2.AST_SymbolVar({name:"$error"}),
+                    	value:new U2.AST_SymbolRef({name:"$chain"})})
+                ]})) ;
+				catcher.body = catcher.body.concat(cloneNodes(node.bcatch.body)) ;
+				catcher.body.push(new U2.AST_Call({
+					expression: new U2.AST_SymbolRef({name:"$error"}),
+					args:[
+					      node.bcatch.argname.clone()
+				]})) ;
+				
+				node.bcatch.body = [new U2.AST_Call({
+					expression: new U2.AST_SymbolRef({name:"$error"}),
+					args:[
+					      node.bcatch.argname.clone()
+				]})] ;
 			}
-
-			body.push(mapContinue.clone());
-
-			var subCall = new U2.AST_UnaryPrefix({
-				operator:'async',
-				expression: new U2.AST_Defun({
-					name:loop.clone(),
-					argnames:[],
-					body:[defContinue]
-				})
-			});
-			subCall.needs_parens = function(){ return true };
-
-			var nextTest ;
-			if (node instanceof U2.AST_Do) {
-				defContinue.body = [new U2.AST_If({condition:condition.clone(),
-					body:new U2.AST_BlockStatement({body:defContinue.body}),
-					alternative:new U2.AST_Return({value:new U2.AST_Call({
-						expression:new U2.AST_SymbolRef({name:config.$return}),
-						args:[]
-					})})
-				})] ;
-				subCall.expression.body = [defContinue].concat(body) ;
-			} else {
-				var nextTest = new U2.AST_If({condition:condition.clone(),
-					body:new U2.AST_BlockStatement({body:body}),
-					alternative:mapBreak.clone()
-				}) ;
-				subCall.expression.body.push(nextTest) ;
-			}
-
-			var replace = new U2.AST_SimpleStatement({body:
-				new U2.AST_UnaryPrefix({operator:'await',expression:
-					new U2.AST_Call({
-						args:[],
-						expression:subCall,
-					})
-				})
-			});
-
-			var parent = asyncWalk.parent() ;
-			if (Array.isArray(parent.body)) {
-				var i = parent.body.indexOf(node) ;
-				if (init)
-					parent.body.splice(i,1,init.clone(),replace) ;
-				else
-					parent.body[i] = replace ;
-			} else {
-				if (init)
-					parent.body = new U2.AST_BlockStatement({body:[init.clone(),replace]}) ;
-				else
-					parent.body = replace ;
-			}
+			var repl = makeScope([catcher,node],["$chain"],["$error"]) ;
+			coerce(node,repl) ;
 		}
-		if (node instanceof U2.AST_For)
-			transformLoop() ;
-		else if (node instanceof U2.AST_While)
-			transformLoop() ;
-		else if (node instanceof U2.AST_DWLoop)
-			transformLoop() ;
 		return true ;
 	});
 	ast.walk(asyncWalk) ;
 	return ast ;
 }
-*/
 
 function asyncAwait(ast,opts) {
 	if (!opts.es7) {
@@ -524,7 +464,7 @@ function asyncAwait(ast,opts) {
 			if (!stmt.equivalent_to(result))
 				callBack.unshift(stmt);
 			// Wrap the callback statement(s) in a Block and transform them
-			var cbBody = new U2.AST_BlockStatement({body:callBack.map(function(e){return e.clone();})}) ;
+			var cbBody = new U2.AST_BlockStatement({body:cloneNodes(callBack)}) ;
 			cbBody.walk(asyncWalk) ;
 
 			var returner = cbBody.body.length ?
@@ -864,7 +804,7 @@ function cleanCode(ast,opts) {
 				call = nullFunctions[call.expression.name] ;
 			}
 			node.expression = call.expression.clone() ; 
-			node.args = call.args.map(function(n){return n.clone()}) ; 
+			node.args = cloneNodes(call.args) ; 
 		}
 		return true ;
 	}) ;
@@ -1228,7 +1168,7 @@ function initialize(opts){
 		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
 		 */
 		global[config.$error] = function(err) {
-			throw err ;
+			//throw err ;
 		};
 
 		if (!opts.dontMapStackTraces) {
