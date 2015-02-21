@@ -2,6 +2,7 @@
 
 console.log(arguments.callee.toString()) ;
 
+
 async function wait(){
 	setImmediate(function(){
 		try{
@@ -22,7 +23,7 @@ async function maybe(x) {
 }
 
 async function test(x) {
-	for (var n=0; n<5; n++) {
+	for (var n=0; n<x; n++) {
 		console.log("step 1") ;
 		try {
 			console.log(n,"try 2a") ;
@@ -30,11 +31,18 @@ async function test(x) {
 			console.log(n,"try 2b") ;
 		} catch (ex) {
 			console.log(n,"ex 3",ex) ;
+			throw ex ;
 		}
 		console.log(n,"step 4") ;
 	}
+	return ;
 }
 
 debugger ;
 
-await test(0) ;
+try {
+	await test(5) ;
+} catch(ex) {
+	console.log("CATCH:",ex);
+	await test(1) ;
+}

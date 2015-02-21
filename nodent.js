@@ -97,7 +97,6 @@ var decorate = new U2.TreeWalker(function(node) {
  * by calling the locally-scoped function $return()
  */
 var lambdaNesting = 0 ;
-//var tryNesting = 0 ;
 
 var returnMapper = new U2.TreeTransformer(function(node,descend) {
 	if (!lambdaNesting && (node instanceof U2.AST_Return) && !node.mapped) {
@@ -141,11 +140,11 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		}
 		repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
 		return repl ;
-	} else if (/*!tryNesting && */(node instanceof U2.AST_Throw)) {
+	} else if (node instanceof U2.AST_Throw) {
 		var value = node.value.clone() ;
 		var repl = new U2.AST_Return({
 			value:new U2.AST_Call({
-				expression:new U2.AST_SymbolRef({name:config.$error}),
+				expression:getCatch(returnMapper),
 				args:[value]
 			})
 		}) ;
@@ -157,11 +156,6 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		lambdaNesting++ ;
 		descend(node, this);
 		lambdaNesting-- ;
-		return node ;
-	} else if (node instanceof U2.AST_Try) {
-		//tryNesting++ ;
-		descend(node, this);
-		//tryNesting-- ;
 		return node ;
 	}  else {
 		descend(node, this);
@@ -362,8 +356,6 @@ function asyncTryCatch(ast,opts) {
 		descend() ;
 
 		if ((node instanceof U2.AST_Try) && containsAwait(node)) {
-//			debugger ;
-			
 			var continuation ;
 			var parent = asyncWalk.parent() ;
 			if (Array.isArray(parent.body)) {
@@ -393,15 +385,14 @@ function asyncTryCatch(ast,opts) {
 					argnames:[node.bcatch.argname.clone()],
 					body:cloneNodes(node.bcatch.body)}) ;
 				
-				//debugger;
-				//catcher.transform(returnMapper);
-				
 				node.bcatch.body = [catcher,new U2.AST_Call({
 					expression: new U2.AST_SymbolRef({name:sym}),
 					args:[node.bcatch.argname.clone()]
 				})] ;
 			}
-			setCatch(node,sym) ;
+			node.body.forEach(function(n){
+				setCatch(n,sym) ;
+			}) ;
 		}
 		return true ;
 	});
@@ -506,9 +497,9 @@ function asyncAwait(ast,opts) {
 								argnames:[result.clone()],
 								body:cbBody.body
 							}),
-							property: "bind"
+							property: "$asyncbind"
 						}),
-						args:[new U2.AST_This()]
+						args:[new U2.AST_This(),getCatch(asyncWalk)]
 					}):new U2.AST_Function({argnames:[],body:[]}) ;
 					
 			if (opts.promises) {
@@ -595,7 +586,6 @@ function asyncLoops(ast,opts) {
 			var loop = new U2.AST_SymbolRef({name:symName}) ;
 
 			// How to exit the loop
-			//var mapBreak = new U2.AST_Return() ;
 			var mapBreak = new U2.AST_Return({
 				value:new U2.AST_UnaryPrefix({
 					operator:"void",
@@ -753,14 +743,13 @@ function asyncDefine(ast,opts) {
 					return ast ;
 				}) ;
 	
+				var funcback = new U2.AST_Function({
+					argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
+					          new U2.AST_SymbolFunarg({name:config.$error})],
+					body:fnBody
+				}) ;
+				setCatch(funcback,config.$error) ;
 				if (opts.promises) {
-					var funcback = new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
-						          new U2.AST_SymbolFunarg({name:config.$error})],
-						body:fnBody
-					}) ;
-					setCatch(funcback,config.$error) ;
-					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_New({
 							expression:new U2.AST_SymbolRef({name:"Promise"}),
@@ -768,31 +757,13 @@ function asyncDefine(ast,opts) {
 						})
 					})] ;
 				} else {
-					var funcback = new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
-						          new U2.AST_SymbolFunarg({name:config.$error})],
-						body:[new U2.AST_Try({
-							body:fnBody,
-							bcatch:new U2.AST_Catch({
-								argname:new U2.AST_SymbolCatch({name:config.$except}),
-								body:[
-								      new U2.AST_Return({value:
-								    	  new U2.AST_Call({
-								    		  expression:new U2.AST_SymbolRef({name:config.$error}),
-								    		  args:[new U2.AST_SymbolRef({name:config.$except})]
-								    	  })})]
-							})
-						})]
-					}) ;
-					setCatch(funcback,config.$error) ;
-					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: funcback,
-								property: "bind"
+								property: "$asyncbind"
 							}),
-							args:[new U2.AST_This()]
+							args:[new U2.AST_This(),getCatch(asyncWalk)]
 						})
 					})] ;
 				}
@@ -1092,10 +1063,10 @@ function initialize(opts){
 				generateSymbol = function (node) {
 					return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;	
 				}
-//				debugger;
+
 				pr.ast = asyncLoops(pr.ast,opts) ;
-				pr.ast = asyncDefine(pr.ast,opts) ;
 				pr.ast = asyncTryCatch(pr.ast,opts) ;
+				pr.ast = asyncDefine(pr.ast,opts) ;
 				pr.ast = asyncAwait(pr.ast,opts) ;
 				pr.ast = cleanCode(pr.ast,opts) ;
 				return pr ;
@@ -1237,6 +1208,19 @@ function initialize(opts){
 
 		}
 
+		Object.defineProperty(Function.prototype,"$asyncbind",{
+			value:function(self,catcher) {
+				var fn = this ;
+				fn.isAsync = true ;
+				return function(){
+					try {
+						return fn.apply(self,arguments);
+					} catch (ex) {
+						catcher(ex);
+					}
+				} ; 
+			}
+		}) ;
 		/**
 		 * NoDentify (make async) a general function.
 		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
