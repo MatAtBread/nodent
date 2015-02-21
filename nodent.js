@@ -97,7 +97,7 @@ var decorate = new U2.TreeWalker(function(node) {
  * by calling the locally-scoped function $return()
  */
 var lambdaNesting = 0 ;
-var tryNesting = 0 ;
+//var tryNesting = 0 ;
 
 var returnMapper = new U2.TreeTransformer(function(node,descend) {
 	if (!lambdaNesting && (node instanceof U2.AST_Return) && !node.mapped) {
@@ -141,7 +141,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		}
 		repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
 		return repl ;
-	} else if (!tryNesting && (node instanceof U2.AST_Throw)) {
+	} else if (/*!tryNesting && */(node instanceof U2.AST_Throw)) {
 		var value = node.value.clone() ;
 		var repl = new U2.AST_Return({
 			value:new U2.AST_Call({
@@ -159,9 +159,9 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		lambdaNesting-- ;
 		return node ;
 	} else if (node instanceof U2.AST_Try) {
-		tryNesting++ ;
+		//tryNesting++ ;
 		descend(node, this);
-		tryNesting-- ;
+		//tryNesting-- ;
 		return node ;
 	}  else {
 		descend(node, this);
@@ -336,40 +336,72 @@ function switchTransformer(ast){
 	stm2;
  */
 
+function getCatch(w,nesting) {
+	nesting = nesting || 0 ;
+	for (var n=w.stack.length-1;n>0;n--)
+		if (w.stack[n].catcher) {
+			if (!nesting)
+				return new U2.AST_SymbolRef({name:w.stack[n].catcher}) ;
+			nesting -= 1 ;
+		}
+	return new U2.AST_SymbolRef({name:config.$error}) ; ;
+}
+
+function setCatch(n,sym) {
+	n.catcher = sym ;
+	var clone = n.clone.bind(n) ;
+	n.clone = function() {
+		var x = clone() ;
+		x.catcher = sym ;
+		return x ;
+	}
+}
+
 function asyncTryCatch(ast,opts) {
 	asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend() ;
 
 		if ((node instanceof U2.AST_Try) && containsAwait(node)) {
 //			debugger ;
-			node.body = [makeScope(node.body)] ;
-			if (node.bcatch) {
-				var catcher = new U2.AST_Defun({
-					name:new U2.AST_SymbolDefun({name:"$error"}),
-					argnames:[
-					    node.bcatch.argname.clone()
-					],
-					body:[]}) ;
-				catcher.body.push(new U2.AST_Var({definitions:[
-                    new U2.AST_VarDef({
-                    	name:new U2.AST_SymbolVar({name:"$error"}),
-                    	value:new U2.AST_SymbolRef({name:"$chain"})})
-                ]})) ;
-				catcher.body = catcher.body.concat(cloneNodes(node.bcatch.body)) ;
-				catcher.body.push(new U2.AST_Call({
-					expression: new U2.AST_SymbolRef({name:"$error"}),
-					args:[
-					      node.bcatch.argname.clone()
-				]})) ;
-				
-				node.bcatch.body = [new U2.AST_Call({
-					expression: new U2.AST_SymbolRef({name:"$error"}),
-					args:[
-					      node.bcatch.argname.clone()
-				]})] ;
+			
+			var continuation ;
+			var parent = asyncWalk.parent() ;
+			if (Array.isArray(parent.body)) {
+				var i = parent.body.indexOf(node) ;
+				var afterTry = parent.body.splice(i+1,parent.body.length-(i-1)) ;
+				if (afterTry.length) {
+					var ctnName = "$post_try_"+generateSymbol() ;
+					
+					parent.body.push(new U2.AST_Defun({
+						name:new U2.AST_SymbolDefun({name:ctnName}),
+						argnames:[],
+						body:cloneNodes(afterTry)})) ;
+					
+					continuation = new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:ctnName})}) ;
+				}
 			}
-			var repl = makeScope([catcher,node],["$chain"],["$error"]) ;
-			coerce(node,repl) ;
+			
+			node.body = toArray(node.body) ;
+			if (continuation) {
+				node.body.push(continuation.clone()) ;
+				node.bcatch.body.push(continuation.clone()) ;
+			}
+			if (node.bcatch) {
+				var sym = "$catch_"+generateSymbol(node.bcatch.argname) ;
+				var catcher = new U2.AST_Defun({
+					name:new U2.AST_SymbolDefun({name:sym}),
+					argnames:[node.bcatch.argname.clone()],
+					body:cloneNodes(node.bcatch.body)}) ;
+				
+				//debugger;
+				//catcher.transform(returnMapper);
+				
+				node.bcatch.body = [catcher,new U2.AST_Call({
+					expression: new U2.AST_SymbolRef({name:sym}),
+					args:[node.bcatch.argname.clone()]
+				})] ;
+			}
+			setCatch(node,sym) ;
 		}
 		return true ;
 	});
@@ -488,7 +520,7 @@ function asyncAwait(ast,opts) {
 			
 			var call = new U2.AST_Call({
 				expression:expr,
-				args:[returner,new U2.AST_SymbolRef({name:config.$error})]
+				args:[returner,getCatch(asyncWalk)/*new U2.AST_SymbolRef({name:config.$error})*/]
 			}) ;
 			
 			terminate(call) ;
@@ -563,7 +595,14 @@ function asyncLoops(ast,opts) {
 			var loop = new U2.AST_SymbolRef({name:symName}) ;
 
 			// How to exit the loop
-			var mapBreak = new U2.AST_Return() ;
+			//var mapBreak = new U2.AST_Return() ;
+			var mapBreak = new U2.AST_Return({
+				value:new U2.AST_UnaryPrefix({
+					operator:"void",
+					expression:new U2.AST_Call({
+						args:[],
+						expression:new U2.AST_SymbolRef({name:config.$return})
+					})})}) ; 
 
 			// How to continue the loop
 			var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
@@ -714,29 +753,13 @@ function asyncDefine(ast,opts) {
 					return ast ;
 				}) ;
 	
-				var funcback = new U2.AST_Function({
-					argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
-					          new U2.AST_SymbolFunarg({name:config.$error})],
-					body:[new U2.AST_Try({
-						body:fnBody,
-						bcatch:new U2.AST_Catch({
-							argname:new U2.AST_SymbolCatch({name:config.$except}),
-							body:[
-							      new U2.AST_Return({value:
-							    	  new U2.AST_Call({
-							    		  expression:new U2.AST_SymbolRef({name:config.$error}),
-							    		  args:[new U2.AST_SymbolRef({name:config.$except})]
-							    	  })})]
-						})
-					})]
-				}) ;
-				
 				if (opts.promises) {
 					var funcback = new U2.AST_Function({
 						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
 						          new U2.AST_SymbolFunarg({name:config.$error})],
 						body:fnBody
 					}) ;
+					setCatch(funcback,config.$error) ;
 					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_New({
@@ -745,6 +768,24 @@ function asyncDefine(ast,opts) {
 						})
 					})] ;
 				} else {
+					var funcback = new U2.AST_Function({
+						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
+						          new U2.AST_SymbolFunarg({name:config.$error})],
+						body:[new U2.AST_Try({
+							body:fnBody,
+							bcatch:new U2.AST_Catch({
+								argname:new U2.AST_SymbolCatch({name:config.$except}),
+								body:[
+								      new U2.AST_Return({value:
+								    	  new U2.AST_Call({
+								    		  expression:new U2.AST_SymbolRef({name:config.$error}),
+								    		  args:[new U2.AST_SymbolRef({name:config.$except})]
+								    	  })})]
+							})
+						})]
+					}) ;
+					setCatch(funcback,config.$error) ;
+					
 					replace.body = [new U2.AST_Return({
 						value:new U2.AST_Call({
 							expression:new U2.AST_Dot({
@@ -1051,9 +1092,10 @@ function initialize(opts){
 				generateSymbol = function (node) {
 					return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;	
 				}
+//				debugger;
 				pr.ast = asyncLoops(pr.ast,opts) ;
-				pr.ast = asyncTryCatch(pr.ast,opts) ;
 				pr.ast = asyncDefine(pr.ast,opts) ;
+				pr.ast = asyncTryCatch(pr.ast,opts) ;
 				pr.ast = asyncAwait(pr.ast,opts) ;
 				pr.ast = cleanCode(pr.ast,opts) ;
 				return pr ;
@@ -1168,7 +1210,7 @@ function initialize(opts){
 		 * We need a global to handle funcbacks for which no error handler has ever been deifned.
 		 */
 		global[config.$error] = function(err) {
-			//throw err ;
+			throw err ;
 		};
 
 		if (!opts.dontMapStackTraces) {
