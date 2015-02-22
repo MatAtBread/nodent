@@ -2,11 +2,13 @@
 Promise = require('../nodent')().Promise ;
 
 global.Promise = require('../nodent')().Promise ;
-console.log(arguments.callee.toString()) ;
+//console.log(arguments.callee.toString()) ;
 
 async function add(a,b) { return a+b }  
 async function test(){
-	var y = await add(await add(6,4),await add(3,7)) ;
-	return y ;
+	return await add(await add(6,4),await add(3,7)) ;
 }
-console.log(await test()) ;
+
+module.exports = async function() {
+	return await test()==20 ;
+}

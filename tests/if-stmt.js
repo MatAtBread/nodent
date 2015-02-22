@@ -1,7 +1,7 @@
 "use nodent-promise";
 Promise = require('../nodent')().Promise ;
 
-console.log(arguments.callee.toString()) ;
+//console.log(arguments.callee.toString()) ;
 
 async function test(x) {
 	var r = "" ;
@@ -19,4 +19,7 @@ async function test(x) {
 	return z ;
 };
 
-console.log(await test(1),await test(0),await test(10))
+module.exports = async function() {
+	var s = await test(1)+await test(0)+await test(10);	
+	return s == "1 is Odd.0 is Zero and Even.10 is Even.";
+}

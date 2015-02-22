@@ -62,13 +62,42 @@ function makeScope(ast,names,values) {
 	return new U2.AST_Call({args:values,expression:fn}) ;
 }
 
+function makeFn(opts,name,body,argnames) {
+	return new U2.AST_Defun({
+		name:new U2.AST_SymbolDefun({name:name}),
+		argnames:argnames||[],
+		body:cloneNodes(body)}) ;
+}
+
+function bindThis(opts,expr) {
+	if (typeof expr==='string') 
+		expr = new U2.AST_SymbolRef({name:expr}) ;
+
+	if (opts.promises)
+		return expr ;
+	
+	return new U2.AST_Call({
+		expression:new U2.AST_Dot({
+			expression: expr,
+			property: "bind"
+		}),
+		args:[new U2.AST_This()]
+	}) ;
+}
+
+function makeCall(opts,name,args) {
+	return new U2.AST_Call({
+		expression:(typeof name==='string')?new U2.AST_SymbolRef({name:name}):name,
+		args:args||[]
+	}) ;
+}
 
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
-		useDirective:/^use\s+nodent$/,
-		useES7Directive:/^use\s+nodent\-es7$/,
-		usePromisesDirective:/^use\s+nodent\-promise$/,
+		useDirective:/['"]use\s+nodent['"]/,
+		useES7Directive:/['"]use\s+nodent\-es7['"]/,
+		usePromisesDirective:/['"]use\s+nodent\-promise['"]/,
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -197,7 +226,8 @@ var generateSymbol ;
  * ...in case 'y' uses await, in which case we need to invoke $more() at the end of the
  * callback to continue execution after the case.
  */
-function ifTransformer(ast){
+
+function ifTransformer(opts,ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
 		if (ifStmt instanceof U2.AST_If) {
@@ -210,19 +240,13 @@ function ifTransformer(ast){
 			var deferredCode = parent.body.splice(j,parent.body.length-j) ;  
 
 			var symName = "$post_if_"+generateSymbol(ifStmt.condition) ;
-			var deferred = new U2.AST_SymbolRef({name:symName}) ;
 			var synthBlock = new U2.AST_BlockStatement({body:[ifStmt.clone()]}) ; 
 			coerce(ifStmt, synthBlock) ;
 			ifStmt = synthBlock.body[0] ;
 			
 			if (deferredCode.length) {
-				var call = new U2.AST_Return({value:new U2.AST_Call({
-					expression:deferred.clone(),
-					args:[]
-				})}) ;
-				synthBlock.body.push(ifTransformer(new U2.AST_Defun({argnames:[],
-					name:new U2.AST_SymbolDeclaration({name:symName}),
-					body:cloneNodes(deferredCode)}))) ;
+				var call = new U2.AST_Return({value:makeCall(opts,bindThis(opts,symName))}) ;
+				synthBlock.body.push(ifTransformer(opts,makeFn(opts,symName,deferredCode))) ;
 				synthBlock.body.push(call.clone()) ;
 
 				function transformConditional(cond) {
@@ -237,15 +261,15 @@ function ifTransformer(ast){
 						}
 						cond.body.push(call.clone()) ;
 					}
-					ifTransformer(cond) ;
+					ifTransformer(opts,cond) ;
 				}
 
 				transformConditional(ifStmt.body) ;
 				if (ifStmt.alternative) {
 					transformConditional(ifStmt.alternative) ;
 				}
-			} else {
-				deferred = null ;
+			//} else {
+			//	deferred = null ;
 			}
 			return true ;
 		}
@@ -262,7 +286,7 @@ function ifTransformer(ast){
  * ...in case one of the cases uses await, in which case we need to invoke $more() at the end of the
  * callback to continue execution after the case.
  */
-function switchTransformer(ast){
+function switchTransformer(opts,ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(switchStmt, descend){
 		if (switchStmt instanceof U2.AST_Switch) {
@@ -279,24 +303,19 @@ function switchTransformer(ast){
 			if (deferredCode[deferredCode.length-1] instanceof U2.AST_Break)
 				parent.body.push(deferredCode.pop()) ;
 			var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
-			var deferred = new U2.AST_SymbolRef({name:symName}) ;
+			var deferred = makeCall(opts,bindThis(opts,symName)) ; //new U2.AST_SymbolRef({name:symName}) ;
 			var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone()]}) ; 
 
 			if (deferredCode.length) {
-				synthBlock.body.push(new U2.AST_Defun({argnames:[],
-					name:new U2.AST_SymbolDeclaration({name:symName}),
-					body:cloneNodes(deferredCode)})) ;
-				synthBlock.body.push(new U2.AST_SimpleStatement({body:new U2.AST_Call({
-					expression:deferred.clone(),
-					args:[]
-				})})) ;
+				synthBlock.body.push(makeFn(opts,symName,deferredCode)) ;
+				synthBlock.body.push(new U2.AST_SimpleStatement({body:deferred.clone()})) ;
 			} else {
 				deferred = null ;
 			}
 
 			coerce(switchStmt, synthBlock) ;
 			switchStmt.body[0].deferred = deferred ;
-			switchStmt.body[0].body.forEach(switchTransformer) ;
+			switchStmt.body[0].body.forEach(switchTransformer.bind(this,opts)) ;
 			return true ;
 		}
 	})) ;
@@ -347,12 +366,13 @@ function setCatch(n,sym) {
 	n.clone = function() {
 		var x = clone() ;
 		x.catcher = sym ;
+		x.clone = n.clone ;
 		return x ;
 	}
 }
 
 function asyncTryCatch(ast,opts) {
-	asyncWalk = new U2.TreeWalker(function(node, descend){
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend() ;
 
 		if ((node instanceof U2.AST_Try) && containsAwait(node)) {
@@ -363,13 +383,9 @@ function asyncTryCatch(ast,opts) {
 				var afterTry = parent.body.splice(i+1,parent.body.length-(i-1)) ;
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
-					
-					parent.body.push(new U2.AST_Defun({
-						name:new U2.AST_SymbolDefun({name:ctnName}),
-						argnames:[],
-						body:cloneNodes(afterTry)})) ;
-					
-					continuation = new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:ctnName})}) ;
+					parent.body.push(makeFn(opts,ctnName,afterTry)) ;
+					continuation = makeCall(opts,bindThis(opts,ctnName)) ; 
+					//new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:ctnName})}) ;
 				}
 			}
 			
@@ -380,15 +396,8 @@ function asyncTryCatch(ast,opts) {
 			}
 			if (node.bcatch) {
 				var sym = "$catch_"+generateSymbol(node.bcatch.argname) ;
-				var catcher = new U2.AST_Defun({
-					name:new U2.AST_SymbolDefun({name:sym}),
-					argnames:[node.bcatch.argname.clone()],
-					body:cloneNodes(node.bcatch.body)}) ;
-				
-				node.bcatch.body = [catcher,new U2.AST_Call({
-					expression: new U2.AST_SymbolRef({name:sym}),
-					args:[node.bcatch.argname.clone()]
-				})] ;
+				var catcher = makeFn(opts,sym,node.bcatch.body,[node.bcatch.argname.clone()]) ; 
+				node.bcatch.body = [catcher,makeCall(opts,bindThis(opts,sym),[node.bcatch.argname.clone()])] ;
 			}
 			node.body.forEach(function(n){
 				setCatch(n,sym) ;
@@ -407,8 +416,8 @@ function asyncAwait(ast,opts) {
 		return ast.transform(asyncAssignTransfom) ;
 	}
 
-	ast = ifTransformer(ast) ;
-	ast = switchTransformer(ast) ;
+	ast = ifTransformer(opts,ast) ;
+	ast = switchTransformer(opts,ast) ;
 	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend();
 		if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
@@ -426,7 +435,7 @@ function asyncAwait(ast,opts) {
 			} 
 
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
-				if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
+				/*if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
 					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
 					console.warn("Nodent JS: Warning - await inside iteration statement "+start.file+":"+start.line) ;
 					terminate = terminateLoop ;
@@ -441,7 +450,7 @@ function asyncAwait(ast,opts) {
 					terminate = terminateLoop ;
 					block = asyncWalk.stack[n] ;
 					break ;
-				}
+				}*/
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
 					var switchStmt = asyncWalk.stack[n-1] ;
 					terminate = function terminateSwitchBranch(call) {
@@ -457,10 +466,7 @@ function asyncAwait(ast,opts) {
 					}
 					// Call the post-switch code
 					if (switchStmt.deferred) {
-						caseBody.push(new U2.AST_Call({
-							expression:switchStmt.deferred.clone(),
-							args:[]
-						})) ;
+						caseBody.push(switchStmt.deferred.clone()) ;
 					}
 					block = new U2.AST_BlockStatement({body:caseBody}) ;
 					asyncWalk.stack[n].body = [block] ;
@@ -490,28 +496,32 @@ function asyncAwait(ast,opts) {
 			var cbBody = new U2.AST_BlockStatement({body:cloneNodes(callBack)}) ;
 			cbBody.walk(asyncWalk) ;
 
-			var returner = cbBody.body.length ?
-					new U2.AST_Call({
-						expression:new U2.AST_Dot({
-							expression: new U2.AST_Function({
-								argnames:[result.clone()],
-								body:cbBody.body
-							}),
-							property: "$asyncbind"
-						}),
-						args:[new U2.AST_This(),getCatch(asyncWalk)]
-					}):new U2.AST_Function({argnames:[],body:[]}) ;
-					
+			var returner = new U2.AST_Function({argnames:[],body:[]}) ;
+			if (cbBody.body.length)
+				returner = new U2.AST_Function({
+					argnames:[result.clone()],
+					body:cbBody.body
+				}) ;
+			
 			if (opts.promises) {
 				expr = new U2.AST_Dot({
 					expression:expr.clone(),
 					property:"then"
 				}) ;
+			} else {
+				if (cbBody.body.length)
+					returner = new U2.AST_Call({
+						expression:new U2.AST_Dot({
+							expression: returner,
+							property: "$asyncbind"
+						}),
+						args:[new U2.AST_This(),getCatch(asyncWalk)]
+					}) ;
 			}
 			
 			var call = new U2.AST_Call({
 				expression:expr,
-				args:[returner,getCatch(asyncWalk)/*new U2.AST_SymbolRef({name:config.$error})*/]
+				args:[returner,getCatch(asyncWalk)]
 			}) ;
 			
 			terminate(call) ;
@@ -567,7 +577,7 @@ function containsAwait(ast) {
 }
 
 function asyncLoops(ast,opts) {
-	asyncWalk = new U2.TreeWalker(function(node, descend){
+	var asyncWalk = new U2.TreeWalker(function(node, descend){
 		descend() ;
 		function transformLoop() {
 			if (!containsAwait(node))
@@ -596,30 +606,25 @@ function asyncLoops(ast,opts) {
 
 			// How to continue the loop
 			var symContinue = new U2.AST_SymbolRef({name:"$next_"+generateSymbol()}) ;
-			var defContinue = new U2.AST_Defun({
-				name:symContinue.clone(),
-				argnames:[],
-				body:[new U2.AST_Return({value:
-					new U2.AST_Call({
-						args:[new U2.AST_SymbolRef({name:config.$return}),
-						      new U2.AST_SymbolRef({name:config.$error})],
-						      expression:
-						    	  opts.promises 
-						    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
-					:new U2.AST_Call({args:[],expression:loop.clone()})
-					})
-				})]
-			}) ;
+			var defContinue = makeFn(opts,symContinue.name,[new U2.AST_Return({value:
+				new U2.AST_Call({
+					args:[new U2.AST_SymbolRef({name:config.$return}),
+					      new U2.AST_SymbolRef({name:config.$error})],
+					      expression:
+					    	  opts.promises 
+					    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
+				:new U2.AST_Call({args:[],expression:loop.clone()})
+				})
+			})]) ; 
+
 			if (step)
 				defContinue.body.unshift(step) ;
 
 			var mapContinue = new U2.AST_Return({
 				value:new U2.AST_UnaryPrefix({
 					operator:"void",
-					expression:new U2.AST_Call({
-						args:[],
-						expression:symContinue.clone()
-					})})}) ; 
+					expression:makeCall(opts,symContinue.clone())
+				})}) ; 
 
 			for (var i=0; i<body.length;i++) {
 				var w ;
@@ -1295,41 +1300,35 @@ function initialize(opts){
 		var stdJSLoader = require.extensions['.js'] ; 
 		if (opts.useDirective || opts.useES7Directive || opts.usePromisesDirective) {
 			require.extensions['.js'] = function(mod,filename) {
-				var code,content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				try {
-					var pr = nodent.parse(content,filename);
-					for (var i=0; i<pr.ast.body.length; i++) {
-						if (pr.ast.body[i] instanceof U2.AST_Directive) {
-							
-							var parseOpts = {} ;
-							parseOpts.promises = matches(pr.ast.body[i].value,opts.usePromisesDirective) ;
-							parseOpts.es7 = parseOpts.promises || matches(pr.ast.body[i].value,opts.useES7Directive) ;
-							return require.extensions[opts.extension](mod,filename,parseOpts) ;
-						}
-					}
-					return stdJSLoader(mod,filename) ;
-				} catch (ex) {
-					try {
-						/* Meh. Try using the JS parser */
-						return stdJSLoader(mod,filename) ;
-					} catch (exjs) {
-						if (ex.constructor.name=="JS_Parse_Error") { 
-							throw reportParseException(ex,content,filename) ;
-						}
-						else
-							throw ex ;
-					}
-				}
+				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+				var parseOpts = {
+					promises: !!content.match(opts.usePromisesDirective),
+				    es7: !!content.match(opts.useES7Directive)
+				} ; 
+				if (parseOpts.promises) parseOpts.es7 = true ;
+				if (parseOpts.promises || parseOpts.es7 || content.match(opts.useDirective)) 
+					return require.extensions[opts.extension](mod,filename,parseOpts) ;
+				return stdJSLoader(mod,filename) ;
 			} ;
 		}
 
-		require.extensions[opts.extension] = function(mod, filename, opts) {
+		require.extensions[opts.extension] = function(mod, filename, parseOpts) {
 			try {
-				opts = opts || {} ;
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var pr = nodent.parse(content,filename,opts);
-				nodent.asynchronize(pr,undefined,opts) ;
-				nodent.prettyPrint(pr,undefined,opts) ;
+				var pr = nodent.parse(content,filename,parseOpts);
+				if (!parseOpts) {
+					parseOpts = {} ;
+					for (var i=0; i<pr.ast.body.length; i++) {
+						if (pr.ast.body[i] instanceof U2.AST_Directive) {
+							var test = "'"+pr.ast.body[i].value+"'" ;
+							parseOpts.promises = matches(test,opts.usePromisesDirective) ;
+							parseOpts.es7 = parseOpts.promises || matches(test,opts.useES7Directive) ;
+						}
+					}
+				}
+
+				nodent.asynchronize(pr,undefined,parseOpts) ;
+				nodent.prettyPrint(pr,undefined,parseOpts) ;
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 

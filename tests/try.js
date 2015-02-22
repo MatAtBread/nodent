@@ -1,7 +1,7 @@
-"use nodent-es7";
+"use nodent-promise";
 
-console.log(arguments.callee.toString()) ;
-
+//s += (arguments.callee.toString()) ;
+var Promise = require('../nodent')().Promise ;
 
 async function wait(){
 	setImmediate(function(){
@@ -23,26 +23,22 @@ async function maybe(x) {
 }
 
 async function test(x) {
+	var s = "" ;
 	for (var n=0; n<x; n++) {
-		console.log("step 1") ;
+		s += ("<") ;
 		try {
-			console.log(n,"try 2a") ;
+			s += ("B") ;
 			await maybe(n) ;
-			console.log(n,"try 2b") ;
+			s += ("C") ;
 		} catch (ex) {
-			console.log(n,"ex 3",ex) ;
-			throw ex ;
+			s += ("X") ;
 		}
-		console.log(n,"step 4") ;
+		s += ("> ") ;
 	}
-	return ;
+	return s ;
 }
 
-debugger ;
-
-try {
-	await test(5) ;
-} catch(ex) {
-	console.log("CATCH:",ex);
-	await test(1) ;
+module.exports = async function() {
+	return await test(5) == "<BC> <BC> <BC> <BX> <BX> ";
 }
+

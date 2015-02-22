@@ -1,21 +1,22 @@
-"use nodent-promise";
-
-Promise = require('../nodent')().Promise ;
-console.log(arguments.callee.toString()) ;
+"use nodent-es7";
 
 async function inc(x) {
-	setTimeout($return.bind(null,x+1),300) ;
+	return x+1 ;
 };
 
-function test() {
+async function test() {
+	var s = "" ;
 	var i = 0 ;
 	do {
-		console.log("<",i)
+		s += "<"+i ;
 		i = await inc(i) ;
-		console.log(">",i)
+		s += ">" ;
 	}
 	while (i<5) ;
-	console.log("ok") ;
+	s += "ok" ;
+	return s ;
 }
 
-test() ;
+module.exports = async function() {
+	return await test() == "<0><1><2><3><4>ok";
+}

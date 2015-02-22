@@ -1,20 +1,25 @@
 "use nodent-promise";
 
 Promise = require('../nodent')().Promise ;
-console.log(arguments.callee.toString()) ;
 
 async function inc(x) {
-	setTimeout($return.bind(null,x+1),300) ;
+	setTimeout($return.bind(null,x+1),100) ;
 };
 
-function test() {
+async function test() {
+	var s = "" ;
 	var i = 0 ;
 	while (i<5) {
-		console.log("<",i)
+		s += "<" ;
 		i = await inc(i) ;
-		console.log(">",i)
+		s += i ;
+		s += ">" ;
 	}
-	console.log("ok") ;
+	s += ("ok") ;
+	return s ;
 }
 
-test() ;
+module.exports = async function() {
+	return await test()=="<1><2><3><4><5>ok" ;
+}
+
