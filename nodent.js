@@ -200,7 +200,7 @@ var generateSymbol ;
 function ifTransformer(ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
-		if (ifStmt instanceof U2.AST_If) {
+		if ((ifStmt instanceof U2.AST_If) && containsAwait(ifStmt)) {
 			var parent = asyncWalk.parent(0) ;
 			if (!Array.isArray(parent.body)) {
 				parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
@@ -265,7 +265,7 @@ function ifTransformer(ast){
 function switchTransformer(ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(switchStmt, descend){
-		if (switchStmt instanceof U2.AST_Switch) {
+		if ((switchStmt instanceof U2.AST_Switch) && containsAwait(switchStmt)){
 			if (switchStmt.deferred) {
 				throw new Error("Duplicate switch dissection") ;
 			}
