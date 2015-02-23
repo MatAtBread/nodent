@@ -230,7 +230,8 @@ var generateSymbol ;
 function ifTransformer(opts,ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
-		if ((ifStmt instanceof U2.AST_If) && containsAwait(ifStmt)) {
+		if ((ifStmt instanceof U2.AST_If) && 
+				(containsAwait(ifStmt.body) || (ifStmt.alternative && containsAwait(ifStmt.alternative)))) {
 			var parent = asyncWalk.parent(0) ;
 			if (!Array.isArray(parent.body)) {
 				parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
@@ -245,7 +246,7 @@ function ifTransformer(opts,ast){
 			ifStmt = synthBlock.body[0] ;
 			
 			if (deferredCode.length) {
-				var call = new U2.AST_Return({value:makeCall(opts,bindThis(opts,symName))}) ;
+				var call = /*new U2.AST_Return({value:*/makeCall(opts,bindThis(opts,symName))/*})*/ ;
 				synthBlock.body.push(ifTransformer(opts,makeFn(opts,symName,deferredCode))) ;
 				synthBlock.body.push(call.clone()) ;
 
@@ -289,7 +290,7 @@ function ifTransformer(opts,ast){
 function switchTransformer(opts,ast){
 	var asyncWalk ;
 	ast.walk(asyncWalk = new U2.TreeWalker(function(switchStmt, descend){
-		if ((switchStmt instanceof U2.AST_Switch) && containsAwait(switchStmt)){
+		if ((switchStmt instanceof U2.AST_Switch) && containsAwait(switchStmt.body)){
 			if (switchStmt.deferred) {
 				throw new Error("Duplicate switch dissection") ;
 			}
