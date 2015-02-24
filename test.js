@@ -8,6 +8,8 @@ for (var i=0; i<tests.length; i++) {
 		var result = await require('./tests/'+tests[i])() ;
 		if (result!==true)
 			console.log(tests[i],"***",result) ;
+		else
+			console.log(tests[i],"passed") ;
 	} catch (ex) {
 		console.log(tests[i],"***",ex) ;
 	}

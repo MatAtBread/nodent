@@ -92,6 +92,17 @@ function makeCall(opts,name,args) {
 	}) ;
 }
 
+function thisCall(opts,name,args){
+//	return makeCall(opts,bindThis(opts,name), args) ;
+	if (typeof name==='string') 
+		name = new U2.AST_SymbolRef({name:name}) ;
+	
+	return new U2.AST_Call({
+		expression:new U2.AST_Dot({expression:name,property:"call"}),
+		args:[new U2.AST_This()].concat(args||[])
+	}) ;
+}
+
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
@@ -180,7 +191,7 @@ var returnMapper = new U2.TreeTransformer(function(node,descend) {
 		repl.start = repl.value.start = node.start ;
 		repl.end = repl.value.end = node.end ;
 		repl.mapped = true ;
-		return repl ;
+		return repl ; 
 	} else if (node instanceof U2.AST_Lambda) {
 		lambdaNesting++ ;
 		descend(node, this);
@@ -246,7 +257,7 @@ function ifTransformer(opts,ast){
 			ifStmt = synthBlock.body[0] ;
 			
 			if (deferredCode.length) {
-				var call = /*new U2.AST_Return({value:*/makeCall(opts,bindThis(opts,symName))/*})*/ ;
+				var call = thisCall(opts,symName) ;
 				synthBlock.body.push(ifTransformer(opts,makeFn(opts,symName,deferredCode))) ;
 				synthBlock.body.push(call.clone()) ;
 
@@ -304,7 +315,7 @@ function switchTransformer(opts,ast){
 			if (deferredCode[deferredCode.length-1] instanceof U2.AST_Break)
 				parent.body.push(deferredCode.pop()) ;
 			var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
-			var deferred = makeCall(opts,bindThis(opts,symName)) ; //new U2.AST_SymbolRef({name:symName}) ;
+			var deferred = thisCall(opts,symName) ; 
 			var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone()]}) ; 
 
 			if (deferredCode.length) {
@@ -385,8 +396,7 @@ function asyncTryCatch(ast,opts) {
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
 					parent.body.push(makeFn(opts,ctnName,afterTry)) ;
-					continuation = makeCall(opts,bindThis(opts,ctnName)) ; 
-					//new U2.AST_Call({args:[],expression:new U2.AST_SymbolRef({name:ctnName})}) ;
+					continuation = thisCall(opts,ctnName) ; 
 				}
 			}
 			
@@ -398,7 +408,7 @@ function asyncTryCatch(ast,opts) {
 			if (node.bcatch) {
 				var sym = "$catch_"+generateSymbol(node.bcatch.argname) ;
 				var catcher = makeFn(opts,sym,node.bcatch.body,[node.bcatch.argname.clone()]) ; 
-				node.bcatch.body = [catcher,makeCall(opts,bindThis(opts,sym),[node.bcatch.argname.clone()])] ;
+				node.bcatch.body = [catcher,thisCall(opts,sym,[node.bcatch.argname.clone()])] ;
 			}
 			node.body.forEach(function(n){
 				setCatch(n,sym) ;
@@ -436,22 +446,6 @@ function asyncAwait(ast,opts) {
 			} 
 
 			for (var n=asyncWalk.stack.length-1; n>=0; n--) {
-				/*if (asyncWalk.stack[n] instanceof U2.AST_IterationStatement) {
-					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-					console.warn("Nodent JS: Warning - await inside iteration statement "+start.file+":"+start.line) ;
-					terminate = terminateLoop ;
-					block = new U2.AST_BlockStatement({body:[asyncWalk.stack[n].body]}) ;
-					asyncWalk.stack[n].body = block ;
-					break ;
-				}
-				if (n>0 && (asyncWalk.stack[n-1] instanceof U2.AST_IterationStatement)
-						&& (asyncWalk.stack[n] instanceof U2.AST_Block)) {
-					var start = asyncWalk.parent(0).start || {file:'?',line:'?'} ;
-					console.warn("Nodent JS: Warning - await inside iteration statement "+start.file+":"+start.line) ;
-					terminate = terminateLoop ;
-					block = asyncWalk.stack[n] ;
-					break ;
-				}*/
 				if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
 					var switchStmt = asyncWalk.stack[n-1] ;
 					terminate = function terminateSwitchBranch(call) {
@@ -561,6 +555,12 @@ function asyncAwait(ast,opts) {
 	})() ;
  */
 function containsAwait(ast) {
+	if (Array.isArray(ast)) {
+		for (var i=0;i<ast.length;i++)
+			if (containsAwait(ast[i]))
+				return true ;
+		return false ;
+	}
     var foundAwait = {} ;
 	try {
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
@@ -1161,6 +1161,20 @@ function initialize(opts){
 			AST:U2
 		};
 
+		Object.defineProperty(Function.prototype,"$asyncbind",{
+			value:function(self,catcher) {
+				var fn = this ;
+				fn.isAsync = true ;
+				return function(){
+					try {
+						return fn.apply(self,arguments);
+					} catch (ex) {
+						catcher(ex);
+					}
+				} ; 
+			}
+		}) ;
+		
 		/* Sync implementation of:
 		 	f(args)(t,x)
 		 	(new f(args)).then(t,x)
@@ -1214,19 +1228,6 @@ function initialize(opts){
 
 		}
 
-		Object.defineProperty(Function.prototype,"$asyncbind",{
-			value:function(self,catcher) {
-				var fn = this ;
-				fn.isAsync = true ;
-				return function(){
-					try {
-						return fn.apply(self,arguments);
-					} catch (ex) {
-						catcher(ex);
-					}
-				} ; 
-			}
-		}) ;
 		/**
 		 * NoDentify (make async) a general function.
 		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
