@@ -1081,7 +1081,7 @@ function initialize(opts){
 					pr.ast = asyncTryCatch(pr.ast,opts) ;
 					pr.ast = asyncDefine(pr.ast,opts) ;
 					pr.ast = asyncAwait(pr.ast,opts) ;
-					pr.ast = cleanCode(pr.ast,opts) ;
+//					pr.ast = cleanCode(pr.ast,opts) ;
 					return pr ;
 				},
 				prettyPrint:function(pr,sourceMapping,opts) {
