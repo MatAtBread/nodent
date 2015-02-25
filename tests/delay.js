@@ -21,10 +21,8 @@ async function test(doThrow) {
 			JSON.parse("*");
 		await sleep(400) ;
 		s = "C" ;
-		return s ;
 	} catch (ex) {
-		//
-		return void $return("X") ;
+		return "X" ;
 	}
 	return s ;
 }
