@@ -6,7 +6,7 @@ var tests = fs.readdirSync('./tests') ;
 global.Promise = nodent.Promise ; //require('bluebird');
 tests.forEach(function(test){
 	[true,false].forEach(function(promise){
-		var log = console.log.bind(console,test,promise?"Promise":"es7") ;
+		var log = console.log.bind(console,test,promise?"Promise":"ES7") ;
 		try {
 			var code = fs.readFileSync('./tests/'+test) ;
 			var pr = nodent.compile(code,"",3,{es7:true,promises:promise}) ;
