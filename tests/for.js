@@ -1,22 +1,30 @@
-"use nodent-promise";
-Promise = require('../nodent')().Promise ;
+"use nodent-es7";
 
 Promise = require('../nodent')().Promise ;
-console.log(arguments.callee.toString()) ;
+//console.log(arguments.callee.toString()) ;
 
 async function inc(x) {
-	setTimeout($return.bind(null,x+1),300) ;
+	setTimeout($return.bind(null,x+1),100) ;
 };
 
-function test() {
-	for (var i=0; i<5; i++) {
+
+async function test() {
+	var s = "" ;
+	for (var i=0; i<10; i++) {
+		if (i*i >= 30) {
+			s += "break"+i+" " ;
+			break ;
+		}
 		if (i*i >= 9) {
-			console.log("big",i) ;
+			s += "big"+i+" " ;
 			continue ;
 		}
-		console.log(await inc(i),i*i) ;
+		s += await inc(i)+"-"+i*i+" " ;
 	}
-	console.log("ok") ;
+	s += "ok" ;
+	return s ;
 }
 
-test() ;
+module.exports = async function() {
+	return await test()=="1-0 2-1 3-4 big3 big4 big5 break6 ok" ;
+}
