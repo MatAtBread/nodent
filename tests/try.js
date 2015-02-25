@@ -1,7 +1,6 @@
 "use nodent-promise";
 
 //s += (arguments.callee.toString()) ;
-var Promise = require('../nodent')().Promise ;
 
 async function wait(){
 	setImmediate(function(){

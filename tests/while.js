@@ -1,6 +1,5 @@
 "use nodent-promise";
 
-Promise = require('../nodent')().Promise ;
 
 async function inc(x) {
 	setTimeout($return.bind(null,x+1),100) ;

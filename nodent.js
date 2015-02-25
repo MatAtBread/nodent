@@ -1212,13 +1212,15 @@ function initialize(opts){
 			value:function(self,catcher) {
 				var fn = this ;
 				fn.isAsync = true ;
-				return function(){
+				var p = function(){
 					try {
 						return fn.apply(self,arguments);
 					} catch (ex) {
 						catcher(ex);
 					}
 				} ; 
+				p.then = p ;
+				return p ;
 			}
 		}) ;
 		/**
