@@ -1197,7 +1197,7 @@ function initialize(opts){
 					return error.apply(this,[ex]) ;
 				}
 			} ;
-			fn.then = function(ret,err){ return fn(ret,err) } ;
+			fn.then = fn ;
 			return fn ;
 		};
 		// Auto-call funcback or Promise if thenable 

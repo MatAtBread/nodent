@@ -1,6 +1,6 @@
 "use nodent-es7";
 
-console.log(arguments.callee.toString());
+//console.log(arguments.callee.toString());
 async function sleep(t){
 	setTimeout(function(){
 		try{
@@ -28,5 +28,5 @@ async function test(doThrow) {
 }
 
 module.exports = async function() {
-	return await test(false)+await test(true) ;
+	return await test(false)+await test(true)=="CX" ;
 }
