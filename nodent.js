@@ -415,6 +415,7 @@ console.log("ok") ;
 		ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
 			if ((ifStmt instanceof U2.AST_If) && 
 					(containsAwait(ifStmt.body) || (ifStmt.alternative && containsAwait(ifStmt.alternative)))) {
+				descend();
 				var parent = asyncWalk.parent(0) ;
 				if (!Array.isArray(parent.body)) {
 					parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;

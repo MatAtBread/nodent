@@ -1,3 +1,4 @@
+"use nodent-es7";
 /** NB: Fails unless 'continue' is supplied **/
 
 async function nop() {
@@ -9,12 +10,10 @@ async function test() {
   for (var n=0;n<10;n++) {
     if (n>5) {
         await nop() ;
-        continue;
     }
-    test() ;
     s += "." ;
   }
-  return s.length==6 ;
+  return s.length==10 ;
 }
 
 module.exports = test ;
