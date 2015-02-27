@@ -134,31 +134,6 @@ function containsAwait(ast) {
 	return false ;
 }
 
-/*
-function containsSymbol(ast,sym) {
-	if (Array.isArray(ast)) {
-		for (var i=0;i<ast.length;i++)
-			if (containsSymbol(ast[i],sym))
-				return true ;
-		return false ;
-	}
-	var foundAwait = {} ;
-	try {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
-			if ((node instanceof U2.AST_SymbolRef) && node.name==sym) {
-				throw foundAwait ;
-			}
-		});
-		ast.walk(asyncWalk) ;
-	} catch (ex) {
-		if (ex===foundAwait)
-			return true ;
-		throw ex ;
-	}
-	return false ;
-}
-*/
-
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
 	// because the buffer-to-string conversion in `fs.readFileSync()`
@@ -257,8 +232,6 @@ function createMappingPadding(mapping) {
 			source: m[m.length-1].source
 		}) ;
 }
-
-var nodent ;
 
 function reportParseException(ex,content,filename) {
 	var sample = content.substring(ex.pos-30,ex.pos-1)
@@ -479,8 +452,6 @@ console.log("ok") ;
 					if (ifStmt.alternative) {
 						transformConditional(ifStmt.alternative) ;
 					}
-					//} else {
-					//	deferred = null ;
 				}
 				return true ;
 			}
@@ -1012,6 +983,7 @@ console.log("ok") ;
 	}
 }
 
+var nodent ;
 function asyncify(promiseProvider) {
 	promiseProvider = promiseProvider || nodent.Promise ;
 	return function(obj,filter,suffix) {

@@ -22,6 +22,7 @@ async function test(x) {
 };
 
 module.exports = async function() {
-	var s = await test(1)+await test(0)+await test(10);	
+	var map = require('../nodent')({use:['map']}).map ;
+	var s = (await map([test(1),test(0),test(10)])).join("") ;
 	return s == "1 is Odd.0 is Zero and Even.10 is Even.";
 }
