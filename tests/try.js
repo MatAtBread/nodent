@@ -1,7 +1,5 @@
 "use nodent-promise";
 
-//s += (arguments.callee.toString()) ;
-
 async function wait(){
 	setImmediate(function(){
 		try{

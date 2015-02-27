@@ -17,15 +17,17 @@ providers.forEach(function(promise){
 			var pr = nodent.compile(code,"",3,{es7:true,promises:!!promise.p}) ;
 			var m = {} ;
 			var fn = new Function("module","require","Promise",pr.code) ;
+//			console.log(test,promise.name,":::::\n",fn.toString());
 			fn(m,require,promise.p) ;
-			var asyncCall = m.exports() ; 
-			debugger;
-			asyncCall.then(function(result){
-				if (result!==true)
-					log("***",result) ;
-				else
-					log("passed") ;
-			}) ;
+			if (m.exports) {
+				var asyncCall = m.exports() ; 
+				asyncCall.then(function(result){
+					if (result!==true)
+						log("***",result) ;
+					else
+						log("passed") ;
+				}) ;
+			}
 		} catch (ex) {
 			log("***",ex) ;
 		}
