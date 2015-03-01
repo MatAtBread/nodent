@@ -19,6 +19,7 @@ function U2patch(){
 	KEYWORDS_BEFORE_EXPRESSION = function(str){ return str in preds || predicates.KEYWORDS_BEFORE_EXPRESSION.apply(this,arguments) ; } ;
 	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
 	UNARY_PREFIX = function(str){ return str in preds || predicates.UNARY_PREFIX.apply(this,arguments) ; } ;
+	AST_Node.warn = function(){} ;
 }
 var U2 = require("./ug2loader").load(U2patch) ;
 
@@ -1114,12 +1115,15 @@ function initialize(initOpts){
 		nodent.decorate = function(pr) {
 			pr.ast.walk(decorate) ;
 		};
-		nodent.require = function(cover) {
+		nodent.require = function(cover,opts) {
 			if (!nodent[cover]) {
+				if (!opts)
+					opts = initOpts.use[cover] ;
+						
 				if (cover.indexOf("/")>=0)
-					nodent[cover] = require(cover)(nodent,initOpts.use[cover]) ;
+					nodent[cover] = require(cover)(nodent,opts) ;
 				else
-					nodent[cover] = require("./covers/"+cover)(nodent,initOpts.use[cover]) ;
+					nodent[cover] = require("./covers/"+cover)(nodent,opts) ;
 			}
 			return nodent[cover] ;
 		};
@@ -1351,9 +1355,9 @@ function initialize(initOpts){
 	}
 
 	if (Array.isArray(initOpts.use))
-		initOpts.use.forEach(nodent.require) ;
+		initOpts.use.forEach(function(x){nodent.require(x)}) ;
 	else {
-		Object.keys(initOpts.use).forEach(nodent.require) ;
+		Object.keys(initOpts.use).forEach(function(x){nodent.require(x)}) ;
 	}
 
 	for (var k in initOpts) {

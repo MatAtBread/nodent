@@ -34,7 +34,7 @@ for (var j=0; j<tests.length; j++) {
 		var fn = new Function("module","require","Promise",pr.code) ;
 
 		fn(m,require,promise.p) ;
-		await sleep(0);
+		await sleep(100);
 		try {
 			var t = Date.now() ;
 			var result = await m.exports(); 
