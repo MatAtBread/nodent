@@ -446,17 +446,6 @@ Example: execute arbitrary async functions in parallel and return when they are 
 
 In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
 
-Function arguments
-------------------
-When you're NOT using Promises, `await` maps to the sequence with an embedded function call, it can be used to invoke functions that accept function arguments. A good example is "process.nextTick()" or "setImmediate()". These exepct a single function argument which is called by the Node event loop next time around. Using NoDent, you can invoke this functionality very easily:
-
-	doItNow() ;
-	await process.nextTick ;
-	doItABitLater();
-	await setImmediate ;
-	doItLaterStill() ;
-[_TRY-IT_ uncheck 'Use Promises'](http://nodent.mailed.me.uk/#doItNow()%20%3B%0Aawait%20process.nextTick%20%3B%0AdoItABitLater()%3B%0Aawait%20setImmediate%20%3B%0AdoItLaterStill()%20%3B%0A)	
-
 nodent.asyncify
 ---------------
 This helper function wraps "normal" Node asynchronous functions (i.e. those whose final paramter is of the form `function(err,data)`)
@@ -496,20 +485,20 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	cd ..
 	./nodent.js tests
 	
-	dowhile.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,2ms|rsvp,1ms|when,1ms
-	for-if.js |nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-	for.js |nodent-ES7,303ms|nodent-Thenable,303ms|bluebird,303ms|rsvp,302ms|when,302ms
-	fs.js |nodent-ES7,237ms|nodent-Thenable,236ms|bluebird,249ms|rsvp,247ms|when,225ms
-	if-stmt-map.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-	if-stmt.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,0ms|when,0ms
-	nested-async.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-	nested-await.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-	performance.js |nodent-ES7,112ms|nodent-Thenable,77ms|bluebird,429ms|rsvp,631ms|when,405ms
-	sleep.js |nodent-ES7,904ms|nodent-Thenable,905ms|bluebird,905ms|rsvp,904ms|when,901ms
-	switch-stmt.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-	sync-ret.js |nodent-ES7,1002ms|nodent-Thenable,?,n/a|bluebird,?,n/a|rsvp,?,n/a|when,?,n/a
-	try.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,1ms|rsvp,0ms|when,1ms
-	while.js |nodent-ES7,1ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,1ms|when,0ms
+dowhile.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,2ms|rsvp,1ms|when,1ms
+for-if.js |nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
+for.js |nodent-ES7,303ms|nodent-Thenable,303ms|bluebird,303ms|rsvp,302ms|when,302ms
+fs.js |nodent-ES7,237ms|nodent-Thenable,236ms|bluebird,249ms|rsvp,247ms|when,225ms
+if-stmt-map.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
+if-stmt.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,0ms|when,0ms
+nested-async.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
+nested-await.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
+performance.js |nodent-ES7,112ms|nodent-Thenable,77ms|bluebird,429ms|rsvp,631ms|when,405ms
+sleep.js |nodent-ES7,904ms|nodent-Thenable,905ms|bluebird,905ms|rsvp,904ms|when,901ms
+switch-stmt.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
+sync-ret.js |nodent-ES7,1002ms|nodent-Thenable,?,n/a|bluebird,?,n/a|rsvp,?,n/a|when,?,n/a
+try.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,1ms|rsvp,0ms|when,1ms
+while.js |nodent-ES7,1ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,1ms|when,0ms
 	
 The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
