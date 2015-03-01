@@ -1,5 +1,3 @@
-"use nodent-promise";
-
 async function wait(){
 	setImmediate(function(){
 		try{

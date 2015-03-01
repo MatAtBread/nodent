@@ -1,5 +1,3 @@
-"use nodent-promise";
-
 async function append(a,b) {
 	return ""+a+b;
 }

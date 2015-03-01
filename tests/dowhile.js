@@ -1,5 +1,3 @@
-"use nodent-es7";
-
 async function inc(x) {
 	return x+1 ;
 };

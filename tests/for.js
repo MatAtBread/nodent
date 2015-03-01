@@ -1,7 +1,3 @@
-"use nodent-es7";
-
-//console.log(arguments.callee.toString()) ;
-
 async function inc(x) {
 	setTimeout($return.bind(null,x+1),100) ;
 };

@@ -48,9 +48,9 @@ module.exports = function(nodent) {
 				}
 				
 				if (asyncFn) {
-					nodent.Promise.mapPromiseCall(asyncFn.apply(this,arguments),complete,completeError);	
+					asyncFn.apply(this,arguments).then(complete,completeError);	
 				} else {
-					nodent.Promise.mapPromiseCall((isArray?e:what[e]),complete,completeError);
+					(isArray?e:what[e]).then(complete,completeError);
 				}
 			}) ;
 		});

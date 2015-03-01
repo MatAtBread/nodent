@@ -1,7 +1,3 @@
-"use nodent-promise";
-
-//console.log(arguments.callee.toString()) ;
-
 async function inc(y) { return y+1 }
 
 async function test(x) {

@@ -937,7 +937,6 @@ console.log("ok") ;
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (calls.indexOf(node)>=0) {
-				debugger ;
 				var parent = asyncWalk.parent() ;
 				if (parent instanceof U2.AST_Return) {
 					var sym = node.expression.expression.name ;
@@ -1172,15 +1171,18 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
+		function makeThenable(fn) {
+			
+		}
 		Object.defineProperty(Function.prototype,"$asyncbind",{
 			value:function(self,catcher) {
 				var fn = this ;
 				fn.isAsync = true ;
-				var p = function(){
+				var p = function(result,error){
 					try {
-						return fn.apply(self,arguments);
+						return fn.call(self,result,error);
 					} catch (ex) {
-						catcher(ex);
+						catcher.call(self,ex);
 					}
 				} ; 
 				p.then = p ;
@@ -1188,17 +1190,13 @@ function initialize(initOpts){
 			}
 		}) ;
 
-		/* Sync implementation of:
-		 	f(args)(t,x)
-		 	(new f(args)).then(t,x)
-		 */
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
-		nodent.Promise = nodent.SyncPromise = function(resolver) {
+		nodent.Promise = nodent.Thenable = function(resolver) {
 			var fn = function(result,error){
 				try {
-					return resolver.apply(this,arguments) ;
+					return resolver.call(this,result,error) ;
 				} catch(ex) {
-					return error.apply(this,[ex]) ;
+					return error.call(this,ex) ;
 				}
 			} ;
 			fn.then = fn ;

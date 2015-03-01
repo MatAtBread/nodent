@@ -1,6 +1,3 @@
-"use nodent-es7";
-/** NB: Fails unless 'continue' is supplied **/
-
 async function nop() {
     return;
 }
