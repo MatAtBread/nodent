@@ -1,7 +1,3 @@
-"use nodent-es7" ;
-
-//console.log(arguments.callee.toString()) ;
-
 var res ;
 async function getSlowRemote() {
 	// Do the async return after 60 seconds
@@ -13,19 +9,26 @@ async function getSlowRemote() {
 	}
 }  
 
-var abort = getSlowRemote()(function(){
+var abort = getSlowRemote().then(function(){
 	res = ("done") ;
 }) ; 
 
-module.exports = async function() {
-	function done(){
-		res = "done" ;
+if (Promise) {
+	module.exports = async function() {
+		return "n/a" ;
 	}
-	var abort = getSlowRemote()(done) ;
-	abort() ;
-	var a = res ;
-	await getSlowRemote() ;
-	var b = res ;
-	return a+b == "aborteddone" ;
+} else {
+	module.exports = async function() {
+		function done(){
+			res = "done" ;
+		}
+		var abort = getSlowRemote()(done) ;
+		abort() ;
+		var a = res ;
+		await getSlowRemote() ;
+		var b = res ;
+		return a+b == "aborteddone" ;
+	}
 }
+
 

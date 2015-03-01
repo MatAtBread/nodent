@@ -18,8 +18,6 @@ async function test() {
 }
 
 module.exports = async function() {
-	var t = Date.now() ;
-	await test() ;
-	return (Date.now()-t)+"ms" ;
+	return await test()==0 ;
 }
 

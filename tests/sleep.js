@@ -1,22 +1,18 @@
 async function sleep(t){
-	setTimeout(function(){
-		try{
-			$return();
-		} catch(ex){ 
-			$error(ex) 
-		}},t) ;
+	setTimeout($return,t) ;
 } 
 
 async function test(doThrow) {
 	var s = "" ;
 	try {
-		await sleep(200) ;
+		await sleep(100) ;
 		s = "A" ;
-		await sleep(300) ;
+		await sleep(200) ;
 		s = "B" ;
-		if (doThrow)
+		if (doThrow) {
 			JSON.parse("*");
-		await sleep(400) ;
+		}
+		await sleep(300) ;
 		s = "C" ;
 	} catch (ex) {
 		return "X" ;
@@ -25,5 +21,5 @@ async function test(doThrow) {
 }
 
 module.exports = async function() {
-	return await test(false)+await test(true)=="CX" ;
+	return await test(true)+await test(false)=="XC" ;
 }

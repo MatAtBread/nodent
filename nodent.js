@@ -640,26 +640,25 @@ console.log("ok") ;
 				cbBody.walk(asyncWalk) ;
 
 				var returner = new U2.AST_Function({argnames:[],body:[]}) ;
-				if (cbBody.body.length)
+				if (cbBody.body.length) {
 					returner = new U2.AST_Function({
 						argnames:[result.clone()],
 						body:cbBody.body
 					}) ;
+					returner = new U2.AST_Call({
+						expression:new U2.AST_Dot({
+							expression: returner,
+							property: "$asyncbind"
+						}),
+						args:[new U2.AST_This(),getCatch(asyncWalk)]
+					}) ;
+				}
 
 				if (opts.promises) {
 					expr = new U2.AST_Dot({
 						expression:expr.clone(),
 						property:"then"
 					}) ;
-				} else {
-					if (cbBody.body.length)
-						returner = new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: returner,
-								property: "$asyncbind"
-							}),
-							args:[new U2.AST_This(),getCatch(asyncWalk)]
-						}) ;
 				}
 
 				var call = new U2.AST_Call({
