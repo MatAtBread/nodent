@@ -300,6 +300,7 @@ Diffrences from the ES7 specification
 * No generators are used. Nodent works simply by transforming your original source
 * As the current version, `finally { }` blocks are NOT transformed by Nodent
 * As the current version, `for (...in...)` loops are NOT transformed by Nodent
+* In `use nodent-es7` mode, within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
 
 Auto-parse from Nodejs
 ======================
@@ -352,7 +353,7 @@ Hopefully you'll recognise this and be able to see you can now invoke it like:
 
 	response = await nodent.http.get(options) ;
 
-To make life even easier, the response is covered too, just before the first callback is invoked with an addition "funcback" called "wait", that waits for a named event. The whole setup is therefore:
+To make life even easier, the response is covered too, just before the first callback is invoked with an addition async function called "wait", that waits for a named event. The whole setup is therefore:
 
 	var http = require('nodent')({use:['http']}).http ;
 
@@ -485,20 +486,20 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	cd ..
 	./nodent.js tests
 	
-dowhile.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,2ms|rsvp,1ms|when,1ms
-for-if.js |nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-for.js |nodent-ES7,303ms|nodent-Thenable,303ms|bluebird,303ms|rsvp,302ms|when,302ms
-fs.js |nodent-ES7,237ms|nodent-Thenable,236ms|bluebird,249ms|rsvp,247ms|when,225ms
-if-stmt-map.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-if-stmt.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,0ms|when,0ms
-nested-async.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-nested-await.js|nodent-ES7,0ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-performance.js |nodent-ES7,112ms|nodent-Thenable,77ms|bluebird,429ms|rsvp,631ms|when,405ms
-sleep.js |nodent-ES7,904ms|nodent-Thenable,905ms|bluebird,905ms|rsvp,904ms|when,901ms
-switch-stmt.js |nodent-ES7,1ms|nodent-Thenable,0ms|bluebird,0ms|rsvp,0ms|when,0ms
-sync-ret.js |nodent-ES7,1002ms|nodent-Thenable,?,n/a|bluebird,?,n/a|rsvp,?,n/a|when,?,n/a
-try.js |nodent-ES7,0ms|nodent-Thenable,1ms|bluebird,1ms|rsvp,0ms|when,1ms
-while.js |nodent-ES7,1ms|nodent-Thenable,1ms|bluebird,0ms|rsvp,1ms|when,0ms
+	dowhile.js     	nodent-ES7,0ms	nodent-Thenable,0ms	bluebird,2ms	rsvp,1ms	when,1ms
+	for-if.js      	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,1ms	rsvp,0ms	when,0ms
+	for.js        	nodent-ES7,303ms	nodent-Thenable,304ms	bluebird,303ms	rsvp,302ms	when,302ms
+	fs.js        	nodent-ES7,220ms	nodent-Thenable,192ms	bluebird,261ms	rsvp,266ms	when,244ms
+	if-stmt-map.js 	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,0ms	when,0ms
+	if-stmt.js     	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,1ms	when,0ms
+	nested-async.js	nodent-ES7,1ms	nodent-Thenable,0ms	bluebird,0ms	rsvp,0ms	when,0ms
+	nested-await.js	nodent-ES7,0ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,1ms	when,0ms
+	performance.js 	nodent-ES7,130ms	nodent-Thenable,74ms	bluebird,448ms	rsvp,631ms	when,438ms
+	sleep.js       	nodent-ES7,903ms	nodent-Thenable,904ms	bluebird,905ms	rsvp,903ms	when,903ms
+	switch-stmt.js 	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,1ms	rsvp,1ms	when,0ms
+	sync-ret.js    	nodent-ES7,1002ms	nodent-Thenable,?,n/a	bluebird,?,n/a	rsvp,?,n/a	when,?,n/a
+	try.js        	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,2ms	rsvp,0ms	when,0ms
+	while.js       	nodent-ES7,0ms	nodent-Thenable,0ms	bluebird,0ms	rsvp,0ms	when,1ms
 	
 The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
