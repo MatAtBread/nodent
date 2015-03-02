@@ -1,5 +1,5 @@
 module.exports = function(nodent) {
-	return function map(what,result,asyncFn) {
+	return new nodent.Thenable(function map(what,result,asyncFn) {
 		if (typeof what=="number") {
 			var period = [] ;
 			period.length = Math.floor(what) ;
@@ -54,5 +54,5 @@ module.exports = function(nodent) {
 				}
 			}) ;
 		});
-	}
+	}) ;
 }

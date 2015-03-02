@@ -1185,7 +1185,7 @@ function initialize(initOpts){
 					try {
 						return fn.call(self,result,error);
 					} catch (ex) {
-						catcher.call(self,ex);
+						return catcher.call(self,ex);
 					}
 				} ; 
 				p.then = p ;
@@ -1205,10 +1205,6 @@ function initialize(initOpts){
 			fn.then = fn ;
 			return fn ;
 		};
-		// Auto-call funcback or Promise if thenable 
-		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
-			return (f.then?f.then:f)(complete,completeError);
-		}
 
 		nodent.asyncify = asyncify ;
 		/**

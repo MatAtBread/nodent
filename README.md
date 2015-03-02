@@ -508,7 +508,9 @@ If you wish to add a Promise implementation to test against, add it to the depen
 Changelog
 ==========
 
-01Mar15: Implement test suite. Update README, move detailed implementation notes to [HowItWorks.md](./HowItWorks.ms)
+02Mar15: Update covers (http,map,events) to use Thenable API for ES5-invocations
+
+01Mar15: Implement test suite. Update README, move detailed implementation notes to [HowItWorks.md](./HowItWorks.md)
 
 17Feb15: Optimize away any statements in a block after a `return` or `throw`
 
