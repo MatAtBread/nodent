@@ -9,13 +9,18 @@ async function sleep(t) {
 	setTimeout($return,t) ;
 }
 
-var providers = [
+var providers = [] ;
+if (global.Promise) {
+    providers.push({name:'global',p:global.Promise}) ;
+}
+
+providers = providers.concat([
     {name:'nodent-ES7',p:null},
  	{name:'nodent-Thenable',p:nodent.Thenable},
 	{name:'bluebird',p:require('bluebird')},
 	{name:'rsvp',p:require('rsvp').Promise},
 	{name:'when',p:require('when').promise}
-] ;
+]) ;
 
 //argv[3]: name of test run
 var tests = process.argv[3] ? [process.argv[3]]:fs.readdirSync('./tests') ;

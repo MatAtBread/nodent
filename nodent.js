@@ -159,7 +159,7 @@ function btoa(str) {
 
 //Hack: go though and create "padding" mappings between lines
 //Without this, whole blocks of code resolve to call & return sequences.
-//This has dependency on the implemenation of source-map  which is
+//This has dependency on the implementation of source-map  which is
 //not a healthy thing to have.
 function createMappingPadding(mapping) {
 	var m = mapping._mappings._array;
@@ -975,9 +975,15 @@ console.log("ok") ;
 			if (node instanceof U2.AST_Jump) {
 				var parent = asyncWalk.parent(0) ;
 				if (Array.isArray(parent.body)) {
-					var i = parent.body.indexOf(node) ;
-					if (i>=0) 
-						parent.body.splice(i+1,parent.body.length-(i+1)) ;
+					var i = parent.body.indexOf(node)+1 ;
+					if (i>0) while (i<parent.body.length) {
+						// Remove any statements EXCEPT for function/var definitions
+						if ((parent.body[i] instanceof U2.AST_Definitions) 
+							|| ((parent.body[i] instanceof U2.AST_Lambda) && parent.body[i].name))
+							i += 1 ;
+						else
+							parent.body.splice(i,1) ;
+					}
 				}
 			}
 			return true ;
@@ -1190,7 +1196,7 @@ function initialize(initOpts){
 					try {
 						return fn.call(self,result,error);
 					} catch (ex) {
-						catcher.call(self,ex);
+						return catcher.call(self,ex);
 					}
 				} ; 
 				p.then = p ;
@@ -1210,10 +1216,6 @@ function initialize(initOpts){
 			fn.then = fn ;
 			return fn ;
 		};
-		// Auto-call funcback or Promise if thenable 
-		nodent.Promise.mapPromiseCall = function(f,complete,completeError) {
-			return (f.then?f.then:f)(complete,completeError);
-		}
 
 		nodent.asyncify = asyncify ;
 		/**
