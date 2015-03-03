@@ -91,10 +91,10 @@ function getCatch(w,nesting) {
 	for (var n=w.stack.length-1;n>0;n--)
 		if (w.stack[n].catcher) {
 			if (!nesting)
-				return new U2.AST_SymbolRef({name:w.stack[n].catcher}) ;
+				return w.stack[n].catcher.map(function(sym){return new U2.AST_SymbolRef({name:sym})}) ;
 			nesting -= 1 ;
 		}
-	return new U2.AST_SymbolRef({name:config.$error}) ; ;
+	return [new U2.AST_SymbolRef({name:config.$error}),0] ; ;
 }
 
 function setCatch(n,sym) {
@@ -366,7 +366,7 @@ function asynchronize(pr,sourceMapping,opts) {
 				var value = node.value.clone() ;
 				var repl = new U2.AST_Return({
 					value:new U2.AST_Call({
-						expression:getCatch(returnMapper),
+						expression:getCatch(returnMapper)[0],
 						args:[value]
 					})
 				}) ;
@@ -556,12 +556,17 @@ console.log("ok") ;
 					node.bcatch.body.push(continuation.clone()) ;
 				}
 				if (node.bcatch) {
-					var sym = "$catch_"+generateSymbol(node.bcatch.argname) ;
+					var symCatch = "$catch_"+generateSymbol(node.bcatch.argname) ;
 					// catcher is not a continuation as it has arguments
-					var catcher = makeFn(sym,mapReturns(node.bcatch.body),[node.bcatch.argname.clone()]) ; 
-					node.bcatch.body = [catcher,thisCall(sym,[node.bcatch.argname.clone()])] ;
+					var catcher = makeFn(symCatch,mapReturns(node.bcatch.body),[node.bcatch.argname.clone()]) ; 
+					node.bcatch.body = [catcher,thisCall(symCatch,[node.bcatch.argname.clone()])] ;
 				}
-				setCatch(node.body,sym) ;
+				if (node.bfinally) {
+					var symFinal = "finally_"+generateSymbol() ;
+					var finalize = makeContinuation(symFinal,mapReturns(node.bfinally.body)) ; 
+					node.bfinally.body = [finalize,thisCall(symFinal)] ;
+				}
+				setCatch(node.body,[symCatch,symFinal]) ;
 			}
 			return true ;
 		});
@@ -651,7 +656,7 @@ console.log("ok") ;
 							expression: returner,
 							property: "$asyncbind"
 						}),
-						args:[new U2.AST_This(),getCatch(asyncWalk)]
+						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
 					}) ;
 				}
 
@@ -664,7 +669,7 @@ console.log("ok") ;
 
 				var call = new U2.AST_Call({
 					expression:expr,
-					args:[returner,getCatch(asyncWalk)]
+					args:[returner,getCatch(asyncWalk)[0]]
 				}) ;
 
 				terminate(call) ;
@@ -879,7 +884,7 @@ console.log("ok") ;
 						          new U2.AST_SymbolFunarg({name:config.$error})],
 						          body:fnBody
 					}) ;
-					setCatch(funcback,config.$error) ;
+					setCatch(funcback,[config.$error]) ;
 					if (opts.promises) {
 						replace.body = [new U2.AST_Return({
 							value:new U2.AST_New({
@@ -894,7 +899,7 @@ console.log("ok") ;
 									expression: funcback,
 									property: "$asyncbind"
 								}),
-								args:[new U2.AST_This(),getCatch(asyncWalk)]
+								args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
 							})
 						})] ;
 					}
