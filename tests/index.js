@@ -15,21 +15,22 @@ if (global.Promise) {
 }
 
 providers = providers.concat([
-    {name:'nodent-ES7',p:null},
+    {name:'nodent-ES7',p:null}/*,
  	{name:'nodent-Thenable',p:nodent.Thenable},
 	{name:'bluebird',p:require('bluebird')},
 	{name:'rsvp',p:require('rsvp').Promise},
-	{name:'when',p:require('when').promise}
+	{name:'when',p:require('when').promise}*/
 ]) ;
 
-//argv[3]: name of test run
-var tests = process.argv[3] ? [process.argv[3]]:fs.readdirSync('./tests') ;
+//argv[3...]: name of test run
+var tests = process.argv.length>3 ? process.argv.slice(3):fs.readdirSync('./tests') ;
 
 for (var j=0; j<tests.length; j++) {
 	var test = tests[j] ;
 	if (test=="index.js" || !test.match(/.*\.js$/))
 		continue ;
 	var info = [(test+"        ").substring(0,15)] ;
+	var failed = false ;
 	for (var i=0; i<providers.length; i++) {
 		var promise = providers[i] ;
 
@@ -37,9 +38,10 @@ for (var j=0; j<tests.length; j++) {
 		var pr = nodent.compile(code,test,3,{es7:true,promises:!!promise.p}) ;
 		var m = {} ;
 		var fn = new Function("module","require","Promise",pr.code) ;
+		failed = fn.toString() ;
 
 		fn(m,require,promise.p) ;
-		await sleep(100);
+		await sleep(10);
 		try {
 			var t = Date.now() ;
 			var result = await m.exports(); 
@@ -47,6 +49,7 @@ for (var j=0; j<tests.length; j++) {
 			if (result!==true) {
 				info.push([promise.name,"?",result]) ;
 			} else {
+				failed = null ;
 				info.push([promise.name,t+"ms"]) ;
 			}
 		} catch (ex) {
@@ -54,4 +57,6 @@ for (var j=0; j<tests.length; j++) {
 		}
 	}
 	console.log(info.join("\t"));
+	if (failed)
+		console.log(failed) ;
 }

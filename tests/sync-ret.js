@@ -1,6 +1,6 @@
 var res ;
 async function getSlowRemote() {
-	// Do the async return after 60 seconds
+	// Do the async return after 1 seconds
 	var timer = setTimeout($return,1000) ;
 	// Return a synchronous value too:
 	return void function() {
