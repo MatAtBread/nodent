@@ -515,34 +515,33 @@ myfn("ok") ;
 					var idx = ref.index ;
 					var deferredCode = ref.parent[ref.field].splice(idx+1,ref.parent[ref.field].length-(idx+1)) ;  
 					ref.parent[ref.field][idx] = synthBlock ;
+					if (deferredCode.length) {
+						var call = new U2.AST_Return({value:thisCall(symName)}) ;
+						synthBlock.body.push(ifTransformer(makeContinuation(symName,deferredCode))) ;
+						synthBlock.body.push(call.clone()) ;
+
+						function transformConditional(cond) {
+							var blockEnd ;
+							if (!(cond instanceof U2.AST_BlockStatement))
+								blockEnd = cond ;
+							else
+								blockEnd = cond.body[cond.body.length-1] ; 
+							if (!(blockEnd instanceof U2.AST_Return)) {
+								if (!(cond instanceof U2.AST_BlockStatement)) {
+									coerce(cond,new U2.AST_BlockStatement({body:[cond.clone()]})) ;
+								}
+								cond.body.push(call.clone()) ;
+							}
+							ifTransformer(cond) ;
+						}
+
+						transformConditional(ifStmt.body) ;
+						if (ifStmt.alternative) {
+							transformConditional(ifStmt.alternative) ;
+						}
+					}
 				} else {
 					ref.parent[ref.field] = synthBlock ;
-				}
-
-				if (deferredCode.length) {
-					var call = new U2.AST_Return({value:thisCall(symName)}) ;
-					synthBlock.body.push(ifTransformer(makeContinuation(symName,deferredCode))) ;
-					synthBlock.body.push(call.clone()) ;
-
-					function transformConditional(cond) {
-						var blockEnd ;
-						if (!(cond instanceof U2.AST_BlockStatement))
-							blockEnd = cond ;
-						else
-							blockEnd = cond.body[cond.body.length-1] ; 
-						if (!(blockEnd instanceof U2.AST_Return)) {
-							if (!(cond instanceof U2.AST_BlockStatement)) {
-								coerce(cond,new U2.AST_BlockStatement({body:[cond.clone()]})) ;
-							}
-							cond.body.push(call.clone()) ;
-						}
-						ifTransformer(cond) ;
-					}
-
-					transformConditional(ifStmt.body) ;
-					if (ifStmt.alternative) {
-						transformConditional(ifStmt.alternative) ;
-					}
 				}
 			}
 			descend() ;
@@ -583,9 +582,7 @@ myfn("ok") ;
 				} else {
 					deferred = null ;
 				}
-debugger;
 				ref.parent[ref.field][ref.index] = synthBlock ;
-//				synthBlock.body[0].deferred = deferred ;
 				synthBlock.body[0].body.forEach(switchTransformer) ;
 				
 				// Now transform each case so that 'break' looks like return <deferred>
