@@ -15,11 +15,11 @@ if (global.Promise) {
 }
 
 providers = providers.concat([
-    {name:'nodent-ES7',p:null}/*,
+    {name:'nodent-ES7',p:null},
  	{name:'nodent-Thenable',p:nodent.Thenable},
 	{name:'bluebird',p:require('bluebird')},
 	{name:'rsvp',p:require('rsvp').Promise},
-	{name:'when',p:require('when').promise}*/
+	{name:'when',p:require('when').promise}
 ]) ;
 
 var showOutput = false ;
