@@ -24,6 +24,11 @@ async function test() {
 	return await later(x) ;
 } 
 
+function dontHoistLoopVars() {
+	for (var loop=0;loop<12345678;loop*=2) {}
+	for (var z in module) {}
+}
+
 var xxx ;
 
 module.exports = async function() {

@@ -1017,14 +1017,18 @@ debugger;
 				if (vars.length) {
 					var definitions = [] ;
 					vars.forEach(function(ref){
+						if ((ref.parent instanceof U2.AST_For || ref.parent instanceof U2.AST_ForIn) && ref.field=="init")
+							return ; // Don't hoist loop vars
+						
 						var self = ref.self ;
 						var values = [] ;
 						for (var i=0; i<self.definitions.length; i++) {
 							var name = self.definitions[i].name.name ;
 							if (definitions.indexOf(name)>=0) {
 								initOpts.log("Nodent: Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"'") ;
+							} else {
+								definitions.push(name) ;
 							}
-							definitions.push(name) ;
 							if (self.definitions[i].value) {
 								var value = new U2.AST_Assign({
 									left:new U2.AST_SymbolRef({name:name}),
