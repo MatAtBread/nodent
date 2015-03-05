@@ -1,4 +1,8 @@
+"use nodent-es7";
+
+var nops = 0 ;
 async function nop() {
+	nops++ ;
     return;
 }
 
@@ -10,7 +14,7 @@ async function test() {
     }
     s += "." ;
   }
-  return s.length==10 ;
+  return s.length==10 && nops==4;
 }
 
 module.exports = test ;

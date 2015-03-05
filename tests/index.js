@@ -22,8 +22,13 @@ providers = providers.concat([
 	{name:'when',p:require('when').promise}*/
 ]) ;
 
-//argv[3...]: name of test run
-var tests = process.argv.length>3 ? process.argv.slice(3):fs.readdirSync('./tests') ;
+var showOutput = false ;
+var idx = 3 ;
+if (process.argv[3]=='--out') {
+	showOutput = true ;
+	idx += 1 ;
+}
+var tests = process.argv.length>idx ? process.argv.slice(idx):fs.readdirSync('./tests') ;
 
 for (var j=0; j<tests.length; j++) {
 	var test = tests[j] ;
@@ -39,6 +44,8 @@ for (var j=0; j<tests.length; j++) {
 		var m = {} ;
 		var fn = new Function("module","require","Promise",pr.code) ;
 		failed = fn.toString() ;
+		if (showOutput)
+			console.log(failed) ;
 
 		fn(m,require,promise.p) ;
 		await sleep(10);
@@ -57,6 +64,6 @@ for (var j=0; j<tests.length; j++) {
 		}
 	}
 	console.log(info.join("\t"));
-	if (failed)
-		console.log(failed) ;
+//	if (failed)
+//		console.log(failed) ;
 }

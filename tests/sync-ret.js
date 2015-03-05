@@ -1,18 +1,15 @@
+"use nodent-es7";
+
 var res ;
 async function getSlowRemote() {
 	// Do the async return after 1 seconds
 	var timer = setTimeout($return,1000) ;
 	// Return a synchronous value too:
 	return void function() {
-		res = ("aborted") ;
+		res = "aborted" ;
 		clearTimeout(timer) ;
 	}
 }  
-
-var abort = getSlowRemote().then(function(){
-	res = ("done") ;
-}) ; 
-
 if (Promise) {
 	module.exports = async function() {
 		return "n/a" ;
@@ -26,9 +23,8 @@ if (Promise) {
 		abort() ;
 		var a = res ;
 		await getSlowRemote() ;
+		done() ;
 		var b = res ;
-		return a+b == "aborteddone" ;
+		return a+b=="aborteddone" ;
 	}
 }
-
-

@@ -1,3 +1,5 @@
+"use nodent-es7";
+
 async function inc(y) { return y+1 }
 
 async function test(x) {
@@ -8,16 +10,17 @@ async function test(x) {
 		break ;
 	case 10:
 		y = await inc(-x) ;
-		break ;
+		return y*5 ;
 	default:
 		y = x ;
 		break ;
 	}
+	y = y*10 ;
 	return y ;
 };
 
 module.exports = async function() {
 	var x = await test(1)+await test(5)+await test(10) ;
-	return  x == -2 ;
+	return  x == 25 ;
 }
 

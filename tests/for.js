@@ -1,5 +1,5 @@
 async function inc(x) {
-	setTimeout($return.bind(null,x+1),100) ;
+	setTimeout($return.bind(null,x+1),10) ;
 };
 
 

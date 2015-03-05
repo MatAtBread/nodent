@@ -73,19 +73,15 @@ var config = {
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
-		$except:"$except",
+		log:function(){ console.warn.apply(console,arguments) },
 		// Pre-ES7 tokens: for async-function() ** OBSOLOETE **
 		// define:"-",
 		// async:"async",
 		// Pre-ES7 tokens for async assignment
+		//$except:"$except",
 		assign:"<<=",
 		ltor:true	/* true: val <<= async(),   false: async() <<= val */
 };
-
-var decorate = new U2.TreeWalker(function(node) {
-	node.$ = "------------".substring(0,decorate.stack.length)+"\t"+node.TYPE+"\t"+node.print_to_string() ;
-	console.log(node.$) ;
-});
 
 /* Bit of a hack: without having to search for references to this
  * node, force it to be some replacement node */
@@ -146,10 +142,12 @@ function containsAwait(ast) {
 
 /* Given a 'parent' node, get the reference (i.e. a member) that contains target. Often
  * this will be 'parent.body', but it might be 'parent.body[x]', or even 'parent.alternative[3]'
- * or any other reference. We need to do this so we can manipulate blocks containing the target */
-function parentRef(walker) {
-	var parent = walker.stack[walker.stack.length-2] ;
-	var target = walker.stack[walker.stack.length-1] ;
+ * or any other reference. We need to do this so we can manipulate blocks containing the target.
+ * NB: Any structural change to the parent after a ref is generated is likely to invalidate
+ * the ref, which will need to be re-referenced */
+function parentRef(walker,depth) {
+	var parent = walker.stack[walker.stack.length-(depth?depth+1:2)] ;
+	var target = walker.stack[walker.stack.length-(depth||1)] ;
 
 	if (typeof parent!=='object')
 		throw new Error("Bad parent "+parent) ;
@@ -159,34 +157,56 @@ function parentRef(walker) {
 	// it checks to see if the target is there, and if succesful returns the 
 	// ref.
 	var k = Object.keys(parent) ;
-	for (var i=0; i<k.length; i++) {
-		if (parent[k[i]] instanceof U2.AST_Node) {
-			if (parent[k[i]]===target)
-				return {parent:parent,field:k[i],self:target} ;
-		} else if (Array.isArray(parent[k[i]]) && (parent[k[i]][0] instanceof U2.AST_Node)) {
-			var j = parent[k[i]].indexOf(target) ;
-			if (j>=0)
-				return {parent:parent,field:k[i],index:j,self:target} ;
+	var ref ;
+	if (k.some(function(key){
+		if (parent[key] instanceof U2.AST_Node) {
+			if (parent[key]===target) {
+				ref = {parent:parent,field:key,self:target} ;
+				return true ;
+			}
+		} else if (Array.isArray(parent[key]) && (parent[key][0] instanceof U2.AST_Node)) {
+			var j = parent[key].indexOf(target) ;
+			if (j>=0) {
+				ref = {
+					parent:parent,
+					field:key,
+					self:target,
+					get index(){
+						var l = parent[key].indexOf(target) ;
+						if (l>=0) return l ;
+						throw new Error("No parent for "+info(target)) ;
+					}} ;
+				return true ;
+			}
 		}
-	}
+	}) && ref) 
+		return ref ;
 	throw new Error("No parent for "+info(target)) ;
 }
 
 /* Find a target in a parent, and ensure the target is part of a block,
  * if necessary by creating an intermediate BlockStatement. Return the
  * new parent (i.e. the same as passed, or the BlockStatement) in the ref.
- * This means that teh returned ref will always have an 'index' and the 
+ * This means that the returned ref will always have an 'index' and the 
  * target will be transformed so that always is within a block */
-function parentBlockRef(walker) {
-	var parent = walker.stack[walker.stack.length-2] ;
-	var ref = parentRef(walker) ;
+function parentBlockRef(walker,depth) {
+	var ref = parentRef(walker,depth) ;
 
 	if ('index' in ref) {
 		return ref ;
 	}
-	
-	parent[ref.field] = new U2.AST_BlockStatement({body:[parent[ref.field].clone()]}) ;
-	return {parent:parent[ref.field],field:'body',index:0} ;
+
+	var target = ref.self ;
+	var block = new U2.AST_BlockStatement({body:[target]}) ;
+	ref.parent[ref.field] = block ;
+	return {parent:block,
+		field:'body',
+		self:target,
+		get index(){
+			var l = block.body.indexOf(target) ;
+			if (l>=0) return l ;
+			throw new Error("No parent for "+info(target)) ;
+		}} ;
 }
 
 function deleteRef(ref) {
@@ -308,7 +328,7 @@ function reportParseException(ex,content,filename) {
 	return ("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
 } 
 
-function asynchronize(pr,sourceMapping,opts) {
+function asynchronize(pr,sourceMapping,opts,initOpts) {
 	var continuations = {} ;
 	sourceMapping = sourceMapping || config.sourceMapping ; 
 
@@ -322,7 +342,6 @@ function asynchronize(pr,sourceMapping,opts) {
 		return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;	
 	}
 
-	debugger ;
 	pr.ast = hoistDeclarations(pr.ast) ;
 	pr.ast = asyncLoops(pr.ast) ;
 	pr.ast = asyncTryCatch(pr.ast) ;
@@ -460,15 +479,15 @@ function asynchronize(pr,sourceMapping,opts) {
 
 	/**
 	 * ES7 await keyword - transform an AST like:
-console.log("start") ;
-console.log(await test(1)) ;
-console.log("ok") ;
+myfn("start") ;
+myfn(await test(1)) ;
+myfn("ok") ;
 
 	 * to:
-console.log("start") ;
+myfn("start") ;
 return test(1)(function(_var){
-console.log(_var) ;
-console.log("ok") ;
+myfn(_var) ;
+myfn("ok") ;
 });
 	 */
 
@@ -487,16 +506,18 @@ console.log("ok") ;
 		ast.walk(asyncWalk = new U2.TreeWalker(function(ifStmt, descend){
 			if ((ifStmt instanceof U2.AST_If) && 
 					(containsAwait(ifStmt.body) || (ifStmt.alternative && containsAwait(ifStmt.alternative)))) {
-				descend() ;
-
-				var ref = parentBlockRef(asyncWalk) ;
-				var container = ref.parent[ref.field] ;
-				var deferredCode = container.splice(ref.index+1,container.length-(ref.index+1)) ;  
 
 				var symName = "$post_if_"+generateSymbol(ifStmt.condition) ;
-				var synthBlock = new U2.AST_BlockStatement({body:[ifStmt.clone()]}) ; 
-				coerce(ifStmt, synthBlock) ;
-				ifStmt = synthBlock.body[0] ;
+				var synthBlock = new U2.AST_BlockStatement({body:[ifStmt]}) ; 
+
+				var ref = parentRef(asyncWalk) ;
+				if ('index' in ref) {
+					var idx = ref.index ;
+					var deferredCode = ref.parent[ref.field].splice(idx+1,ref.parent[ref.field].length-(idx+1)) ;  
+					ref.parent[ref.field][idx] = synthBlock ;
+				} else {
+					ref.parent[ref.field] = synthBlock ;
+				}
 
 				if (deferredCode.length) {
 					var call = new U2.AST_Return({value:thisCall(symName)}) ;
@@ -523,8 +544,9 @@ console.log("ok") ;
 						transformConditional(ifStmt.alternative) ;
 					}
 				}
-				return true ;
 			}
+			descend() ;
+			return true ;
 		})) ;
 		return ast ;
 	}
@@ -545,18 +567,15 @@ console.log("ok") ;
 				if (switchStmt.deferred) {
 					throw new Error("Duplicate switch dissection") ;
 				}
-				var parent = asyncWalk.parent(0) ;
-				if (!Array.isArray(parent.body)) {
-					parent.body = new U2.AST_BlockStatement({body:[parent.body]}) ;
-					parent = parent.body ;
-				} 
-				var j = parent.body.indexOf(switchStmt)+1 ;
-				var deferredCode = parent.body.splice(j,parent.body.length-j) ;  
+				var ref = parentBlockRef(asyncWalk) ;
+
+				var j = ref.index+1 ;
+				var deferredCode = ref.parent[ref.field].splice(j,ref.parent[ref.field].length-j) ;  
 				if (deferredCode[deferredCode.length-1] instanceof U2.AST_Break)
-					parent.body.push(deferredCode.pop()) ;
+					ref.parent[ref.field].push(deferredCode.pop()) ;
 				var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
 				var deferred = thisCall(symName) ; 
-				var synthBlock = new U2.AST_BlockStatement({body:[switchStmt.clone()]}) ; 
+				var synthBlock = new U2.AST_BlockStatement({body:[switchStmt]}) ; 
 
 				if (deferredCode.length) {
 					synthBlock.body.push(makeContinuation(symName,deferredCode)) ;
@@ -564,10 +583,28 @@ console.log("ok") ;
 				} else {
 					deferred = null ;
 				}
-
-				coerce(switchStmt, synthBlock) ;
-				switchStmt.body[0].deferred = deferred ;
-				switchStmt.body[0].body.forEach(switchTransformer) ;
+debugger;
+				ref.parent[ref.field][ref.index] = synthBlock ;
+//				synthBlock.body[0].deferred = deferred ;
+				synthBlock.body[0].body.forEach(switchTransformer) ;
+				
+				// Now transform each case so that 'break' looks like return <deferred>
+				synthBlock.body[0].body.forEach(function(caseStmt,idx){
+					if (!(caseStmt instanceof U2.AST_SwitchBranch)) {
+						throw new Error("switch contains non-case/default statement: "+caseStmt.TYPE) ;
+					}
+					if (containsAwait(caseStmt)) {
+						var end = caseStmt.body[caseStmt.body.length-1] ;
+						if (end  instanceof U2.AST_Break) {
+							caseStmt.body[caseStmt.body.length-1] = new U2.AST_Return({value:deferred.clone()}) ;
+						} else if (end instanceof U2.AST_Exit) {
+							// Do nothing - block ends in return or throw
+						} else {
+							initOpts.log("case fall-through not supported - added break") ;
+							caseStmt.body.push(new U2.AST_Return({value:deferred.clone()})) ;
+						}
+					}
+				}) ;
 				return true ;
 			}
 		})) ;
@@ -651,60 +688,27 @@ console.log("ok") ;
 				var expr = node.expression.clone() ;
 				coerce(node,result) ;
 
-				var stmt = asyncWalk.find_parent(U2.AST_Statement) ;
-				var block ;
-				var terminate ;
-
-				function terminateLoop(call) {
-					block.body.push(new U2.AST_SimpleStatement({body:call})) ;
-					block.body.push(new U2.AST_Continue()) ;
-				} 
-
-				for (var n=asyncWalk.stack.length-1; n>=0; n--) {
-					if (asyncWalk.stack[n] instanceof U2.AST_SwitchBranch) {
-						var switchStmt = asyncWalk.stack[n-1] ;
-						terminate = function terminateSwitchBranch(call) {
-							block.body.push(new U2.AST_Return({ value:call })) ;
-						} ;
-						var caseBody = asyncWalk.stack[n].body ;
-						// TODO: Enforce 'break' as final statement
-						var endBody = caseBody.pop() ;
-						if (!(endBody instanceof U2.AST_Break)) {
-							var start = caseBody.start || {file:'?',line:'?'} ;
-							console.warn("Nodent JS: Warning - switch-case missing break"+start.file+":"+start.line) ;
-							caseBody.push(endBody) ; // Put it back!
-						}
-						// Call the post-switch code
-						if (switchStmt.deferred) {
-							caseBody.push(switchStmt.deferred.clone()) ;
-						}
-						block = new U2.AST_BlockStatement({body:caseBody}) ;
-						asyncWalk.stack[n].body = [block] ;
+				// Find the statement containing this await expression (and it's parent)
+				var stmt ;
+				for (var n=0; n<asyncWalk.stack.length; n++) {
+					if (asyncWalk.stack[asyncWalk.stack.length-(n+1)] instanceof U2.AST_Statement) {
+						stmt = parentBlockRef(asyncWalk,n+1) ;
 						break ;
 					}
-					if (asyncWalk.stack[n] instanceof U2.AST_Block) {
-						terminate = function terminateBlock(call) {
-							block.body.push(new U2.AST_Return({ value:call })) ;
-						} ;
-						block = asyncWalk.stack[n] ;
-						if (block!==stmt)
-							break ;
-					}
 				}
-				if (!terminate)
-					throw new Error("Block termination error") ;
+				if (!stmt)
+					throw new Error("Illegal await not contained in a statement") ;
 
-				var i = block.body.indexOf(stmt) ;
-				if (i<0)
-					throw new Error("Block nesting error") ;
-
-				var callBack = block.body.splice(i,block.body.length-i).slice(1); 
-				// If stmt is only a reference to the result, suppress the result reference as it does nothing
-				if (!stmt.equivalent_to(result))
-					callBack.unshift(stmt);
+				var i = stmt.index ;
+				var callBack = stmt.parent[stmt.field].splice(i,stmt.parent[stmt.field].length-i).slice(1); 
+				// If stmt is only a reference to the result, suppress the result 
+				// reference as it does nothing
+				if (!stmt.self.equivalent_to(result))
+					callBack.unshift(stmt.self);
+				
 				// Wrap the callback statement(s) in a Block and transform them
 				var cbBody = new U2.AST_BlockStatement({body:cloneNodes(callBack)}) ;
-				cbBody.walk(asyncWalk) ;
+				cbBody = asyncAwait(cbBody) ;
 
 				var returner = new U2.AST_Function({argnames:[],body:[]}) ;
 				if (cbBody.body.length) {
@@ -733,7 +737,7 @@ console.log("ok") ;
 					args:[returner,getCatch(asyncWalk)]
 				}) ;
 
-				terminate(call) ;
+				stmt.parent[stmt.field].push(new U2.AST_Return({ value:call })) ;
 			}
 			return true ; 
 		}) ;
@@ -1016,10 +1020,14 @@ console.log("ok") ;
 						var self = ref.self ;
 						var values = [] ;
 						for (var i=0; i<self.definitions.length; i++) {
-							definitions.push(new U2.AST_VarDef({name:self.definitions[i].name.clone()})) ;
+							var name = self.definitions[i].name.name ;
+							if (definitions.indexOf(name)>=0) {
+								initOpts.log("Nodent: Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"'") ;
+							}
+							definitions.push(name) ;
 							if (self.definitions[i].value) {
 								var value = new U2.AST_Assign({
-									left:new U2.AST_SymbolRef({name:self.definitions[i].name.name}),
+									left:new U2.AST_SymbolRef({name:name}),
 									operator:'=',
 									right:self.definitions[i].value.clone()
 								}) ;
@@ -1039,7 +1047,7 @@ console.log("ok") ;
 							}
 						} else {
 							if ('index' in ref) {
-								ref.parent[ref.field].splice.call([ref.index,0].concat(values)) ;
+								ref.parent[ref.field][ref.index] = new U2.AST_BlockStatement({body:values}) ;
 							} else {
 								ref.parent[ref.field] = new U2.AST_BlockStatement({body:values}) ;
 							}
@@ -1047,6 +1055,9 @@ console.log("ok") ;
 					}) ;
 
 					if (definitions.length) {
+						definitions = definitions.map(function(name){ return new U2.AST_VarDef({
+							name: new U2.AST_SymbolVar({name:name})
+						})}) ;
 						if (!(node.body[0] instanceof U2.AST_Var)) {
 							node.body.unshift(new U2.AST_Var({definitions:definitions})) ;
 						} else {
@@ -1124,11 +1135,10 @@ console.log("ok") ;
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (node instanceof U2.AST_Jump) {
-				var parent = asyncWalk.parent(0) ;
 				var ref = parentRef(asyncWalk) ;
 				if ('index' in ref) {
 					var i = ref.index+1 ;
-					if (i>0) while (i<ref.parent[ref.field].length) {
+					while (i<ref.parent[ref.field].length) {
 						// Remove any statements EXCEPT for function/var definitions
 						if ((ref.parent[ref.field][i] instanceof U2.AST_Definitions) 
 							|| ((ref.parent[ref.field][i] instanceof U2.AST_Lambda) 
@@ -1225,14 +1235,14 @@ function initialize(initOpts){
 				sourceMapping = sourceMapping || config.sourceMapping ; 
 
 				var pr = nodent.parse(code,origFilename,sourceMapping,opts);
-				nodent.asynchronize(pr,sourceMapping,opts) ;
+				nodent.asynchronize(pr,sourceMapping,opts,initOpts) ;
 				nodent.prettyPrint(pr,sourceMapping,opts) ;
 				return pr ;
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
-					console.warn(reportParseException(ex,code,origFilename)) ;
+					initOps.log(reportParseException(ex,code,origFilename)) ;
 				else
-					console.warn("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					initOpts.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 				if (ex instanceof Error)
 					throw ex ;
 				else {
@@ -1508,7 +1518,7 @@ function initialize(initOpts){
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
-					console.warn(reportParseException(ex,content,filename)) ;
+					initOps.log(reportParseException(ex,content,filename)) ;
 				throw ex ;
 			}
 		};

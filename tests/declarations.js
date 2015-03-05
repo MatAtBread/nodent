@@ -1,5 +1,3 @@
-var xxx ;
-
 async function test() {
 	j = 5 ;
 	var x = mod() ;
@@ -18,10 +16,15 @@ async function test() {
 	}
 	async function later(q) {
 		"use fnarr";
+		var array = [6,2,7,9],obj = {abc:123,def:456} ;
+		var keys = Object.keys(array).concat(Object.keys(obj)) ;
 		return mod()+q ;
 	}
+	var sameScope = 12 ;
 	return await later(x) ;
 } 
+
+var xxx ;
 
 module.exports = async function() {
 	return await test()==10;
