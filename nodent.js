@@ -1513,7 +1513,7 @@ function initialize(initOpts){
 					}
 				}
 
-				nodent.asynchronize(pr,undefined,parseOpts) ;
+				nodent.asynchronize(pr,undefined,parseOpts,initOpts) ;
 				nodent.prettyPrint(pr,undefined,parseOpts) ;
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
