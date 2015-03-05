@@ -7,12 +7,12 @@ async function test(doThrow) {
 	try {
 		await sleep(100) ;
 		s = "A" ;
-		await sleep(200) ;
+		await sleep(120) ;
 		s = "B" ;
 		if (doThrow) {
 			JSON.parse("*");
 		}
-		await sleep(300) ;
+		await sleep(150) ;
 		s = "C" ;
 	} catch (ex) {
 		return "X" ;

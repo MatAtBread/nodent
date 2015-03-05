@@ -14,5 +14,5 @@ async function test() {
 }
 
 module.exports = async function() {
-	return await test()=="k9" ;
+	return await test()=="k10" ;
 }

@@ -508,6 +508,8 @@ If you wish to add a Promise implementation to test against, add it to the depen
 Changelog
 ==========
 
+05Mar15: A significant internal refractoring avoids some unusual syntax cases that weren't being transformed correctly - specifically some occurances of `if .... else if .... else if`. Additionally, scope was an issue in functions which declared variables/functions after an `await` but referred to them before the `await`. The actual declaration would be nested in a generated callback and the forward reference would then fail. As of v1.0.30, nodent re-orders all declarations before transpliation to ensure this is not possible. The order for all functions is directives,variables,functions,executable code within an individual scope, meaning executable code (including await) cannot refer forwards.
+
 02Mar15: Update covers (http,map,events) to use Thenable API for ES5-invocations
 
 01Mar15: Implement test suite. Update README, move detailed implementation notes to [HowItWorks.md](./HowItWorks.md)

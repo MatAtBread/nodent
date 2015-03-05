@@ -2,7 +2,14 @@ async function append(a,b) {
 	return ""+a+b;
 }
 
+async function finalIf(x) {
+	if (x)
+		await append(x,0) ;
+	return ;
+}
+
 async function test(x) {
+	await finalIf(x) ;
 	var r = "" ;
 	if (!x) {
 		r = "Zero and " ;

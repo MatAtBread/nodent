@@ -5,12 +5,15 @@ async function inc(x) {
 async function test() {
 	var s = "" ;
 	var i = 0 ;
+	async function notFinished() {
+		return i<5 ;
+	}
 	do {
 		s += "<"+i ;
 		i = await inc(i) ;
 		s += ">" ;
 	}
-	while (i<5) ;
+	while (await notFinished(i)) ;
 	s += "ok" ;
 	return s ;
 }
