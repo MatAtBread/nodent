@@ -17,7 +17,7 @@ module.exports = function(nodent) {
 			result = isArray?[]:{} ;
 		}
 		var array = isArray?what:Object.keys(what) ;
-		return new nodent.Promise(function ($return,$error) {
+		return new nodent.Thenable(function ($return,$error) {
 			var len = array.length ;
 			if (len==0)
 				return $return(result) ;
