@@ -32,7 +32,7 @@ if (process.argv[3]=='--out') {
 }
 
 function pad(s) {
-	return (s+"                ").substring(0,24)
+	return (s+"                        ").substring(0,24)
 }
 
 var tests = process.argv.length>idx ? 
@@ -75,7 +75,7 @@ async function runTests() {
 				msgs.push(promise.name+" EX:"+ex.message+"\n"+ex.stack) ;
 			}
 		}
-		console.log(info.join("\t"));
+		console.log(info.map(pad).join(""));
 		if (msgs.length)
 			msgs.forEach(function(m){ console.log("  "+m)});
 
