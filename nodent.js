@@ -31,6 +31,21 @@ var NAST_DeletedNode = U2.DEFNODE("DeletedNode", null, {
     }
 }, U2.AST_Node);
 NAST_DeletedNode.DEFMETHOD("_codegen",function(self,output){}) ;
+U2.AST_Node.DEFMETHOD("setProperties",function(props){
+	var prevClone = this.clone ;
+	function resetProps(d,s) {
+		Object.keys(props).forEach(function(k){
+			if (k in s)
+				d[k] = s[k]
+		}) ;
+	}
+	this.clone = function() {
+		var n = prevClone.apply(this,arguments) ;
+		resetProps(n,this) ;
+		return n ;
+	}
+	resetProps(this,props) ;
+}) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
@@ -73,7 +88,7 @@ var config = {
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
-		log:function(){ console.warn.apply(console,arguments) },
+		log:function(msg){ console.warn("Nodent: "+msg) },
 		// Pre-ES7 tokens: for async-function() ** OBSOLOETE **
 		// define:"-",
 		// async:"async",
@@ -597,7 +612,7 @@ myfn("ok") ;
 						} else if (end instanceof U2.AST_Exit) {
 							// Do nothing - block ends in return or throw
 						} else {
-							initOpts.log("case fall-through not supported - added break") ;
+							initOpts.log(pr.filename+" - switch-case fall-through not supported - added break") ;
 							caseStmt.body.push(new U2.AST_Return({value:deferred.clone()})) ;
 						}
 					}
@@ -686,6 +701,14 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+				/* NB: We can't do this test here as by now all the 'async' 
+				 * operators have been mapped(!) and the nested nature 
+				 * of the asyncWait mapper means it might not even be in the stack *
+				if (!asyncWalk.stack.some(function(ancestor){
+					return ancestor.wasAsync ;
+				})) {
+					initOpts.log(pr.filename+" - Warning: 'await' used inside non-async function return value indeterminate; "+node.print_to_string()) ;
+				}*/
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 				var expr = node.expression.clone() ;
 				coerce(node,result) ;
@@ -943,6 +966,7 @@ myfn("ok") ;
 						          new U2.AST_SymbolFunarg({name:config.$error})],
 						          body:fnBody
 					}) ;
+					funcback.setProperties({wasAsync:true}) ;
 					setCatch(funcback,[config.$error]) ;
 					if (opts.promises) {
 						replace.body = [new U2.AST_Return({
@@ -1027,7 +1051,7 @@ myfn("ok") ;
 						for (var i=0; i<self.definitions.length; i++) {
 							var name = self.definitions[i].name.name ;
 							if (definitions.indexOf(name)>=0) {
-								initOpts.log("Nodent: Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"'") ;
+								initOpts.log(pr.filename+" - Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"()'") ;
 							} else {
 								definitions.push(name) ;
 							}
@@ -1246,9 +1270,9 @@ function initialize(initOpts){
 				return pr ;
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
-					initOps.log(reportParseException(ex,code,origFilename)) ;
+					initOpts.log(reportParseException(ex,code,origFilename)) ;
 				else
-					initOpts.log("NoDent JS: Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
+					initOpts.log("Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
 				if (ex instanceof Error)
 					throw ex ;
 				else {
@@ -1524,7 +1548,7 @@ function initialize(initOpts){
 				mod._compile(pr.code, pr.filename);
 			} catch (ex) {
 				if (ex.constructor.name=="JS_Parse_Error") 
-					initOps.log(reportParseException(ex,content,filename)) ;
+					initOpts.log(reportParseException(ex,content,filename)) ;
 				throw ex ;
 			}
 		};

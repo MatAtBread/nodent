@@ -1,7 +1,5 @@
 var strings = "The quick brown fox jumps over the lazy dog".split(" ") ;
 
-console.log(arguments.callee.toString()) ;
-
 async function test() {
 	try {
 		async function getLength(y) {
@@ -38,4 +36,6 @@ async function test() {
 	}
 }
 
-module.exports = test ;
+module.exports = async function() {
+	return 1==await test() ;
+}
