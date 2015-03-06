@@ -22,7 +22,7 @@ async function test() {
 	}
 	var sameScope = 12 ;
 
-	for (var dontHoistLoopVars=0;loop<12345678;loop*=2) {}
+	for (var dontHoistLoopVars=1;dontHoistLoopVars<12345678;dontHoistLoopVars*=2) {}
 	for (var dontHoistLoopIn in module) {}
 
 	return await later(x) ;
