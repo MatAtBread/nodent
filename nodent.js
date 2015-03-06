@@ -99,7 +99,7 @@ function getCatch(w,nesting) {
 				return w.stack[n].catcher.map(function(sym){return new U2.AST_SymbolRef({name:sym})}) ;
 			nesting -= 1 ;
 		}
-	return [new U2.AST_SymbolRef({name:config.$error}),0] ; ;
+	return [new U2.AST_SymbolRef({name:config.$error})] ; ;
 }
 
 function setCatch(n,sym) {
