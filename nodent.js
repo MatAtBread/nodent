@@ -968,7 +968,22 @@ myfn("ok") ;
 					}) ;
 					funcback.setProperties({wasAsync:true}) ;
 					setCatch(funcback,[config.$error]) ;
+					funcback = new U2.AST_Call({
+						expression:new U2.AST_Dot({
+							expression: funcback,
+							property: "$asyncbind"
+						}),
+						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
+					}) ;
 					if (opts.promises) {
+						/* 
+						 * Promises logically only need .bind() here, as
+						 * the surrounding TryCatch will handle any exceptions,
+						 * but for some V8 specific reason, .bind() is around
+						 * three times slower than using $asyncbind(), which
+						 * wraps the function in context and (unecessarily)
+						 * handles exceptions.
+						 * 
 						funcback = new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: funcback,
@@ -976,6 +991,7 @@ myfn("ok") ;
 							}),
 							args:[new U2.AST_This()]
 						}) ;
+						*/
 						replace.body = [new U2.AST_Return({
 							value:new U2.AST_New({
 								expression:new U2.AST_SymbolRef({name:"Promise"}),
@@ -983,13 +999,6 @@ myfn("ok") ;
 							})
 						})] ;
 					} else {
-						funcback = new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: funcback,
-								property: "$asyncbind"
-							}),
-							args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
-						}) ;
 						replace.body = [new U2.AST_Return({
 							value:funcback
 						})] ;
