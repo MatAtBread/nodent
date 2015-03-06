@@ -969,6 +969,13 @@ myfn("ok") ;
 					funcback.setProperties({wasAsync:true}) ;
 					setCatch(funcback,[config.$error]) ;
 					if (opts.promises) {
+						funcback = new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: funcback,
+								property: "bind"
+							}),
+							args:[new U2.AST_This()]
+						}) ;
 						replace.body = [new U2.AST_Return({
 							value:new U2.AST_New({
 								expression:new U2.AST_SymbolRef({name:"Promise"}),
@@ -976,14 +983,15 @@ myfn("ok") ;
 							})
 						})] ;
 					} else {
+						funcback = new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: funcback,
+								property: "$asyncbind"
+							}),
+							args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
+						}) ;
 						replace.body = [new U2.AST_Return({
-							value:new U2.AST_Call({
-								expression:new U2.AST_Dot({
-									expression: funcback,
-									property: "$asyncbind"
-								}),
-								args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
-							})
+							value:funcback
 						})] ;
 					}
 

@@ -28,7 +28,7 @@ var idx = 3 ;
 if (process.argv[3]=='--out') {
 	showOutput = true ;
 	idx += 1 ;
-	providers = [providers[0]] ;
+	providers = [providers[1]] ;
 }
 
 function pad(s) {
