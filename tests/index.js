@@ -27,6 +27,7 @@ var idx = 3 ;
 if (process.argv[3]=='--out') {
 	showOutput = true ;
 	idx += 1 ;
+	providers = [providers[0]] ;
 }
 var tests = process.argv.length>idx ? process.argv.slice(idx):fs.readdirSync('./tests') ;
 

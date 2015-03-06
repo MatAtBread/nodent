@@ -1,8 +1,8 @@
 async function test() {
-	j = 5 ;
+	useBeforeDeclaration = 5 ;
 	var x = mod() ;
 	function mod() {
-		return j ;
+		return useBeforeDeclaration ;
 	}
 	debugger ;
 	"use peabody";
@@ -11,7 +11,7 @@ async function test() {
 	}
 	{
 		var sameScope = 111 ;
-		var j ;
+		var useBeforeDeclaration ;
 		global.callback && callback(function xyz(){ return abc ; })
 	}
 	async function later(q) {
@@ -21,15 +21,14 @@ async function test() {
 		return mod()+q ;
 	}
 	var sameScope = 12 ;
+
+	for (var dontHoistLoopVars=0;loop<12345678;loop*=2) {}
+	for (var dontHoistLoopIn in module) {}
+
 	return await later(x) ;
 } 
 
-function dontHoistLoopVars() {
-	for (var loop=0;loop<12345678;loop*=2) {}
-	for (var z in module) {}
-}
-
-var xxx ;
+var hoistTopLevel ;
 
 module.exports = async function() {
 	return await test()==10;
