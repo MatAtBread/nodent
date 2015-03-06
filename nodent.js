@@ -612,7 +612,7 @@ myfn("ok") ;
 						} else if (end instanceof U2.AST_Exit) {
 							// Do nothing - block ends in return or throw
 						} else {
-							initOpts.log("switch-case fall-through not supported - added break") ;
+							initOpts.log(pr.filename+" - switch-case fall-through not supported - added break") ;
 							caseStmt.body.push(new U2.AST_Return({value:deferred.clone()})) ;
 						}
 					}
@@ -702,7 +702,7 @@ myfn("ok") ;
 				if (!asyncWalk.stack.some(function(ancestor){
 					return ancestor.wasAsync ;
 				})) {
-					initOpts.log("Warning: 'await' used inside non-async function return value indeterminate; "+node.print_to_string()) ;
+					initOpts.log(pr.filename+" - Warning: 'await' used inside non-async function return value indeterminate; "+node.print_to_string()) ;
 				}*/
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 				var expr = node.expression.clone() ;
@@ -1046,7 +1046,7 @@ myfn("ok") ;
 						for (var i=0; i<self.definitions.length; i++) {
 							var name = self.definitions[i].name.name ;
 							if (definitions.indexOf(name)>=0) {
-								initOpts.log("Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"()'") ;
+								initOpts.log(pr.filename+" - Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"()'") ;
 							} else {
 								definitions.push(name) ;
 							}
@@ -1373,9 +1373,6 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
-		function makeThenable(fn) {
-			
-		}
 		Object.defineProperty(Function.prototype,"$asyncbind",{
 			value:function(self,catcher) {
 				var fn = this ;
