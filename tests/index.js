@@ -23,12 +23,15 @@ providers = providers.concat([
 ]) ;
 
 var msgs = [] ;
-var showOutput = false ;
+var showOutput = false, saveOutput = false ;
 var idx = 3 ;
-if (process.argv[3]=='--out') {
+if (process.argv[3]=='--out' || process.argv[3]=='--save') {
 	showOutput = true ;
 	idx += 1 ;
 	providers = [providers[1]] ;
+}
+if (process.argv[3]=='--save') {
+	saveOutput = true ;
 }
 
 function pad(s) {
@@ -51,12 +54,15 @@ async function runTests() {
 			var promise = providers[i] ;
 	
 			var code = fs.readFileSync(test).toString() ;
-			var pr = nodent.compile(code,test,3,{es7:true,promises:!!promise.p}) ;
+			var pr = nodent.compile(code,test,showOutput?2:3,{es7:true,promises:!!promise.p}) ;
 			var m = {} ;
 			var fn = new Function("module","require","Promise",pr.code) ;
 			failed = fn.toString() ;
 			if (showOutput)
 				console.log(failed) ;
+			if (saveOutput) {
+				fs.writeFileSync(test+".out",failed) ;
+			}
 	
 			fn(m,require,promise.p) ;
 			await sleep(10);

@@ -4,7 +4,7 @@ async function test() {
 	function mod() {
 		return useBeforeDeclaration ;
 	}
-	debugger ;
+
 	"use peabody";
 	function noSemi(x) {
 		yes(no(maybe()))
