@@ -716,9 +716,18 @@ myfn("ok") ;
 					return ancestor.props && ancestor.props.wasAsync ;
 				}) ;
 				
-				if (!inAsync) {
-					initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value indeterminate; ") ;
+				if (!inAsync && opts.promises) {
+					initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value Promise runtime-specific") ;
 				}
+				
+				var parent = asyncWalk.parent(0) ;
+				if ((parent instanceof U2.AST_Binary) && (parent.operator=="||" || parent.operator=="&&") && parent.right===node) {
+					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' on right of "+parent.operator+" will always evaluate '"+node.print_to_string()+"'") ;
+				}
+				if ((parent instanceof U2.AST_Conditional) && parent.condition!==node) {
+					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' will always be evaluate '"+node.print_to_string()+"'") ;
+				}
+
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 				var expr = node.expression.clone() ;
 				coerce(node,result) ;
