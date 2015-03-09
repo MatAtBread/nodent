@@ -300,7 +300,8 @@ Diffrences from the ES7 specification
 * No generators are used. Nodent works simply by transforming your original source
 * As the current version, `finally { }` blocks are NOT transformed by Nodent
 * As the current version, `for (...in...)` loops are NOT transformed by Nodent
-* In `use nodent-es7` mode, within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted.
+* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
 
 Auto-parse from Nodejs
 ======================
