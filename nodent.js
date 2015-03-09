@@ -24,27 +24,33 @@ function U2patch(){
 var U2 = require("./ug2loader").load(U2patch) ;
 
 /* New node types that we use */
-var NAST_DeletedNode = U2.DEFNODE("DeletedNode", null, {
+U2.AST_DeletedNode = U2.DEFNODE("DeletedNode", null, {
     $documentation: "A deleted node",
     _walk: function(visitor) {
 //        return visitor._visit(this);
     }
 }, U2.AST_Node);
-NAST_DeletedNode.DEFMETHOD("_codegen",function(self,output){}) ;
+U2.AST_DeletedNode.DEFMETHOD("_codegen",function(self,output){}) ;
+
 U2.AST_Node.DEFMETHOD("setProperties",function(props){
 	var prevClone = this.clone ;
-	function resetProps(d,s) {
-		Object.keys(props).forEach(function(k){
-			if (k in s)
-				d[k] = s[k]
-		}) ;
-	}
+	var prevCodeGen = this._codegen ;
+	this.props = this.props || {} ;
+	for (var k in props)
+		this.props[k] = props[k] ;
+
 	this.clone = function() {
 		var n = prevClone.apply(this,arguments) ;
-		resetProps(n,this) ;
+		n.setProperties(this.props) ;
 		return n ;
 	}
-	resetProps(this,props) ;
+	this._codegen = function(self,output) {
+		if (self.props) {
+			output.print("/* "+JSON.stringify(self.props)+" */") ;
+		}
+		var r = prevCodeGen.call(this,self,output) ;
+		return r ;
+	}
 }) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
@@ -229,7 +235,7 @@ function deleteRef(ref) {
 		return ref.parent[ref.field].splice(ref.index,1)[0] ;
 	}
 	var self = ref.self ; 
-	ref.parent[ref.field] = new NAST_DeletedNode() ;
+	ref.parent[ref.field] = new U2.AST_DeletedNode() ;
 	if (ref.parent instanceof U2.AST_SimpleStatement) {
 		coerce(ref.parent,ref.parent[ref.field]);
 	}
@@ -703,11 +709,13 @@ myfn("ok") ;
 			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
 				/* NB: We can't do this test here as by now all the 'async' 
 				 * operators have been mapped(!) and the nested nature 
-				 * of the asyncWait mapper means it might not even be in the stack *
+				 * of the asyncWait mapper means it might not even be in the stack. 
+				 * This really needs a warning if the developer is to avoid basic
+				 * errors that are hard to find at runtime *
 				if (!asyncWalk.stack.some(function(ancestor){
-					return ancestor.wasAsync ;
+					return ancestor.props && ancestor.props.wasAsync ;
 				})) {
-					initOpts.log(pr.filename+" - Warning: 'await' used inside non-async function return value indeterminate; "+node.print_to_string()) ;
+					initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value indeterminate; ") ;
 				}*/
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 				var expr = node.expression.clone() ;
@@ -1154,7 +1162,7 @@ myfn("ok") ;
 				if (parent instanceof U2.AST_Return) {
 					var sym = node.expression.expression.name ;
 					coerce(parent,new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())})) ;
-					coerce(continuations[sym].def,new NAST_DeletedNode()) ;
+					coerce(continuations[sym].def,new U2.AST_DeletedNode()) ;
 				}
 			}
 			return true ;
