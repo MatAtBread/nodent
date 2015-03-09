@@ -44,13 +44,14 @@ U2.AST_Node.DEFMETHOD("setProperties",function(props){
 		n.setProperties(this.props) ;
 		return n ;
 	}
-	this._codegen = function(self,output) {
-		if (self.props) {
-			output.print("/* "+JSON.stringify(self.props)+" */") ;
-		}
-		var r = prevCodeGen.call(this,self,output) ;
-		return r ;
-	}
+// Useful for debugging, not much else
+//	this._codegen = function(self,output) {
+//		if (self.props) {
+//			output.print("/* "+JSON.stringify(self.props)+" */") ;
+//		}
+//		var r = prevCodeGen.call(this,self,output) ;
+//		return r ;
+//	}
 }) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
@@ -697,9 +698,10 @@ myfn("ok") ;
 		return ast ;
 	}
 
-	function asyncAwait(ast) {
+	function asyncAwait(ast,inAsync) {
 		if (!opts.es7) {
 			// Only load deprecated ES5 behaviour if the app uses it.
+			initOpts.log("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords") ;
 			var asyncAssignTransfom = require('./es5plus')(U2,config) ;
 			return ast.transform(asyncAssignTransfom) ;
 		}
@@ -707,16 +709,16 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
-				/* NB: We can't do this test here as by now all the 'async' 
-				 * operators have been mapped(!) and the nested nature 
-				 * of the asyncWait mapper means it might not even be in the stack. 
-				 * This really needs a warning if the developer is to avoid basic
-				 * errors that are hard to find at runtime *
-				if (!asyncWalk.stack.some(function(ancestor){
+				/* Warn if this await expression is not inside an async function, as the return
+				 * will depend on the Thenable implementation, and references to $return might
+				 * not resolve to anything */
+				inAsync = inAsync || asyncWalk.stack.some(function(ancestor){
 					return ancestor.props && ancestor.props.wasAsync ;
-				})) {
+				}) ;
+				
+				if (!inAsync) {
 					initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value indeterminate; ") ;
-				}*/
+				}
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
 				var expr = node.expression.clone() ;
 				coerce(node,result) ;
@@ -741,7 +743,7 @@ myfn("ok") ;
 				
 				// Wrap the callback statement(s) in a Block and transform them
 				var cbBody = new U2.AST_BlockStatement({body:cloneNodes(callBack)}) ;
-				cbBody = asyncAwait(cbBody) ;
+				cbBody = asyncAwait(cbBody,inAsync) ;
 
 				var returner = new U2.AST_Function({argnames:[],body:[]}) ;
 				if (cbBody.body.length) {
@@ -1240,9 +1242,11 @@ function asyncify(promiseProvider) {
 						var cb = function(err,ok){
 							if (err)
 								return $error(err) ;
-							if (arguments.length==2)
-								return $return(ok) ;
-							return $return(Array.prototype.slice.call(arguments,1)) ;
+							switch (arguments.length) {
+							case 0: return $return() ;
+							case 2: return $return(ok) ;
+							default: return $return(Array.prototype.slice.call(arguments,1)) ;
+							}
 						} ;
 						// If more args were supplied than declared, push the CB
 						if (a.length > obj[k].length) {
