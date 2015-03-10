@@ -993,30 +993,14 @@ myfn("ok") ;
 					}) ;
 					funcback.setProperties({wasAsync:true}) ;
 					setCatch(funcback,[config.$error]) ;
-					funcback = new U2.AST_Call({
+					/*funcback = new U2.AST_Call({
 						expression:new U2.AST_Dot({
 							expression: funcback,
-							property: "$asyncbind"
+							property: "$asyncdefine"
 						}),
 						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
-					}) ;
+					}) ;*/
 					if (opts.promises) {
-						/* 
-						 * Promises logically only need .bind() here, as
-						 * the surrounding TryCatch will handle any exceptions,
-						 * but for some V8 specific reason, .bind() is around
-						 * three times slower than using $asyncbind(), which
-						 * wraps the function in context and (unecessarily)
-						 * handles exceptions.
-						 * 
-						funcback = new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: funcback,
-								property: "bind"
-							}),
-							args:[new U2.AST_This()]
-						}) ;
-						*/
 						replace.body = [new U2.AST_Return({
 							value:new U2.AST_New({
 								expression:new U2.AST_SymbolRef({name:"Promise"}),
@@ -1151,6 +1135,17 @@ myfn("ok") ;
 		return ast ;
 	}
 
+	function replaceSymbols(ast,from,to) {
+		var walk = new U2.TreeWalker(function(node,descend){
+			descend() ;
+			if (node.name==from) {
+				node.name = to ;
+			}
+			return true ;
+		}) ;
+		ast.walk(walk) ;
+	}
+
 	/* Remove un-necessary nested blocks and crunch down empty function implementations */
 	function cleanCode(ast) {
 		var asyncWalk ;
@@ -1184,19 +1179,7 @@ myfn("ok") ;
 		}) ;
 		ast.walk(asyncWalk) ;
 
-		function replaceSymbols(ast,from,to) {
-			var walk = new U2.TreeWalker(function(node,descend){
-				descend() ;
-				if (node.name==from) {
-//					node.setProperties({$elided:node.name}) ;
-					node.name = to ;
-				}
-				return true ;
-			}) ;
-			ast.walk(walk) ;
-		}
-
-		// Find references to functions of the form:
+		// Find declarations of functions of the form:
 		// 		function [sym]() { return _call_.call(this) } 
 		// or 
 		// 		function [sym]() { return _call_() } 
@@ -1487,23 +1470,22 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
-		function makeThenable(fn) {
-			
+		function thenTryCatch(self,catcher) {
+			var fn = this ;
+			fn.isAsync = true ;
+			var p = function(result,error){
+				try {
+					return fn.call(self,result,error);
+				} catch (ex) {
+					return catcher.call(self,ex);
+				}
+			} ; 
+			p.then = p ;
+			return p ;
 		}
-		Object.defineProperty(Function.prototype,"$asyncbind",{
-			value:function(self,catcher) {
-				var fn = this ;
-				fn.isAsync = true ;
-				var p = function(result,error){
-					try {
-						return fn.call(self,result,error);
-					} catch (ex) {
-						return catcher.call(self,ex);
-					}
-				} ; 
-				p.then = p ;
-				return p ;
-			}
+		Object.defineProperties(Function.prototype,{
+			$asyncdefine:{value:thenTryCatch,writeable:true},
+			$asyncbind:{value:thenTryCatch,writeable:true}
 		}) ;
 
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
