@@ -1,14 +1,21 @@
-async function test() {
-	if (cond1) {
-		await fn1() ;
-		if (cond2) {
-			await fn2() ;
+var s = "" ;
+async function fn(f) { s += "."+f ; return }
+
+async function test(a,b) {
+	if (a) {
+		await fn(a) ;
+		if (b) {
+			await fn(b) ;
+		} else {
+			await fn(-a) ;
 		}
+	} else {
+		await fn(-b) ;
 	}
-	someMore() ;
-	done() ;
+	return ;
 }
 
 module.exports = async function() {
-	return true ;
+	await test(0,0)+await test(0,1)+await test(1,0)+await test(1,1) ;
+	return s==".0.-1.1.-1.1.1" ;
 }

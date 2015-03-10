@@ -47,7 +47,11 @@ U2.AST_Node.DEFMETHOD("setProperties",function(props){
 // Useful for debugging, not much else
 	this._codegen = function(self,output) {
 		if (self.props) {
-			output.print("/* "+Object.keys(self.props)+" */") ;
+			var keys = Object.keys(self.props).filter(function(k){return k[0]=="$"}) ;
+			if (keys.length)
+				output.print("/* "+keys.map(function(k){
+					return k+":"+self.props[k]
+				})+" *"+"/") ;
 		}
 		var r = prevCodeGen.call(this,self,output) ;
 		return r ;
@@ -421,7 +425,8 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 			expression:new U2.AST_Dot({expression:name,property:"call"}),
 			args:[new U2.AST_This()].concat(args||[])
 		}) ;
-		n.setProperties({thisCall:name.name}) ;
+		name.setProperties({thisCall:n}) ;
+		n.setProperties({thisCallName:name.name}) ;
 		return n ;
 	}
 
@@ -1150,63 +1155,102 @@ myfn("ok") ;
 	function cleanCode(ast) {
 		var asyncWalk ;
 
-		// Find references to functions of the form:
-		// 		function [sym]() { return /* thisCall */ $_$9.call(this) } 
-		// and replace with:
-		//		$_$9
-		// If the [sym] exists and is referenced elsewhere, replace those too. This
-		// needs to be done recursively from the bottom of the tree upwards
-		/*
-		var relpacements = {} ;
+		/* Inline continuations that are only referenced once */
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
-			if (node.props && node.props.thisCall) {
-				if ((asyncWalk.parent(0) instanceof U2.AST_Return)
-					&& (asyncWalk.parent(1) instanceof U2.AST_Lambda)
-					&& asyncWalk.parent(1).body.length==1) {
-//					console.log("********"+node.props.thisCall+"******\n",pretty(asyncWalk.parent(1))) ;
-					var o = {} ;
-					o["ellision="+node.props.thisCall] = true ;
-					asyncWalk.parent(1).setProperties(o) ;
-					// If this lambda is anonymous, it cannot be referenced elsewhere, so
-					// just replace it in-situ
-//					if (!asyncWalk.parent(1).name)
-//						coerce(asyncWalk.parent(1),new U2.AST_SymbolRef({name:node.props.thisCall}));
-//					subst[] = name ;
+			if ((node instanceof U2.AST_SymbolRef) && continuations[node.name] && node.props && node.props.thisCall) {
+				if (continuations[node.name].ref) {
+					delete continuations[node.name] ;
+				} else {
+					continuations[node.name].ref = node.props.thisCall ;
 				}
 			}
 			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;*/
-		/*
-		for (var k in continuations) {
-			if (continuations[k].def.body.length==1
-				&& continuations[k].def.body[0] instanceof U2.AST_Return
-				&& continuations[k].def.body[0].value.props
-				&& continuations[k].def.body[0].value.props.thisCall) {
-				continuations[k].def.setProperties({elide:true}) ;
-			}
-			console.log(k,continuations[k].def.print_to_string()) ;
-		}*/
-/*
+		ast.walk(asyncWalk) ;
+
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (calls.indexOf(node)>=0) {
 				var parent = asyncWalk.parent() ;
-console.log(pr.filename,"Elide "+parent.print_to_string()) ;				
 				if (parent instanceof U2.AST_Return) {
 					var sym = node.expression.expression.name ;
-					var replace = new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())}) ;
-console.log(pr.filename,"to "+replace.print_to_string()) ;				
-					coerce(parent,replace) ;
+					coerce(parent,new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())})) ;
 					coerce(continuations[sym].def,new U2.AST_DeletedNode()) ;
 				}
 			}
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
-*/
+
+		function replaceSymbols(ast,from,to) {
+			var walk = new U2.TreeWalker(function(node,descend){
+				descend() ;
+				if (node.name==from) {
+//					node.setProperties({$elided:node.name}) ;
+					node.name = to ;
+				}
+				return true ;
+			}) ;
+			ast.walk(walk) ;
+		}
+
+		// Find references to functions of the form:
+		// 		function [sym]() { return _call_.call(this) } 
+		// or 
+		// 		function [sym]() { return _call_() } 
+		// and replace with:
+		//		_call_
+		// If the [sym] exists and is referenced elsewhere, replace those too. This
+		// needs to be done recursively from the bottom of the tree upwards
+
+		/* For either of the call forms above, return the actualy invoked symbol name */
+		function simpleCallName(node) {
+			if ((node instanceof U2.AST_Call) 
+					&& node.args.length==0 
+					&& node.expression instanceof U2.AST_SymbolRef)
+				return node.expression.name ;
+			
+			if ((node instanceof U2.AST_Call) 
+					&& node.props && node.props.thisCallName)
+				return node.props.thisCallName ;
+			
+			return null ;
+		}
+		
+		var replaced = {} ;
+		asyncWalk = new U2.TreeWalker(function(node, descend){
+			descend();
+			
+			if (node instanceof U2.AST_Lambda) {
+				if (node.body[0] instanceof U2.AST_Return) {
+					var to = simpleCallName(node.body[0].value) ;
+					if (to) {
+						if (replaced[to])
+							to = replaced[to] ;
+						var from = node.name && node.name.name ;
+						if (from) {
+					        var stack = asyncWalk.stack;
+					        for (var i = stack.length-1; --i >= 0;) {
+					            var scope = stack[i];
+					            if (scope instanceof U2.AST_Scope) {
+									replaced[from] = to ;
+									replaceSymbols(scope,from,to) ;
+					            }
+					        }
+							coerce(node,new U2.AST_DeletedNode()) ;
+						} else if (node.body[0].value.expression.expression) {
+							// This is an anonymous function, so can be replaced in-situ
+							coerce(node,node.body[0].value.expression.expression.clone()) ;
+						}
+					} 
+				}
+			}
+			return true ;
+		}) ;
+		ast.walk(asyncWalk) ;
+
 		// Coalese BlockStatements
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
