@@ -45,13 +45,13 @@ U2.AST_Node.DEFMETHOD("setProperties",function(props){
 		return n ;
 	}
 // Useful for debugging, not much else
-//	this._codegen = function(self,output) {
-//		if (self.props) {
-//			output.print("/* "+JSON.stringify(self.props)+" */") ;
-//		}
-//		var r = prevCodeGen.call(this,self,output) ;
-//		return r ;
-//	}
+	this._codegen = function(self,output) {
+		if (self.props) {
+			output.print("/* "+Object.keys(self.props)+" */") ;
+		}
+		var r = prevCodeGen.call(this,self,output) ;
+		return r ;
+	}
 }) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
@@ -401,11 +401,9 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	/* Create a 'continuation' - a block of statements that have been hoisted 
 	 * into a named function so they can be invoked conditionally or asynchronously */
 	function makeContinuation(name,body) {
-		var ctn = new U2.AST_Defun({
-			name:new U2.AST_SymbolDefun({name:name}),
-			argnames:[],
-			body:cloneNodes(body)}) ;
+		var ctn = makeFn(name,body) ;
 		continuations[name] = {def:ctn} ;
+		ctn.setProperties({continuation:true}) ;
 		return ctn ;
 	}
 
@@ -423,7 +421,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 			expression:new U2.AST_Dot({expression:name,property:"call"}),
 			args:[new U2.AST_This()].concat(args||[])
 		}) ;
-		name.thisCall = n ;
+		n.setProperties({thisCall:name.name}) ;
 		return n ;
 	}
 
@@ -716,8 +714,11 @@ myfn("ok") ;
 					return ancestor.props && ancestor.props.wasAsync ;
 				}) ;
 				
-				if (!inAsync && opts.promises) {
-					initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value Promise runtime-specific") ;
+				if (!inAsync) {
+					if (opts.promises)
+						initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value Promise runtime-specific") ;
+					else
+						initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value from await is synchronous") ;
 				}
 				
 				var parent = asyncWalk.parent(0) ;
@@ -725,7 +726,7 @@ myfn("ok") ;
 					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' on right of "+parent.operator+" will always evaluate '"+node.print_to_string()+"'") ;
 				}
 				if ((parent instanceof U2.AST_Conditional) && parent.condition!==node) {
-					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' will always be evaluate '"+node.print_to_string()+"'") ;
+					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' will always evaluate '"+node.print_to_string()+"'") ;
 				}
 
 				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
@@ -1149,37 +1150,63 @@ myfn("ok") ;
 	function cleanCode(ast) {
 		var asyncWalk ;
 
-		// Find references to continuations
+		// Find references to functions of the form:
+		// 		function [sym]() { return /* thisCall */ $_$9.call(this) } 
+		// and replace with:
+		//		$_$9
+		// If the [sym] exists and is referenced elsewhere, replace those too. This
+		// needs to be done recursively from the bottom of the tree upwards
+		/*
+		var relpacements = {} ;
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
-			if ((node instanceof U2.AST_SymbolRef) && continuations[node.name] && node.thisCall) {
-				if (continuations[node.name].ref) {
-					// We alreday have a reference to this continuation,
-					// so since it's used more than once, we'll remove it
-					delete continuations[node.name] ;
-				} else {
-					continuations[node.name].ref = node.thisCall ;
+			if (node.props && node.props.thisCall) {
+				if ((asyncWalk.parent(0) instanceof U2.AST_Return)
+					&& (asyncWalk.parent(1) instanceof U2.AST_Lambda)
+					&& asyncWalk.parent(1).body.length==1) {
+//					console.log("********"+node.props.thisCall+"******\n",pretty(asyncWalk.parent(1))) ;
+					var o = {} ;
+					o["ellision="+node.props.thisCall] = true ;
+					asyncWalk.parent(1).setProperties(o) ;
+					// If this lambda is anonymous, it cannot be referenced elsewhere, so
+					// just replace it in-situ
+//					if (!asyncWalk.parent(1).name)
+//						coerce(asyncWalk.parent(1),new U2.AST_SymbolRef({name:node.props.thisCall}));
+//					subst[] = name ;
 				}
 			}
 			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
-
+		ast.walk(asyncWalk) ;*/
+		/*
+		for (var k in continuations) {
+			if (continuations[k].def.body.length==1
+				&& continuations[k].def.body[0] instanceof U2.AST_Return
+				&& continuations[k].def.body[0].value.props
+				&& continuations[k].def.body[0].value.props.thisCall) {
+				continuations[k].def.setProperties({elide:true}) ;
+			}
+			console.log(k,continuations[k].def.print_to_string()) ;
+		}*/
+/*
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
 			if (calls.indexOf(node)>=0) {
 				var parent = asyncWalk.parent() ;
+console.log(pr.filename,"Elide "+parent.print_to_string()) ;				
 				if (parent instanceof U2.AST_Return) {
 					var sym = node.expression.expression.name ;
-					coerce(parent,new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())})) ;
+					var replace = new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())}) ;
+console.log(pr.filename,"to "+replace.print_to_string()) ;				
+					coerce(parent,replace) ;
 					coerce(continuations[sym].def,new U2.AST_DeletedNode()) ;
 				}
 			}
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
-
+*/
 		// Coalese BlockStatements
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
