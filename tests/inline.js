@@ -11,6 +11,7 @@ async function test(a,b) {
 		}
 	} else {
 		await fn(-b) ;
+		return ;
 	}
 	return ;
 }

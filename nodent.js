@@ -45,9 +45,10 @@ U2.AST_Node.DEFMETHOD("setProperties",function(props){
 		return n ;
 	}
 // Useful for debugging, not much else
+/*	
 	this._codegen = function(self,output) {
 		if (self.props) {
-			var keys = Object.keys(self.props).filter(function(k){return k[0]=="$"}) ;
+			var keys = Object.keys(self.props) ;//.filter(function(k){return k[0]=="$"}) ;
 			if (keys.length)
 				output.print("/* "+keys.map(function(k){
 					return k+":"+self.props[k]
@@ -55,7 +56,7 @@ U2.AST_Node.DEFMETHOD("setProperties",function(props){
 		}
 		var r = prevCodeGen.call(this,self,output) ;
 		return r ;
-	}
+	}*/
 }) ;
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
@@ -1188,7 +1189,7 @@ myfn("ok") ;
 		// If the [sym] exists and is referenced elsewhere, replace those too. This
 		// needs to be done recursively from the bottom of the tree upwards
 
-		/* For either of the call forms above, return the actualy invoked symbol name */
+		/* For either of the call forms above, return the actually invoked symbol name */
 		function simpleCallName(node) {
 			if ((node instanceof U2.AST_Call) 
 					&& node.args.length==0 
@@ -1223,9 +1224,9 @@ myfn("ok") ;
 					            }
 					        }
 							coerce(node,new U2.AST_DeletedNode()) ;
-						} else if (node.body[0].value.expression.expression) {
+						} else {
 							// This is an anonymous function, so can be replaced in-situ
-							coerce(node,node.body[0].value.expression.expression.clone()) ;
+							coerce(node,new U2.AST_SymbolRef({name:to})) ;
 						}
 					} 
 				}
