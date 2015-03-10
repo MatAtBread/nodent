@@ -993,13 +993,13 @@ myfn("ok") ;
 					}) ;
 					funcback.setProperties({wasAsync:true}) ;
 					setCatch(funcback,[config.$error]) ;
-					/*funcback = new U2.AST_Call({
+					funcback = new U2.AST_Call({
 						expression:new U2.AST_Dot({
 							expression: funcback,
-							property: "$asyncdefine"
+							property: "$asyncbind"//"$asyncdefine"
 						}),
 						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
-					}) ;*/
+					}) ;
 					if (opts.promises) {
 						replace.body = [new U2.AST_Return({
 							value:new U2.AST_New({
@@ -1233,6 +1233,26 @@ myfn("ok") ;
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
+
+		// The symbol folding above might generate lines like:
+		//		$return.$asyncbind(this,$error)
+		// these can be simplified to:
+		//		$return
+		asyncWalk = new U2.TreeWalker(function(node, descend){
+			descend();
+			
+			if (node instanceof U2.AST_Call
+					&& node.expression instanceof U2.AST_Dot
+					&& node.expression.property == "$asyncbind"
+					&& node.expression.expression instanceof U2.AST_SymbolRef
+					&& node.expression.expression.name == "$return"
+			) {
+				coerce(node,node.expression.expression) ;
+			}
+			return true ;
+		}) ;
+		ast.walk(asyncWalk) ;
+
 
 		// Coalese BlockStatements
 		asyncWalk = new U2.TreeWalker(function(node, descend){
@@ -1484,7 +1504,7 @@ function initialize(initOpts){
 			return p ;
 		}
 		Object.defineProperties(Function.prototype,{
-			$asyncdefine:{value:thenTryCatch,writeable:true},
+//			$asyncdefine:{value:thenTryCatch,writeable:true},
 			$asyncbind:{value:thenTryCatch,writeable:true}
 		}) ;
 
