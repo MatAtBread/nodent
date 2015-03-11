@@ -1701,7 +1701,7 @@ initialize.asyncify = asyncify ;
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
-if (require.main===module && process.argv.length>3) {
+if (require.main===module && process.argv.length>=3) {
 	// Initialise nodent
 	initialize(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	
 	var path = require('path') ;
