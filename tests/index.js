@@ -14,13 +14,12 @@ if (global.Promise) {
     providers.push({name:'global',p:global.Promise}) ;
 }
 
-providers = providers.concat([
-    {name:'nodent-es7',p:null},
- 	{name:'nodent.Thenable',p:nodent.Thenable},
-	{name:'bluebird',p:require('bluebird')},
-	{name:'rsvp',p:require('rsvp').Promise},
-	{name:'when',p:require('when').promise}
-]) ;
+providers.push({name:'nodent-es7',p:null});
+providers.push({name:'nodent.Thenable',p:nodent.Thenable});
+
+try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { /* Not installed */ }
+try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { /* Not installed */ }
+try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { /* Not installed */ }
 
 var msgs = [] ;
 var showOutput = false, saveOutput = false ;

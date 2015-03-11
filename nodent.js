@@ -1701,10 +1701,34 @@ initialize.asyncify = asyncify ;
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
-if (require.main===module && process.argv[2]) {
+if (require.main===module && process.argv.length>3) {
 	// Initialise nodent
 	initialize(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	
 	var path = require('path') ;
-	var mod = path.resolve(process.argv[2]) ;
-	require(mod);
+	var n = 2 ;
+	if (process.argv[n]=="--out") {
+		// Compile & output, but don't require
+		n += 1 ;
+		var filename = path.resolve(process.argv[n]) ;
+		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+		var parseOpts = {
+				promises: !!content.match(config.usePromisesDirective),
+				es7: !!content.match(config.useES7Directive)
+		} ; 
+		if (parseOpts.promises) parseOpts.es7 = true ;
+		if (parseOpts.promises || parseOpts.es7 || content.match(config.useDirective)) {
+			var pr = nodent.parse(content,filename,parseOpts);
+			nodent.asynchronize(pr,undefined,parseOpts,config) ;
+			nodent.prettyPrint(pr,undefined,parseOpts) ;
+			console.log(pr.code) ;
+		} else {
+			initOpts.log(filename+": No 'use nodent' directive") ;
+		}
+
+		
+	} else {
+		// Compile & require
+		var mod = path.resolve(process.argv[n]) ;
+		require(mod);
+	}
 }
