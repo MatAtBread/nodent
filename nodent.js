@@ -1065,6 +1065,7 @@ myfn("ok") ;
 			
 			if (matching(node,walk)) {
 				matches.push(parentRef(walk)) ;
+				return true ;
 			}
 			if (node instanceof U2.AST_Scope) {
 				return true ;
@@ -1101,12 +1102,16 @@ myfn("ok") ;
 				}) ;
 
 				functions.forEach(function(ref) {
-console.log("ELFN:",info(ref.parent,true),ref.self.print_to_string()) ;					
 //					if (ref.parent instanceof U2.AST_Statement && !(ref.parent instanceof U2.AST_Jump)) {
-//						var self = ref.self ;
-//						var fnSym = new U2.AST_SymbolRef({name:self.name || self.expression.name}) ;
-//						setRef(ref,fnSym) ;
-						node.body.unshift(deleteRef(ref)) ;
+						// We could be a function (with a name) or an async operator (with an expr that is a named function)
+						var symName = ref.self.name?ref.self.name.name:ref.self.expression.name.name ;
+console.log("ELFN:",info(ref.parent,true),symName) ;					
+						var fnSym = new U2.AST_SymbolRef({name:symName}) ;
+						// In some contexts we need to leave the sym in place, in others we can delete it
+						if (!(ref.parent instanceof U2.AST_Scope))
+							node.body.unshift(setRef(ref,fnSym)) ;
+						else
+							node.body.unshift(deleteRef(ref)) ;
 //					}
 				}) ;
 				
