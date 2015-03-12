@@ -70,13 +70,13 @@ function pretty(node) {
 	node.print(str);
 	return str.toString() ;
 }
-function info(node) {
+function info(node,quiet) {
 	if (Array.isArray(node))
 		return node.map(info) ;
 	var s = "" ;
 	for (var q = node.__proto__; q.TYPE; q=q.__proto__)
 		s += q.TYPE+"." ;
-	return s+":"+node.print_to_string() ;
+	return s+(quiet?"":":"+node.print_to_string()) ;
 }
 function cloneNodes(nodes) {
 	return nodes.map(function(n){return n.clone()}) ;
@@ -246,6 +246,18 @@ function deleteRef(ref) {
 		coerce(ref.parent,ref.parent[ref.field]);
 	}
 	return self ;
+}
+
+function setRef(ref,node) {
+	var prev ;
+	if ('index' in ref) {
+		prev = ref.parent[ref.field][ref.index] ;
+		ref.parent[ref.field][ref.index] = node ;
+	} else {
+		prev = ref.parent[ref.field] ;
+		ref.parent[ref.field] = node ;
+	}
+	return prev ;
 }
 
 function stripBOM(content) {
@@ -1051,7 +1063,7 @@ myfn("ok") ;
 			if (node === ast)
 				return ;
 			
-			if (matching(node)) {
+			if (matching(node,walk)) {
 				matches.push(parentRef(walk)) ;
 			}
 			if (node instanceof U2.AST_Scope) {
@@ -1067,16 +1079,35 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend() ;
 			if (node instanceof U2.AST_Scope) {
-				var functions = scopedNodes(node,function(n){
-					return (((n instanceof U2.AST_Lambda) && n.name) 
-							|| ((n instanceof U2.AST_UnaryPrefix)
-									&& n.operator=="async")) ;
+				var functions = scopedNodes(node,function(n,walk){
+					// Don't hoist functions that are the value of a return,
+					// as in 'return [async] function() {}'
+//					if (walk.parent() instanceof U2.AST_Return)
+//						return false ;
+
+					// YES: We're a named function
+					if ((n instanceof U2.AST_Lambda) && n.name)
+						return true ;
+					
+					// YES: We're a named async function
+					if ((n instanceof U2.AST_UnaryPrefix) 
+							&& n.operator=="async"
+							&& (n.expression instanceof U2.AST_Lambda)
+							&& n.expression.name)
+						return true ;
+					
+					// No, we're not a hoistable function
+					return false ;
 				}) ;
 
 				functions.forEach(function(ref) {
-					if (ref.parent instanceof U2.AST_Statement) {
+console.log("ELFN:",info(ref.parent,true),ref.self.print_to_string()) ;					
+//					if (ref.parent instanceof U2.AST_Statement && !(ref.parent instanceof U2.AST_Jump)) {
+//						var self = ref.self ;
+//						var fnSym = new U2.AST_SymbolRef({name:self.name || self.expression.name}) ;
+//						setRef(ref,fnSym) ;
 						node.body.unshift(deleteRef(ref)) ;
-					}
+//					}
 				}) ;
 				
 				var vars = scopedNodes(node,function(n){
@@ -1113,17 +1144,9 @@ myfn("ok") ;
 						if (values.length==0)
 							deleteRef(ref) ;
 						else if (values.length==1) {
-							if ('index' in ref) {
-								ref.parent[ref.field][ref.index] = values[0] ;
-							} else {
-								ref.parent[ref.field] = values[0] ;
-							}
+							setRef(ref,values[0]) ;
 						} else {
-							if ('index' in ref) {
-								ref.parent[ref.field][ref.index] = new U2.AST_BlockStatement({body:values}) ;
-							} else {
-								ref.parent[ref.field] = new U2.AST_BlockStatement({body:values}) ;
-							}
+							setRef(ref,new U2.AST_BlockStatement({body:values})) ;
 						}
 					}) ;
 
