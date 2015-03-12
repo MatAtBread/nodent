@@ -388,7 +388,8 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	pr.ast = ifTransformer(pr.ast) ;
 	pr.ast = switchTransformer(pr.ast) ;
 	pr.ast = asyncAwait(pr.ast) ;
-	pr.ast = hoistDeclarations(pr.ast) ;
+// Since we're no longer hoisting synthetic functions, this shouldn't change anything, so don't bother executing it	
+//	pr.ast = hoistDeclarations(pr.ast) ;
 	pr.ast = cleanCode(pr.ast) ;
 	return pr ;
 
