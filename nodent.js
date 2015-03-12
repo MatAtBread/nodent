@@ -697,8 +697,10 @@ myfn("ok") ;
 				}
 				if (node.bcatch) {
 					var symCatch = "$catch_"+generateSymbol(node.bcatch.argname) ;
-					// catcher is not a continuation as it has arguments
+					// catcher is not a continuation as it has arguments,
+					// but we set the prop nothositable so it doesn't get hoisted
 					var catcher = makeFn(symCatch,mapReturns(node.bcatch.body),[node.bcatch.argname.clone()]) ; 
+					catcher.setProperties({nothositable:true});
 					node.bcatch.body = [catcher,thisCall(symCatch,[node.bcatch.argname.clone()])] ;
 				}
 				if (node.bfinally) {
@@ -1081,16 +1083,16 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend() ;
 			if (node instanceof U2.AST_Scope) {
-				var functions = scopedNodes(node,function(n,walk){
-					// YES: We're a named function
-					if ((n instanceof U2.AST_Lambda) && n.name)
-						return true ;
+				var functions = scopedNodes(node,function hoistable(n){
+					// YES: We're a named function, but not a continuation
+					if ((n instanceof U2.AST_Lambda) && n.name) { 
+						return !(n.props && (n.props.nothositable || n.props.continuation)) ;
+					}
 					
 					// YES: We're a named async function
 					if ((n instanceof U2.AST_UnaryPrefix) 
 							&& n.operator=="async"
-							&& (n.expression instanceof U2.AST_Lambda)
-							&& n.expression.name)
+							&& hoistable(n.expression))
 						return true ;
 					
 					// No, we're not a hoistable function
