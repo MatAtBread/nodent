@@ -988,9 +988,10 @@ myfn("ok") ;
 					fn = fn.expression.clone() ;
 				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
 					var replace = fn.clone() ;
-					if (replace instanceof U2.AST_Defun) {
-						replace.needs_parens = function(){ return true };
-					}
+// Obsolete? Not sure why we needed this, but it messes up function hoisting by limiting the scope of the function name.					
+//					if (replace instanceof U2.AST_Defun) {
+//						replace.needs_parens = function(){ return true };
+//					}
 					/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 					 * with a call to "$return" */
 					var fnBody = fn.body.map(function(sub){
@@ -1081,11 +1082,6 @@ myfn("ok") ;
 			descend() ;
 			if (node instanceof U2.AST_Scope) {
 				var functions = scopedNodes(node,function(n,walk){
-					// Don't hoist functions that are the value of a return,
-					// as in 'return [async] function() {}'
-//					if (walk.parent() instanceof U2.AST_Return)
-//						return false ;
-
 					// YES: We're a named function
 					if ((n instanceof U2.AST_Lambda) && n.name)
 						return true ;
@@ -1101,18 +1097,27 @@ myfn("ok") ;
 					return false ;
 				}) ;
 
+				var hoistedFn = {} ;
 				functions.forEach(function(ref) {
-//					if (ref.parent instanceof U2.AST_Statement && !(ref.parent instanceof U2.AST_Jump)) {
-						// We could be a function (with a name) or an async operator (with an expr that is a named function)
-						var symName = ref.self.name?ref.self.name.name:ref.self.expression.name.name ;
-console.log("ELFN:",info(ref.parent,true),symName) ;					
-						var fnSym = new U2.AST_SymbolRef({name:symName}) ;
-						// In some contexts we need to leave the sym in place, in others we can delete it
-						if (!(ref.parent instanceof U2.AST_Scope))
-							node.body.unshift(setRef(ref,fnSym)) ;
-						else
-							node.body.unshift(deleteRef(ref)) ;
-//					}
+					// What is the name of this function (could be async, so check the expression if necessary)
+					var symName = ref.self.name?ref.self.name.name:ref.self.expression.name.name ;
+					if (symName in hoistedFn) {
+						initOpts.log(pr.filename+" - Duplicate 'function "+symName+"()'") ;
+					}
+					hoistedFn[symName] = true ;
+					var fnSym = new U2.AST_SymbolRef({name:symName}) ;
+
+					// In some contexts we need to leave the sym in place, in others we can delete it
+					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
+					var movedFn ;
+					if (ref.field!=='body')
+						movedFn = setRef(ref,fnSym) ;
+					else
+						movedFn = deleteRef(ref) ;
+					
+					if (movedFn instanceof U2.AST_Function)
+						movedFn = new U2.AST_Defun(movedFn) ;
+					node.body.unshift(movedFn) ;
 				}) ;
 				
 				var vars = scopedNodes(node,function(n){

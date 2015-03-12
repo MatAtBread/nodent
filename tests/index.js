@@ -22,15 +22,21 @@ try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { /* 
 try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { /* Not installed */ }
 
 var msgs = [] ;
-var showOutput = false, saveOutput = false ;
+var showOutput = false, saveOutput = false, quiet = false ;
 var idx = 3 ;
-if (process.argv[3]=='--out' || process.argv[3]=='--save') {
-	showOutput = true ;
-	idx += 1 ;
-	providers = [providers[1]] ;
-}
-if (process.argv[3]=='--save') {
-	saveOutput = true ;
+
+for (idx=3; idx < process.argv.length; idx++) {
+	if (process.argv[idx]=='--out' || process.argv[idx]=='--save') {
+		showOutput = true ;
+		providers = [providers[1]] ;
+		if (process.argv[idx]=='--save') {
+			saveOutput = true ;
+		}
+	} else if (process.argv[idx]=='--quiet') {
+		quiet = true ;
+	} else {
+		break ;
+	}
 }
 
 function pad(s) {
@@ -81,7 +87,7 @@ async function runTests() {
 			}
 		}
 		console.log(info.map(pad).join(""));
-		if (msgs.length)
+		if (!quiet && msgs.length)
 			msgs.forEach(function(m){ console.log("  "+m)});
 
 	//	if (failed)
