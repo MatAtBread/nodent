@@ -1,3 +1,5 @@
+[![NPM](https://nodei.co/npm/nodent.png?downloads=true&downloadRank=true)](https://nodei.co/npm/nodent/)
+
 NoDent
 ======
 
