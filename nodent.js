@@ -70,13 +70,13 @@ function pretty(node) {
 	node.print(str);
 	return str.toString() ;
 }
-function info(node) {
+function info(node,quiet) {
 	if (Array.isArray(node))
 		return node.map(info) ;
 	var s = "" ;
 	for (var q = node.__proto__; q.TYPE; q=q.__proto__)
 		s += q.TYPE+"." ;
-	return s+":"+node.print_to_string() ;
+	return s+(quiet?"":":"+node.print_to_string()) ;
 }
 function cloneNodes(nodes) {
 	return nodes.map(function(n){return n.clone()}) ;
@@ -248,6 +248,18 @@ function deleteRef(ref) {
 	return self ;
 }
 
+function setRef(ref,node) {
+	var prev ;
+	if ('index' in ref) {
+		prev = ref.parent[ref.field][ref.index] ;
+		ref.parent[ref.field][ref.index] = node ;
+	} else {
+		prev = ref.parent[ref.field] ;
+		ref.parent[ref.field] = node ;
+	}
+	return prev ;
+}
+
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
 	// because the buffer-to-string conversion in `fs.readFileSync()`
@@ -376,7 +388,8 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	pr.ast = ifTransformer(pr.ast) ;
 	pr.ast = switchTransformer(pr.ast) ;
 	pr.ast = asyncAwait(pr.ast) ;
-	pr.ast = hoistDeclarations(pr.ast) ;
+// Since we're no longer hoisting synthetic functions, this shouldn't change anything, so don't bother executing it	
+//	pr.ast = hoistDeclarations(pr.ast) ;
 	pr.ast = cleanCode(pr.ast) ;
 	return pr ;
 
@@ -685,8 +698,10 @@ myfn("ok") ;
 				}
 				if (node.bcatch) {
 					var symCatch = "$catch_"+generateSymbol(node.bcatch.argname) ;
-					// catcher is not a continuation as it has arguments
+					// catcher is not a continuation as it has arguments,
+					// but we set the prop nothositable so it doesn't get hoisted
 					var catcher = makeFn(symCatch,mapReturns(node.bcatch.body),[node.bcatch.argname.clone()]) ; 
+					catcher.setProperties({nothositable:true});
 					node.bcatch.body = [catcher,thisCall(symCatch,[node.bcatch.argname.clone()])] ;
 				}
 				if (node.bfinally) {
@@ -976,9 +991,10 @@ myfn("ok") ;
 					fn = fn.expression.clone() ;
 				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
 					var replace = fn.clone() ;
-					if (replace instanceof U2.AST_Defun) {
-						replace.needs_parens = function(){ return true };
-					}
+// Obsolete? Not sure why we needed this, but it messes up function hoisting by limiting the scope of the function name.					
+//					if (replace instanceof U2.AST_Defun) {
+//						replace.needs_parens = function(){ return true };
+//					}
 					/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 					 * with a call to "$return" */
 					var fnBody = fn.body.map(function(sub){
@@ -1051,8 +1067,9 @@ myfn("ok") ;
 			if (node === ast)
 				return ;
 			
-			if (matching(node)) {
+			if (matching(node,walk)) {
 				matches.push(parentRef(walk)) ;
+				return true ;
 			}
 			if (node instanceof U2.AST_Scope) {
 				return true ;
@@ -1067,16 +1084,43 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend() ;
 			if (node instanceof U2.AST_Scope) {
-				var functions = scopedNodes(node,function(n){
-					return (((n instanceof U2.AST_Lambda) && n.name) 
-							|| ((n instanceof U2.AST_UnaryPrefix)
-									&& n.operator=="async")) ;
+				var functions = scopedNodes(node,function hoistable(n){
+					// YES: We're a named function, but not a continuation
+					if ((n instanceof U2.AST_Lambda) && n.name) { 
+						return !(n.props && (n.props.nothositable || n.props.continuation)) ;
+					}
+					
+					// YES: We're a named async function
+					if ((n instanceof U2.AST_UnaryPrefix) 
+							&& n.operator=="async"
+							&& hoistable(n.expression))
+						return true ;
+					
+					// No, we're not a hoistable function
+					return false ;
 				}) ;
 
+				var hoistedFn = {} ;
 				functions.forEach(function(ref) {
-					if (ref.parent instanceof U2.AST_Statement) {
-						node.body.unshift(deleteRef(ref)) ;
+					// What is the name of this function (could be async, so check the expression if necessary)
+					var symName = ref.self.name?ref.self.name.name:ref.self.expression.name.name ;
+					if (symName in hoistedFn) {
+						initOpts.log(pr.filename+" - Duplicate 'function "+symName+"()'") ;
 					}
+					hoistedFn[symName] = true ;
+					var fnSym = new U2.AST_SymbolRef({name:symName}) ;
+
+					// In some contexts we need to leave the sym in place, in others we can delete it
+					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
+					var movedFn ;
+					if (ref.field!=='body')
+						movedFn = setRef(ref,fnSym) ;
+					else
+						movedFn = deleteRef(ref) ;
+					
+					if (movedFn instanceof U2.AST_Function)
+						movedFn = new U2.AST_Defun(movedFn) ;
+					node.body.unshift(movedFn) ;
 				}) ;
 				
 				var vars = scopedNodes(node,function(n){
@@ -1113,17 +1157,9 @@ myfn("ok") ;
 						if (values.length==0)
 							deleteRef(ref) ;
 						else if (values.length==1) {
-							if ('index' in ref) {
-								ref.parent[ref.field][ref.index] = values[0] ;
-							} else {
-								ref.parent[ref.field] = values[0] ;
-							}
+							setRef(ref,values[0]) ;
 						} else {
-							if ('index' in ref) {
-								ref.parent[ref.field][ref.index] = new U2.AST_BlockStatement({body:values}) ;
-							} else {
-								ref.parent[ref.field] = new U2.AST_BlockStatement({body:values}) ;
-							}
+							setRef(ref,new U2.AST_BlockStatement({body:values})) ;
 						}
 					}) ;
 
