@@ -101,11 +101,14 @@ var config = {
 		$return:"$return",
 		$error:"$error",
 		log:function(msg){ console.warn("Nodent: "+msg) },
+		bindAwait:"$asyncbind",
+		bindAsync:"$asyncbind",
+		bindLoop:"$asyncbind",
 		// Pre-ES7 tokens: for async-function() ** OBSOLOETE **
 		// define:"-",
 		// async:"async",
 		// Pre-ES7 tokens for async assignment
-		//$except:"$except",
+		$except:"$except",
 		assign:"<<=",
 		ltor:true	/* true: val <<= async(),   false: async() <<= val */
 };
@@ -785,7 +788,7 @@ myfn("ok") ;
 					returner = new U2.AST_Call({
 						expression:new U2.AST_Dot({
 							expression: returner,
-							property: "$asyncbind"
+							property: initOpts.bindAwait
 						}),
 						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
 					}) ;
@@ -873,10 +876,6 @@ myfn("ok") ;
 						args:[new U2.AST_SymbolRef({name:config.$return}),
 						      new U2.AST_SymbolRef({name:config.$error})],
 						      expression:loop.clone()
-						      /*expression:
-						    	  opts.promises 
-						    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
-								  :new U2.AST_Call({args:[],expression:loop.clone()})*/
 					})
 				})]) ; 
 
@@ -904,16 +903,12 @@ myfn("ok") ;
 
 				body.push(mapContinue.clone());
 
-				var subCall = /*new U2.AST_UnaryPrefix({
-					operator:'async',
-					expression: */new U2.AST_Defun({
-						name:loop.clone(),
-						argnames:[new U2.AST_SymbolRef({name:config.$return}),
-							      new U2.AST_SymbolRef({name:config.$error})],
-						body:[defContinue]
-					//})
+				var subCall = new U2.AST_Defun({
+					name:loop.clone(),
+					argnames:[new U2.AST_SymbolRef({name:config.$return}),
+						      new U2.AST_SymbolRef({name:config.$error})],
+					body:[defContinue]
 				});
-				//subCall.needs_parens = function(){ return true };
 
 				var nextTest ;
 				if (node instanceof U2.AST_Do) {
@@ -938,15 +933,10 @@ myfn("ok") ;
 						expression:new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: subCall,
-								property: "$asyncbind"
+								property: initOpts.bindLoop
 							}),
 							args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
 						})
-							
-						/*new U2.AST_Call({
-							args:[],
-							expression:subCall,
-						})*/
 					})
 				});
 
@@ -1013,6 +1003,18 @@ myfn("ok") ;
 						return ast ;
 					}) ;
 
+					/* Removed as ES7 now has a (tiny) runtime: asyncbind. Prior to
+					 * using $asyncbind, each async function caught it's own exceptions
+					 * and was invoked via bind(), so no exception handler was passed. 
+					 * $asyncbind passes the exception handler as a parameter, and the 
+					 * invoked function doesn't require a try{} catch() {}
+					 */
+					/*if (!opts.promises) {
+						fnBody = [new U2.AST_Try({body:fnBody,bcatch: new U2.AST_Catch({
+							argname:new U2.AST_SymbolFunarg({name:initOpts.$except}),
+							body:[thisCall(getCatch(asyncWalk)[0],[new U2.AST_SymbolRef({name:initOpts.$except})])]})})] ;
+					}*/
+					
 					var funcback = new U2.AST_Function({
 						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
 						          new U2.AST_SymbolFunarg({name:config.$error})],
@@ -1023,7 +1025,7 @@ myfn("ok") ;
 					funcback = new U2.AST_Call({
 						expression:new U2.AST_Dot({
 							expression: funcback,
-							property: "$asyncbind"
+							property: initOpts.bindAsync
 						}),
 						args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
 					}) ;
@@ -1316,7 +1318,6 @@ myfn("ok") ;
 		}) ;
 		ast.walk(asyncWalk) ;
 
-
 		// Coalese BlockStatements
 		asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend();
@@ -1553,7 +1554,7 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
-		function thenTryCatch(self,catcher) {
+		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
 			var fn = this ;
 			fn.isAsync = true ;
 			var thenable = function(result,error){
@@ -1566,9 +1567,9 @@ function initialize(initOpts){
 			thenable.then = thenable ;
 			return thenable ;
 		}
-		Object.defineProperties(Function.prototype,{
-			$asyncbind:{value:thenTryCatch,writeable:true}
-		}) ;
+		Object.defineProperty(Function.prototype,"$asyncbind",
+			{value:nodent.thenTryCatch,writeable:true}
+		) ;
 
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.Promise = nodent.Thenable = function(resolver) {

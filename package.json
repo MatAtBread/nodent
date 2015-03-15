@@ -1,6 +1,6 @@
 {
   "name": "nodent",
-  "version": "1.0.37",
+  "version": "1.0.38",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
