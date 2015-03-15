@@ -2,7 +2,10 @@
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
-var nodent = require('../nodent')({use:["map"],log:function(msg){ msgs.push(msg) }}) ;
+var nodent = require('../nodent')({
+	use:["map"],
+	log:function(msg){ msgs.push(msg) }
+}) ;
 var Promise = nodent.Thenable ;
 
 async function sleep(t) {
@@ -26,12 +29,14 @@ var showOutput = false, saveOutput = false, quiet = false ;
 var idx = 3 ;
 
 for (idx=3; idx < process.argv.length; idx++) {
-	if (process.argv[idx]=='--out' || process.argv[idx]=='--save') {
+	if (process.argv[idx]=='--out') {
 		showOutput = true ;
-		providers = [providers[1]] ;
-		if (process.argv[idx]=='--save') {
-			saveOutput = true ;
-		}
+		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
+	} else 	if (process.argv[idx]=='--es7') {
+		showOutput = true ;
+		providers = [{name:'nodent-es7',p:null}] ;
+	} else if (process.argv[idx]=='--save') {
+		saveOutput = true ;
 	} else if (process.argv[idx]=='--quiet') {
 		quiet = true ;
 	} else {
@@ -59,7 +64,9 @@ async function runTests() {
 			var promise = providers[i] ;
 	
 			var code = fs.readFileSync(test).toString() ;
-			var pr = nodent.compile(code,test,showOutput?2:3,{es7:true,promises:!!promise.p}) ;
+			var pr = nodent.compile(code,test,showOutput?2:3,{
+				es7:true,promises:!!promise.p
+			}) ;
 			var m = {} ;
 			var fn = new Function("module","require","Promise",pr.code) ;
 			failed = fn.toString() ;
