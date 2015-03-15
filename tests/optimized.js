@@ -5,7 +5,7 @@ async function test() {
 		{
 			var s = "k" ;
 			{
-				return s+test.toString().split("\n").length ;
+				return s ;
 			}
 		}
 		unreachable.code() ;
@@ -14,5 +14,5 @@ async function test() {
 }
 
 module.exports = async function() {
-	return await test()=="k10" ;
+	return await test()=="k" ;
 }
