@@ -872,10 +872,11 @@ myfn("ok") ;
 					new U2.AST_Call({
 						args:[new U2.AST_SymbolRef({name:config.$return}),
 						      new U2.AST_SymbolRef({name:config.$error})],
-						      expression:
+						      expression:loop.clone()
+						      /*expression:
 						    	  opts.promises 
 						    	  ?new U2.AST_Dot({expression:new U2.AST_Call({args:[],expression:loop.clone()}),property:"then"})
-					:new U2.AST_Call({args:[],expression:loop.clone()})
+								  :new U2.AST_Call({args:[],expression:loop.clone()})*/
 					})
 				})]) ; 
 
@@ -903,15 +904,16 @@ myfn("ok") ;
 
 				body.push(mapContinue.clone());
 
-				var subCall = new U2.AST_UnaryPrefix({
+				var subCall = /*new U2.AST_UnaryPrefix({
 					operator:'async',
-					expression: new U2.AST_Defun({
+					expression: */new U2.AST_Defun({
 						name:loop.clone(),
-						argnames:[],
+						argnames:[new U2.AST_SymbolRef({name:config.$return}),
+							      new U2.AST_SymbolRef({name:config.$error})],
 						body:[defContinue]
-					})
+					//})
 				});
-				subCall.needs_parens = function(){ return true };
+				//subCall.needs_parens = function(){ return true };
 
 				var nextTest ;
 				if (node instanceof U2.AST_Do) {
@@ -922,21 +924,29 @@ myfn("ok") ;
 							args:[]
 						})})
 					})] ;
-					subCall.expression.body = [defContinue].concat(body) ;
+					subCall.body = [defContinue].concat(body) ;
 				} else {
 					var nextTest = new U2.AST_If({condition:condition.clone(),
 						body:new U2.AST_BlockStatement({body:body}),
 						alternative:mapBreak.clone()
 					}) ;
-					subCall.expression.body.push(nextTest) ;
+					subCall.body.push(nextTest) ;
 				}
 
 				var replace = new U2.AST_SimpleStatement({body:
-					new U2.AST_UnaryPrefix({operator:'await',expression:
-						new U2.AST_Call({
+					new U2.AST_UnaryPrefix({operator:'await',
+						expression:new U2.AST_Call({
+							expression:new U2.AST_Dot({
+								expression: subCall,
+								property: "$asyncbind"
+							}),
+							args:[new U2.AST_This(),getCatch(asyncWalk)[0]]
+						})
+							
+						/*new U2.AST_Call({
 							args:[],
 							expression:subCall,
-						})
+						})*/
 					})
 				});
 
