@@ -1,5 +1,7 @@
-async function sleep(t){
-	setTimeout($return,t) ;
+function sleep(t){
+	return new Promise(function($return,$error){
+		setTimeout($return,t) ;
+	});
 } 
 
 async function test(doThrow) {

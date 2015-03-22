@@ -1,10 +1,12 @@
-async function wait(){
-	setImmediate(function(){
-		try{
-			$return();
-		} catch(ex){ 
-			$error(ex) 
-		}}) ;
+function wait(){
+	return new Promise(function($return,$error){
+		setImmediate(function(){
+			try{
+				$return();
+			} catch(ex){ 
+				$error(ex) 
+			}}) ;
+	}) ;
 } 
 
 async function maybe(x) {

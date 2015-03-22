@@ -1,7 +1,6 @@
 async function inc(x) {
-	setTimeout($return.bind(null,x+1),10) ;
+	return x+1 ;
 };
-
 
 async function test() {
 	var s = "" ;

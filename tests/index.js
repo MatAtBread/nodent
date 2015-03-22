@@ -25,14 +25,23 @@ try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { /* 
 try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { /* Not installed */ }
 
 var msgs = [] ;
-var showOutput = false, saveOutput = false, quiet = false ;
+var showOutput = false, saveOutput = false, quiet = false, useGenerators = false ;
 var idx = 3 ;
 
 for (idx=3; idx < process.argv.length; idx++) {
-	if (process.argv[idx]=='--out') {
+	if (process.argv[idx]=='--generators') {
+		try {
+			//eval("var temp = new Promise(function(){}) ; function *(){ return }") ;
+		} catch (ex) {
+			throw new Error("*** Installed platform does not support Promises or Generators") ;
+		}
+//		showOutput = true ;
+		useGenerators = true ;
+//		providers = [{name:'Promises',p:global.Promise}] ;
+	} else if (process.argv[idx]=='--out') {
 		showOutput = true ;
-		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
-	} else 	if (process.argv[idx]=='--es7') {
+//		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
+	} else if (process.argv[idx]=='--es7') {
 		showOutput = true ;
 		providers = [{name:'nodent-es7',p:null}] ;
 	} else if (process.argv[idx]=='--save') {
@@ -62,10 +71,12 @@ async function runTests() {
 		msgs = [] ;
 		for (var i=0; i<providers.length; i++) {
 			var promise = providers[i] ;
+			if (useGenerators && !promise.p)
+				continue ;
 	
 			var code = fs.readFileSync(test).toString() ;
 			var pr = nodent.compile(code,test,showOutput?2:3,{
-				es7:true,promises:!!promise.p
+				es7:true,promises:!!promise.p,generators:useGenerators
 			}) ;
 			var m = {} ;
 			var fn = new Function("module","require","Promise",pr.code) ;
@@ -76,7 +87,7 @@ async function runTests() {
 				fs.writeFileSync(test+".out",failed) ;
 			}
 	
-			fn(m,require,promise.p) ;
+			fn(m,require,promise.p || nodent.Thenable) ;
 			await sleep(10);
 			try {
 				var t = Date.now() ;

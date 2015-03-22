@@ -384,16 +384,20 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 		return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;	
 	}
 
-	pr.ast = hoistDeclarations(pr.ast) ;
-	pr.ast = asyncLoops(pr.ast) ;
-	pr.ast = asyncTryCatch(pr.ast) ;
-	pr.ast = asyncDefine(pr.ast) ;
-	pr.ast = ifTransformer(pr.ast) ;
-	pr.ast = switchTransformer(pr.ast) ;
-	pr.ast = asyncAwait(pr.ast) ;
-// Since we're no longer hoisting synthetic functions, this shouldn't change anything, so don't bother executing it	
-//	pr.ast = hoistDeclarations(pr.ast) ;
-	pr.ast = cleanCode(pr.ast) ;
+	if (opts.generators) {
+		pr.ast = asyncSpawn(pr.ast) ;
+	} else {
+		pr.ast = hoistDeclarations(pr.ast) ;
+		pr.ast = asyncLoops(pr.ast) ;
+		pr.ast = asyncTryCatch(pr.ast) ;
+		pr.ast = asyncDefine(pr.ast) ;
+		pr.ast = ifTransformer(pr.ast) ;
+		pr.ast = switchTransformer(pr.ast) ;
+		pr.ast = asyncAwait(pr.ast) ;
+	// Since we're no longer hoisting synthetic functions, this shouldn't change anything, so don't bother executing it	
+//		pr.ast = hoistDeclarations(pr.ast) ;
+		pr.ast = cleanCode(pr.ast) ;
+	}
 	return pr ;
 
 	function makeFn(name,body,argnames) {
@@ -1072,6 +1076,53 @@ myfn("ok") ;
 		return ast ;
 	}
 
+	/*
+	 * Rewrite
+			async function <name>?<argumentlist><body>
+		to
+			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); } 
+	 */
+	function asyncSpawn(ast) {
+		var asyncWalk = new U2.TreeWalker(function(node, descend){
+			if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
+				descend() ;
+				// 'async' is unary operator that takes a function as it's operand, 
+				// async function(){} 
+				var fn = node.expression ;
+				
+				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
+					var ref = parentRef(asyncWalk) ;
+					var generator = new U2.AST_Defun({
+						name:new U2.AST_SymbolRef({name:"*"}),
+						argnames:[],
+						body:fn.body
+					}) ;
+					var awaits = scopedNodes(generator,function(n){
+						return (n instanceof U2.AST_UnaryPrefix) && n.operator=="await" ;
+					}) ;
+					awaits.forEach(function(r){
+						r.self.operator = "yield" ;
+						r.self.needs_parens = function(){ return true };
+					}) ;
+					fn.body = [
+					    new U2.AST_Return({value:
+						    new U2.AST_Call({
+								expression:new U2.AST_Dot({
+									expression:generator,
+									property:"$asyncspawn"}),
+								args:[new U2.AST_SymbolRef({name:"Promise"})]
+						})})] ;
+
+					fn.needs_parens = function(){ return false };
+					setRef(ref,fn) ;
+					return true ;
+				}
+			}
+		});
+		ast.walk(asyncWalk) ;
+		return ast ;
+	}
+
 	/* Find all nodes within this scope matching the specified function */
 	function scopedNodes(ast,matching) {
 		var matches = [] ;
@@ -1568,8 +1619,46 @@ function initialize(initOpts){
 			return thenable ;
 		}
 		Object.defineProperty(Function.prototype,"$asyncbind",
-			{value:nodent.thenTryCatch,writeable:true}
-		) ;
+				{value:nodent.thenTryCatch,writeable:true}
+			) ;
+		
+		function spawnGenerator(promiseProvider) {
+			var genF = this ;
+		    return new promiseProvider(function(resolve, reject) {
+		        var gen = genF();
+		        function step(nextF) {
+		            var next;
+		            try {
+		                next = nextF();
+		            } catch(e) {
+		                // finished with failure, reject the promise
+		                reject(e); 
+		                return;
+		            }
+		            if(next.done) {
+		                // finished with success, resolve the promise
+		                resolve(next.value);
+		                return;
+		            } 
+		            // not finished, chain off the yielded promise and `step` again
+		            if (next.value.then) {
+			            next.value.then(function(v) {
+			                step(function() { return gen.next(v); });      
+			            }, function(e) {
+			                step(function() { return gen.throw(e); });
+			            });
+		            } else {
+		            	// Or just step the value 
+		            	step(function() { return gen.next(next.value); })
+		            }
+		        }
+		        step(function() { return gen.next(undefined); });
+		    });
+		}
+
+		Object.defineProperty(Function.prototype,"$asyncspawn",
+				{value:spawnGenerator,writeable:true}
+			) ;
 
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.Promise = nodent.Thenable = function(resolver) {
@@ -1762,6 +1851,7 @@ if (require.main===module && process.argv.length>=3) {
 				promises: !!content.match(config.usePromisesDirective),
 				es7: !!content.match(config.useES7Directive)
 		} ; 
+		parseOpts = {es7:true,generators:true} ;
 		if (parseOpts.promises) parseOpts.es7 = true ;
 		if (parseOpts.promises || parseOpts.es7 || content.match(config.useDirective)) {
 			var pr = nodent.parse(content,filename,parseOpts);
