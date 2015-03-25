@@ -1,4 +1,4 @@
-var s = "" ;
+var s ;
 async function fn(f) { s += "."+f ; return }
 
 async function test(a,b) {

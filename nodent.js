@@ -1260,8 +1260,8 @@ myfn("ok") ;
 	function replaceSymbols(ast,from,to) {
 		var walk = new U2.TreeWalker(function(node,descend){
 			descend() ;
-			if (node.name==from) {
-				node.name = to ;
+			if (node.TYPE=="SymbolRef" && node.name==from) {
+				coerce(node,new U2.AST_SymbolRef({name:to})) ;
 			}
 			return true ;
 		}) ;
@@ -1312,14 +1312,16 @@ myfn("ok") ;
 
 		/* For either of the call forms above, return the actually invoked symbol name */
 		function simpleCallName(node) {
-			if ((node instanceof U2.AST_Call) 
+			if ((node.TYPE=="Call") 
 					&& node.args.length==0 
-					&& node.expression instanceof U2.AST_SymbolRef)
+					&& node.expression instanceof U2.AST_SymbolRef) {
 				return node.expression.name ;
+			}
 			
-			if ((node instanceof U2.AST_Call) 
-					&& node.props && node.props.thisCallName)
+			if ((node.TYPE=="Call") 
+					&& node.props && node.props.thisCallName) {
 				return node.props.thisCallName ;
+			}
 			
 			return null ;
 		}

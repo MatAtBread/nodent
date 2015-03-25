@@ -1,7 +1,3 @@
-async function breathe(t) {
-	setTimeout($return,1) ;
-}
-
 function AClass(n){
 	this.field = n ;
 }
@@ -13,7 +9,7 @@ AClass.prototype.total = async function(arg) {
 }
 
 AClass.prototype.barf = async function() {
-	await breathe(10) ;
+	await breathe() ;
 	var ex = new Error("total:"+this.field) ;
 	ex.source = this ;
 	throw ex ;

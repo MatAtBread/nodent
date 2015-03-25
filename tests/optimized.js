@@ -13,6 +13,16 @@ async function test() {
 	thats.all.folks ;
 }
 
+function aClass() {}
+
+function top() {
+	function createA() {
+		return aClass() ;
+	}
+	var x = createA() ;
+}
+
 module.exports = async function() {
+	top() ;
 	return await test()=="k" ;
 }

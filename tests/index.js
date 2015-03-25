@@ -8,10 +8,10 @@ var nodent = require('../nodent')({
 }) ;
 var Promise = nodent.Thenable ;
 
-async function sleep(t) {
+global.sleep = async function sleep(t) {
 	setTimeout($return,t) ;
 }
-async function breath() {
+global.breathe = async function breathe() {
 	var t = Date.now() ;
 	setImmediate(function(){
 		$return(Date.now()-t) ;
@@ -37,16 +37,14 @@ var idx = 3 ;
 for (idx=3; idx < process.argv.length; idx++) {
 	if (process.argv[idx]=='--generators') {
 		try {
-			//eval("var temp = new Promise(function(){}) ; function *(){ return }") ;
+			eval("var temp = new Promise(function(){}) ; function *x(){ return }") ;
 		} catch (ex) {
 			throw new Error("*** Installed platform does not support Promises or Generators") ;
 		}
-//		showOutput = true ;
 		useGenerators = true ;
-//		providers = [{name:'Promises',p:global.Promise}] ;
 	} else if (process.argv[idx]=='--out') {
 		showOutput = true ;
-//		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
+		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
 	} else if (process.argv[idx]=='--es7') {
 		showOutput = true ;
 		providers = [{name:'nodent-es7',p:null}] ;
@@ -85,7 +83,7 @@ async function runTests() {
 			for (var i=0; i<providers.length; i++) {
 				var promise = providers[i] ;
 				if (g>0 && !promise.p) {
-					info.push([promise.name,"n/a"]) ;
+					info.push([promise.name]) ;
 					continue ;
 				}
 
@@ -98,7 +96,7 @@ async function runTests() {
 				failed = fn.toString() ;
 				if (showOutput)
 					console.log(failed) ;
-				if (saveOutput) {
+				if (showOutput && saveOutput) {
 					fs.writeFileSync(test+".out",failed) ;
 				}
 
@@ -109,11 +107,11 @@ async function runTests() {
 					var result,t = Date.now() ;
 					if (samples<0) {
 						samples = 0 ;
-						while (Date.now()-t < 50 && samples<1000) {
+						while (Date.now()-t < 100 && samples<5000) {
 							result = await m.exports();
 							samples++ ;
 							if (!(samples&63))
-								t += await breath() ;
+								t += await breathe() ;
 						}
 						timeBase = Date.now()-t ;
 						info.push("x"+samples) ;
@@ -121,11 +119,10 @@ async function runTests() {
 						for (var reSample=0; reSample<samples; reSample++){
 							result = await m.exports(); 
 							if (!(reSample&63))
-								t += await breath() ;
+								t += await breathe() ;
 						}
 					}
 
-//					var result = await m.exports(); 
 					t = Date.now()-t ;
 					if (result!==true) {
 						info.push([promise.name,"?",result]) ;
@@ -137,7 +134,7 @@ async function runTests() {
 							info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
 					}
 				} catch (ex) {
-					info.push([promise.name,"EX"]) ;
+					info.push([promise.name,"*error*"]) ;
 					msgs.push(promise.name+" EX:"+ex.message+"\n"+ex.stack) ;
 				}
 			}

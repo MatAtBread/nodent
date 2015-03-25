@@ -1,9 +1,3 @@
-function breathe() {
-	return new Promise(function($return,$error){
-		setImmediate($return);
-	});
-}
-
 async function add(a,b) {
     return a+b;
 }

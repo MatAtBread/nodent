@@ -501,27 +501,56 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	cd ..
 	./nodent.js tests
 	
-	dowhile.js     	nodent-ES7,0ms	nodent-Thenable,0ms	bluebird,2ms	rsvp,1ms	when,1ms
-	for-if.js      	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,1ms	rsvp,0ms	when,0ms
-	for.js        	nodent-ES7,303ms	nodent-Thenable,304ms	bluebird,303ms	rsvp,302ms	when,302ms
-	fs.js        	nodent-ES7,220ms	nodent-Thenable,192ms	bluebird,261ms	rsvp,266ms	when,244ms
-	if-stmt-map.js 	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,0ms	when,0ms
-	if-stmt.js     	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,1ms	when,0ms
-	nested-async.js	nodent-ES7,1ms	nodent-Thenable,0ms	bluebird,0ms	rsvp,0ms	when,0ms
-	nested-await.js	nodent-ES7,0ms	nodent-Thenable,1ms	bluebird,0ms	rsvp,1ms	when,0ms
-	performance.js 	nodent-ES7,130ms	nodent-Thenable,74ms	bluebird,448ms	rsvp,631ms	when,438ms
-	sleep.js       	nodent-ES7,903ms	nodent-Thenable,904ms	bluebird,905ms	rsvp,903ms	when,903ms
-	switch-stmt.js 	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,1ms	rsvp,1ms	when,0ms
-	sync-ret.js    	nodent-ES7,1002ms	nodent-Thenable,?,n/a	bluebird,?,n/a	rsvp,?,n/a	when,?,n/a
-	try.js        	nodent-ES7,1ms	nodent-Thenable,1ms	bluebird,2ms	rsvp,0ms	when,0ms
-	while.js       	nodent-ES7,0ms	nodent-Thenable,0ms	bluebird,0ms	rsvp,0ms	when,1ms
+	await-usage.js  x5000   nodent-es7,34ms     nodent.Thenable,73%     native,1279%        bluebird,229%       rsvp,220%       when,152%           
+	complex.js      x753    nodent-es7,100ms    nodent.Thenable,86%     native,234%         bluebird,227%       rsvp,149%       when,133%           
+	declarations.js x5000   nodent-es7,74ms     nodent.Thenable,77%     native,232%         bluebird,113%       rsvp,117%       when,100%           
+	dowhile.js      x5000   nodent-es7,48ms     nodent.Thenable,79%     native,1014%        bluebird,183%       rsvp,216%       when,156%           
+	else-if.js      x5000   nodent-es7,46ms     nodent.Thenable,78%     native,1204%        bluebird,232%       rsvp,219%       when,165%           
+	for-if.js       x5000   nodent-es7,49ms     nodent.Thenable,93%     native,1312%        bluebird,242%       rsvp,222%       when,191%           
+	for.js          x5000   nodent-es7,52ms     nodent.Thenable,88%     native,784%         bluebird,175%       rsvp,150%       when,142%           
+	fs-sync.js      x18     nodent-es7,100ms    nodent.Thenable,95%     native,94%          bluebird,95%        rsvp,95%        when,93%        
+	fs.js           x1      nodent-es7,204ms    nodent.Thenable,99%     native,105%         bluebird,112%       rsvp,103%       when,103%           
+	if-stmt-map.js  x1916   nodent-es7,100ms    nodent.Thenable,73%     native,206%         bluebird,118%       rsvp,141%       when,115%           
+	if-stmt.js      x5000   nodent-es7,46ms     nodent.Thenable,89%     native,1247%        bluebird,267%       rsvp,230%       when,156%           
+	inline.js       x5000   nodent-es7,52ms     nodent.Thenable,59%     native,917%         bluebird,173%       rsvp,165%       when,121%           
+	method.js       x929    nodent-es7,100ms    nodent.Thenable,112%    native,186%         bluebird,216%       rsvp,137%       when,136%           
+	nested-async.js x5000   nodent-es7,16ms     nodent.Thenable,68%     native,725%         bluebird,206%       rsvp,112%       when,118%           
+	nested-await.js x5000   nodent-es7,24ms     nodent.Thenable,50%     native,887%         bluebird,175%       rsvp,162%       when,91%        
+	obj.js          x867    nodent-es7,100ms    nodent.Thenable,92%     native,200%         bluebird,178%       rsvp,134%       when,120%           
+	optimized.js    x5000   nodent-es7,20ms     nodent.Thenable,25%     native,360%         bluebird,95%        rsvp,60%        when,45%        
+	perf-2.js       x1      nodent-es7,852ms    nodent.Thenable,101%    native,197%         bluebird,193%       rsvp,135%       when,139%           
+	perf.js         x2      nodent-es7,127ms    nodent.Thenable,134%    native,1162%        bluebird,262%       rsvp,192%       when,175%           
+	ret-fn.js       x5000   nodent-es7,61ms     nodent.Thenable,70%     native,491%         bluebird,131%       rsvp,118%       when,91%        
+	sleep.js        x1      nodent-es7,293ms    nodent.Thenable,100%    native,100%         bluebird,99%        rsvp,103%       when,100%           
+	switch-stmt.js  x5000   nodent-es7,28ms     nodent.Thenable,64%     native,835%         bluebird,178%       rsvp,146%       when,114%           
+	sync-await.js   x24     nodent-es7,107ms    nodent.Thenable,143%    native,88%          bluebird,31%        rsvp,28%        when,32%        
+	sync-ret.js     x1      nodent-es7,101ms    nodent.Thenable,?,n/a   native,?,n/a        bluebird,?,n/a      rsvp,?,n/a      when,?,n/a          
+	try.js          x773    nodent-es7,100ms    nodent.Thenable,94%     native,195%         bluebird,184%       rsvp,129%       when,130%           
+	while.js        x942    nodent-es7,100ms    nodent.Thenable,94%     native,173%         bluebird,178%       rsvp,124%       when,124%           
 	
 The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
 If you wish to add a Promise implementation to test against, add it to the dependencies in tests/package.json and give it an entry in the tests/index.js test runner. 
 
+The test runner in tests/index.js accepts the following options:
+
+	./nodent.js tests [--out --save --es7 --generators] tests [test-files]
+	
+	--out        Show the generated ES5 code for Promises
+	--es7        Show the generated ES5 code for ES7 mode
+	--save       Save the output (must be used with --out or --es7)
+	--quiet      Suppress any errors or warnings
+	--generators Performance test syntax transformation, followed by generators
+
 Changelog
 ==========
+
+25Mar15: Fix an issue which caused a `return` within a loop to not exit the enclosing `async` function.
+25Mar15: Fix an issue which caused function inlining of non-functional calls to elide the body without updating the references (apparent as an incorrect "Undefined" exception at runtime).
+
+24Mar15: Update the test harness to normalize test times by targetting a completion time of at least 100ms.
+
+22Mar15: Implement transformation to Generator functions. NB: This is experimental and at present underperfoms the normal nodent transformations by about 3 times. Turn on by specifying the compiler option `generators:true`, or `--generators` from the test harness.   
 
 12Mar15: Fix issue in function hoisting that lost references where a named function was part in a statement that was also and expression, for example 'return function x(){}' was mapped to 'function x(){} return ;'. The original symbol is now in place so that it translates to 'function x(){} return x ;'
 
