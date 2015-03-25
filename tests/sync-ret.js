@@ -10,12 +10,13 @@ async function getSlowRemote() {
 		clearTimeout(timer) ;
 	}
 }  
-if (Promise) {
+if (!es7) {
 	module.exports = async function() {
 		return "n/a" ;
 	}
 } else {
 	module.exports = async function() {
+		res = "" ;
 		function done(){
 			res = "done" ;
 		}

@@ -17,6 +17,7 @@ async function test(a,b) {
 }
 
 module.exports = async function() {
+	s = "" ;
 	await test(0,0)+await test(0,1)+await test(1,0)+await test(1,1) ;
 	return s==".0.-1.1.-1.1.1" ;
 }

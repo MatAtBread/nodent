@@ -862,6 +862,7 @@ myfn("ok") ;
 				body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
 
 				var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
+				var symExit = "$exit_"+generateSymbol(condition) ;
 				var loop = new U2.AST_SymbolRef({name:symName}) ;
 
 				// How to exit the loop
@@ -870,14 +871,14 @@ myfn("ok") ;
 						operator:"void",
 						expression:new U2.AST_Call({
 							args:[],
-							expression:new U2.AST_SymbolRef({name:config.$return})
+							expression:new U2.AST_SymbolRef({name:symExit})
 						})})}) ; 
 
 				// How to continue the loop
 				var symContinue = "$next_"+generateSymbol() ;
 				var defContinue = makeContinuation(symContinue,[new U2.AST_Return({value:
 					new U2.AST_Call({
-						args:[new U2.AST_SymbolRef({name:config.$return}),
+						args:[new U2.AST_SymbolRef({name:symExit}),
 						      new U2.AST_SymbolRef({name:config.$error})],
 						      expression:loop.clone()
 					})
@@ -895,7 +896,12 @@ myfn("ok") ;
 				for (var i=0; i<body.length;i++) {
 					var w ;
 					body[i].walk(w = new U2.TreeWalker(function(n,descend){
-						if (n instanceof U2.AST_Break) {
+						if (n instanceof U2.AST_Return) {
+							n.value = new U2.AST_Call({
+								expression:new U2.AST_SymbolRef({name:config.$return}),
+								args:[n.value.clone()]}) ; 
+							return true ;
+						} else if (n instanceof U2.AST_Break) {
 							coerce(n,mapBreak.clone()) ;
 						} else if (n instanceof U2.AST_Continue) {
 							coerce(n,mapContinue.clone()) ;
@@ -909,7 +915,7 @@ myfn("ok") ;
 
 				var subCall = new U2.AST_Defun({
 					name:loop.clone(),
-					argnames:[new U2.AST_SymbolRef({name:config.$return}),
+					argnames:[new U2.AST_SymbolRef({name:symExit}),
 						      new U2.AST_SymbolRef({name:config.$error})],
 					body:[defContinue]
 				});
@@ -919,7 +925,7 @@ myfn("ok") ;
 					defContinue.body = [new U2.AST_If({condition:condition.clone(),
 						body:new U2.AST_BlockStatement({body:defContinue.body}),
 						alternative:new U2.AST_Return({value:new U2.AST_Call({
-							expression:new U2.AST_SymbolRef({name:config.$return}),
+							expression:new U2.AST_SymbolRef({name:symExit}),
 							args:[]
 						})})
 					})] ;
@@ -1622,7 +1628,7 @@ function initialize(initOpts){
 				{value:nodent.thenTryCatch,writeable:true}
 			) ;
 		
-		function spawnGenerator(promiseProvider) {
+		nodent.spawnGenerator = function(promiseProvider) {
 			var genF = this ;
 		    return new promiseProvider(function(resolve, reject) {
 		        var gen = genF();
@@ -1631,16 +1637,14 @@ function initialize(initOpts){
 		            try {
 		                next = nextF();
 		            } catch(e) {
-		                // finished with failure, reject the promise
 		                reject(e); 
 		                return;
 		            }
 		            if(next.done) {
-		                // finished with success, resolve the promise
 		                resolve(next.value);
 		                return;
 		            } 
-		            // not finished, chain off the yielded promise and `step` again
+
 		            if (next.value.then) {
 			            next.value.then(function(v) {
 			                step(function() { return gen.next(v); });      
@@ -1648,7 +1652,6 @@ function initialize(initOpts){
 			                step(function() { return gen.throw(e); });
 			            });
 		            } else {
-		            	// Or just step the value 
 		            	step(function() { return gen.next(next.value); })
 		            }
 		        }
@@ -1657,7 +1660,7 @@ function initialize(initOpts){
 		}
 
 		Object.defineProperty(Function.prototype,"$asyncspawn",
-				{value:spawnGenerator,writeable:true}
+				{value:nodent.spawnGenerator,writeable:true}
 			) ;
 
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
@@ -1851,7 +1854,7 @@ if (require.main===module && process.argv.length>=3) {
 				promises: !!content.match(config.usePromisesDirective),
 				es7: !!content.match(config.useES7Directive)
 		} ; 
-		parseOpts = {es7:true,generators:true} ;
+//		parseOpts = {es7:true,generators:true} ;
 		if (parseOpts.promises) parseOpts.es7 = true ;
 		if (parseOpts.promises || parseOpts.es7 || content.match(config.useDirective)) {
 			var pr = nodent.parse(content,filename,parseOpts);
