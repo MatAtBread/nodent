@@ -103,12 +103,29 @@ async function runTests() {
 				fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
 				await sleep(10);
 
+				async function run(fn) {
+					var tid = setTimeout(function(){
+						var x = $error ;
+						$return = null ;
+						$error = null ;
+						return x(new Error("timeout")) ;
+					},5000) ;
+					
+					fn.then(function(r){
+						clearTimeout(tid) ;
+						return $return && $return(r) ;
+					},function(ex){
+						clearTimeout(tid) ;
+						return $error && $error(ex) ;
+					}) 
+				}
+			
 				try {
 					var result,t = Date.now() ;
 					if (samples<0) {
 						samples = 0 ;
 						while (Date.now()-t < 100 && samples<5000) {
-							result = await m.exports();
+							result = await run(m.exports());
 							samples++ ;
 							if (!(samples&63))
 								t += await breathe() ;
@@ -117,7 +134,7 @@ async function runTests() {
 						info.push("x"+samples) ;
 					} else {
 						for (var reSample=0; reSample<samples; reSample++){
-							result = await m.exports(); 
+							result = await run(m.exports()); 
 							if (!(reSample&63))
 								t += await breathe() ;
 						}
@@ -135,7 +152,7 @@ async function runTests() {
 					}
 				} catch (ex) {
 					info.push([promise.name,"*error*"]) ;
-					msgs.push(promise.name+" EX:"+ex.message+"\n"+ex.stack) ;
+					msgs.push(promise.name+" EX:"+ex.toString()+"\n"+ex.stack) ;
 				}
 			}
 			console.log(info.map(pad).join(""));
