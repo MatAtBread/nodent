@@ -389,8 +389,8 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	} else {
 		pr.ast = hoistDeclarations(pr.ast) ;
 		pr.ast = asyncLoops(pr.ast) ;
-		pr.ast = asyncTryCatch(pr.ast) ;
 		pr.ast = asyncDefine(pr.ast) ;
+		pr.ast = asyncTryCatch(pr.ast) ;
 		pr.ast = ifTransformer(pr.ast) ;
 		pr.ast = switchTransformer(pr.ast) ;
 		pr.ast = asyncAwait(pr.ast) ;
@@ -680,7 +680,6 @@ myfn("ok") ;
 	 */
 
 	function asyncTryCatch(ast) {
-/****///		var mapReturns = function(x) { return x } ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend() ;
 
@@ -692,14 +691,14 @@ myfn("ok") ;
 					var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
 					if (afterTry.length) {
 						var ctnName = "$post_try_"+generateSymbol() ;
-						ref.parent[ref.field].push(makeContinuation(ctnName,mapReturns(afterTry))) ;
+						ref.parent[ref.field].push(makeContinuation(ctnName,afterTry)) ;
 						continuation = thisCall(ctnName) ; 
 					}
 				} else {
 					throw new Error(pr.filename+" - malformed try/catch blocks") ;
 				}
 
-				node.body = toArray(mapReturns(node.body)) ;
+				node.body = toArray(node.body) ;
 				if (continuation) {
 					node.body.push(continuation.clone()) ;
 					node.bcatch.body.push(continuation.clone()) ;
@@ -708,13 +707,13 @@ myfn("ok") ;
 					var symCatch = "$catch_"+generateSymbol(node.bcatch.argname) ;
 					// catcher is not a continuation as it has arguments,
 					// but we set the prop nothositable so it doesn't get hoisted
-					var catcher = makeFn(symCatch,mapReturns(node.bcatch.body),[node.bcatch.argname.clone()]) ; 
+					var catcher = makeFn(symCatch,node.bcatch.body,[node.bcatch.argname.clone()]) ; 
 					catcher.setProperties({nothositable:true});
 					node.bcatch.body = [catcher,thisCall(symCatch,[node.bcatch.argname.clone()])] ;
 				}
 				if (node.bfinally) {
 					var symFinal = "finally_"+generateSymbol() ;
-					var finalize = makeContinuation(symFinal,mapReturns(node.bfinally.body)) ; 
+					var finalize = makeContinuation(symFinal,node.bfinally.body) ; 
 					node.bfinally.body = [finalize,thisCall(symFinal)] ;
 				}
 				setCatch(node.body,[symCatch,symFinal]) ;
@@ -993,7 +992,7 @@ myfn("ok") ;
 	function asyncDefine(ast) {
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
-				// 'async' is unary operator that takes a function as it's operand, 
+				// "async" is unary operator that takes a function as it's operand, 
 				// OR, for old-style declarations, a unary negative expression yielding a function, e.g.
 				// async function(){} or async-function(){}
 				// The latter form is deprecated, but has the advantage of being ES5 syntax compatible
@@ -1089,7 +1088,7 @@ myfn("ok") ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
 				descend() ;
-				// 'async' is unary operator that takes a function as it's operand, 
+				// "async" is unary operator that takes a function as it's operand, 
 				// async function(){} 
 				var fn = node.expression ;
 				
