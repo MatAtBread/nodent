@@ -4,7 +4,7 @@ async function add(a,b) {
 
 async function test() {
   var x = 0 ;
-  for (var n=0;n<50000;n++) {
+  for (var n=0;n<10000;n++) {
     await breathe() ;
     x = await add(x,1) ;
   }

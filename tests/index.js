@@ -31,6 +31,7 @@ try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { /* 
 try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { /* Not installed */ }
 
 var msgs = [] ;
+var targetSamples = -1 ;
 var showOutput = false, saveOutput = false, quiet = false, useGenerators = false ;
 var idx = 3 ;
 
@@ -52,6 +53,8 @@ for (idx=3; idx < process.argv.length; idx++) {
 		saveOutput = true ;
 	} else if (process.argv[idx]=='--quiet') {
 		quiet = true ;
+	} else if (process.argv[idx]=='--quick') {
+		targetSamples = 1 ;
 	} else {
 		break ;
 	}
@@ -70,12 +73,10 @@ async function runTests() {
 		var test = tests[j] ;
 		if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
 			continue ;
+		var samples = targetSamples ;
+		var timeBase = 0 ;
 		var failed = false ;
 		msgs = [] ;
-
-		var samples = -1 ;
-		var timeBase = 0 ;
-
 		for (var g=0;g<(useGenerators?2:1);g++) {
 			var info = [pad(test)] ;
 			if (g>0)
@@ -112,10 +113,10 @@ async function runTests() {
 					},5000) ;
 					
 					fn.then(function(r){
-						clearTimeout(tid) ;
+						tid && clearTimeout(tid) ;
 						return $return && $return(r) ;
 					},function(ex){
-						clearTimeout(tid) ;
+						tid && clearTimeout(tid) ;
 						return $error && $error(ex) ;
 					}) 
 				}
@@ -124,12 +125,13 @@ async function runTests() {
 					var result,t = Date.now() ;
 					if (samples<0) {
 						samples = 0 ;
-						while (Date.now()-t < 100 && samples<5000) {
+						do {
 							result = await run(m.exports());
 							samples++ ;
 							if (!(samples&63))
 								t += await breathe() ;
 						}
+						while (Date.now()-t < 100 && samples<5000) ;
 						timeBase = Date.now()-t ;
 						info.push("x"+samples) ;
 					} else {

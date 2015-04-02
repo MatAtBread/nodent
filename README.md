@@ -540,10 +540,13 @@ The test runner in tests/index.js accepts the following options:
 	--es7        Show the generated ES5 code for ES7 mode
 	--save       Save the output (must be used with --out or --es7)
 	--quiet      Suppress any errors or warnings
+	--quick      Don't target a specific execute time, just run each test once
 	--generators Performance test syntax transformation, followed by generators
 
 Changelog
 ==========
+
+02Apr15: Fix an issue that caused 'if .. else .. ; more' to not continue to 'more' when nested inside a try{} block. Create new test cases to ensure compliance
 
 25Mar15: Fix an issue which caused a `return` within a loop to not exit the enclosing `async` function.
 25Mar15: Fix an issue which caused function inlining of non-functional calls to elide the body without updating the references (apparent as an incorrect "Undefined" exception at runtime).
