@@ -509,9 +509,9 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 				repl.mapped = true ;
 				return repl ; 
 			} else if (node instanceof U2.AST_Lambda) {
-				lambdaNesting++ ;
-				descend(node, this);
-				lambdaNesting-- ;
+//				lambdaNesting++ ;
+//				descend(node, this);
+//				lambdaNesting-- ;
 				return node ;
 			}  else {
 				descend(node, this);
@@ -680,6 +680,7 @@ myfn("ok") ;
 	 */
 
 	function asyncTryCatch(ast) {
+/****///		var mapReturns = function(x) { return x } ;
 		var asyncWalk = new U2.TreeWalker(function(node, descend){
 			descend() ;
 
@@ -694,6 +695,8 @@ myfn("ok") ;
 						ref.parent[ref.field].push(makeContinuation(ctnName,mapReturns(afterTry))) ;
 						continuation = thisCall(ctnName) ; 
 					}
+				} else {
+					throw new Error(pr.filename+" - malformed try/catch blocks") ;
 				}
 
 				node.body = toArray(mapReturns(node.body)) ;
@@ -999,10 +1002,6 @@ myfn("ok") ;
 					fn = fn.expression.clone() ;
 				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
 					var replace = fn.clone() ;
-// Obsolete? Not sure why we needed this, but it messes up function hoisting by limiting the scope of the function name.					
-//					if (replace instanceof U2.AST_Defun) {
-//						replace.needs_parens = function(){ return true };
-//					}
 					/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 					 * with a call to "$return" */
 					var fnBody = fn.body.map(function(sub){
@@ -1862,7 +1861,7 @@ if (require.main===module && process.argv.length>=3) {
 			nodent.prettyPrint(pr,undefined,parseOpts) ;
 			console.log(pr.code) ;
 		} else {
-			initOpts.log(filename+": No 'use nodent' directive") ;
+			console.warn(filename+": No 'use nodent' directive") ;
 		}
 
 		
