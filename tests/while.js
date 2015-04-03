@@ -1,5 +1,6 @@
 async function inc(x) {
-	setImmediate($return.bind(null,x+1)) ;
+	await breathe() ;
+	return x+1 ;
 };
 
 async function test() {

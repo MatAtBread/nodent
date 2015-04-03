@@ -3,9 +3,8 @@ var strings = "The quick brown fox jumps over the lazy dog".split(" ") ;
 async function test() {
 	try {
 		async function getLength(y) {
-			setImmediate(function(){
-				$return(y.length) ;
-			}) ;
+			await breathe() ;
+			return y.length ;
 		}
 		
 		var l = 0,m = 0 ;
