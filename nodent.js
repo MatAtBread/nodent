@@ -1074,7 +1074,8 @@ myfn("ok") ;
 					var ref = parentRef(asyncWalk) ;
 					var generator = new U2.AST_Defun({
 						name:new U2.AST_SymbolRef({name:"*"}),
-						argnames:[],
+						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
+						          new U2.AST_SymbolFunarg({name:config.$error})],
 						body:fn.body
 					}) ;
 					var awaits = scopedNodes(generator,function(n){
@@ -1090,7 +1091,7 @@ myfn("ok") ;
 								expression:new U2.AST_Dot({
 									expression:generator,
 									property:"$asyncspawn"}),
-								args:[new U2.AST_SymbolRef({name:"Promise"})]
+								args:[new U2.AST_SymbolRef({name:"Promise"}),new U2.AST_This()]
 						})})] ;
 
 					fn.needs_parens = function(){ return false };
@@ -1604,10 +1605,10 @@ function initialize(initOpts){
 				{value:nodent.thenTryCatch,writeable:true}
 			) ;
 		
-		nodent.spawnGenerator = function(promiseProvider) {
+		nodent.spawnGenerator = function(promiseProvider,self) {
 			var genF = this ;
 		    return new promiseProvider(function(resolve, reject) {
-		        var gen = genF();
+		        var gen = genF.call(self,resolve, reject);
 		        function step(nextF) {
 		            var next;
 		            try {
@@ -1829,7 +1830,7 @@ if (require.main===module && process.argv.length>=3) {
 		var parseOpts = {
 				promises: !!content.match(config.usePromisesDirective),
 				es7: !!content.match(config.useES7Directive)
-		} ; 
+		} ;
 		if (parseOpts.promises) parseOpts.es7 = true ;
 		if (!(parseOpts.promises || parseOpts.es7 || content.match(config.useDirective))) {
 			parseOpts = {es7:true} ;

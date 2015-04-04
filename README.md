@@ -87,7 +87,7 @@ Nodent can operate either with of without Promises as this type. The pros and co
 
 To specify that you wish to use Promises, make the first directive in your file:
 
-	"use nodent-promises";
+	"use nodent-promise";
 
 as opposed to:
 
@@ -546,6 +546,8 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+04Apr15: Correct documentation for "use nodent-promise". In generator mode, bind the generator to the caller's `this` to enable constructs such as `myclass.prototype.fn = async function ... ;`. The ES7 specification is not clear as to whether as to how this construct is exectued (i.e. there is no mechanism for binding the generator to the calling object, but it is syntactically valid).
+ 
 02Apr15: Fix an issue that caused 'if .. else .. ; more' to not continue to 'more' when nested inside a try{} block. Create new test cases to ensure compliance
 
 25Mar15: Fix an issue which caused a `return` within a loop to not exit the enclosing `async` function.
