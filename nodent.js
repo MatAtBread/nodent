@@ -26,9 +26,7 @@ var U2 = require("./ug2loader").load(U2patch) ;
 /* New node types that we use */
 U2.AST_DeletedNode = U2.DEFNODE("DeletedNode", null, {
     $documentation: "A deleted node",
-    _walk: function(visitor) {
-//        return visitor._visit(this);
-    }
+    _walk: function(visitor) {}
 }, U2.AST_Node);
 U2.AST_DeletedNode.DEFMETHOD("_codegen",function(self,output){}) ;
 
@@ -97,6 +95,7 @@ var config = {
 		useDirective:/['"]use\s+nodent['"]/,
 		useES7Directive:/['"]use\s+nodent\-es7['"]/,
 		usePromisesDirective:/['"]use\s+nodent\-promise['"]/,
+		useGeneratorsDirective:/['"]use\s+nodent\-generators['"]/,
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -104,7 +103,7 @@ var config = {
 		bindAwait:"$asyncbind",
 		bindAsync:"$asyncbind",
 		bindLoop:"$asyncbind",
-		// Pre-ES7 tokens: for async-function() ** OBSOLOETE **
+		// Pre-ES7 tokens: for async-function() ** OBSOLETE **
 		// define:"-",
 		// async:"async",
 		// Pre-ES7 tokens for async assignment
@@ -112,6 +111,50 @@ var config = {
 		assign:"<<=",
 		ltor:true	/* true: val <<= async(),   false: async() <<= val */
 };
+
+/* Extract compiler options from code (either a string or AST) */ 
+function parseCompilerOptions(code,initOpts) {
+	function matches(str,match){
+		if (!match)
+			return false ;
+		if (typeof match==="string")
+			return match==str ;
+		if ("test" in match)
+			return match.test(str) ;
+	}
+
+	parseOpts = {} ;
+
+	if (typeof code=="string") {
+		var parseOpts = {
+				promises: !!code.match(initOpts.usePromisesDirective),
+				es7: !!code.match(initOpts.useES7Directive),
+				generators: !!code.match(initOpts.useGeneratorsDirective),
+				es5assign: !!code.match(initOpts.useDirective)
+		} ; 
+		if (parseOpts.promises) parseOpts.es7 = true ;
+	} else {
+		// code is an AST
+		for (var i=0; i<pr.ast.body.length; i++) {
+			if (code.body[i] instanceof U2.AST_Directive) {
+				var test = "'"+code.body[i].value+"'" ;
+				parseOpts.promises = matches(test,initOpts.usePromisesDirective) ;
+				parseOpts.es7 = parseOpts.promises || matches(test,initOpts.useES7Directive) ;
+				parseOpts.generators = matches(test,initOpts.useGeneratorsDirective) ;
+				parseOpts.es5assign = matches(test,initOpts.useDirective) ;
+			}
+		}
+	}
+
+	if (parseOpts.promises || parseOpts.es7 || parseOpts.es5assign || parseOpts.generators) {
+		if ((parseOpts.promises || parseOpts.es7) && (parseOpts.es5assign || parseOpts.generators)) {
+			initOpts.log("Invalid combination of 'use nodent*' directives. Assuming 'use nodent-es7'") ;
+			parseOpts = {es7:true} ;
+		}
+		return parseOpts ;
+	} 
+	return null ; // No valid nodent options
+}
 
 /* Bit of a hack: without having to search for references to this
  * node, force it to be some replacement node */
@@ -471,56 +514,81 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	 * This allows us to capture a normal "return" statement and actually implement it
 	 * by calling the locally-scoped function $return()
 	 */
-	function mapReturns(n){
+	function mapReturns(n,containers){
 		if (Array.isArray(n)) {
-			return n.map(mapReturns) ;
+			return n.map(function(m){return mapReturns(m,containers)}) ;
 		}
 		var lambdaNesting = 0 ;
 		var returnMapper = new U2.TreeTransformer(function(node,descend) {
-			if (!lambdaNesting && (node instanceof U2.AST_Return) && !node.mapped) {
-				var repl = node.clone() ;
-				var value = repl.value?[repl.value.clone()]:[] ;
-				/*
-				 * NB: There is a special case where we do a REAL return to allow
-				 * for chained async-calls and synchronous returns
-				 * 
-				 * The selected syntax for this is:
-				 * 
-				 * 	return void (expr) ;
-				 * 
-				 * which is mapped to:
-				 * 
-				 * 	return (expr) ;
-				 * 
-				 * Note that the parenthesis are necessary in the case of anything except a single symbol as "void" binds to
-				 * values before operator.
-				 *  
-				 * In the case where we REALLY want to return undefined to the callback, a simple "return" or "return undefined" 
-				 * works.
-				 */
-				if (value.length>0 && value[0] instanceof U2.AST_UnaryPrefix && value[0].operator=="void") {
-					repl.value = value[0].expression ;
+			if ((node instanceof U2.AST_Return) && !node.mapped) {
+				var repl,value ;
+				if (lambdaNesting > 0) {
+					if ((node.value instanceof U2.AST_UnaryPrefix) && node.value.operator == "async") {
+						value = [node.value.expression.clone()] ;
+						repl = node.clone() ; //repl = new U2.AST_Return({value:undefined}) ;
+					}
 				} else {
-					repl.value = new U2.AST_Call({
-						expression:new U2.AST_SymbolRef({name:config.$return}),
-						args:value
-					}) ;
+					if (!containers) {
+						repl = node.clone() ;
+						value = repl.value?[repl.value.clone()]:[] ;
+					}
 				}
-				repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
-				return repl ;
+				if (!value) {
+					descend(node, this);
+					return node ;
+				} else {
+					/* NB: There is a special case where we do a REAL return to allow for chained async-calls and synchronous returns
+					 * 
+					 * The selected syntax for this is:
+					 * 	return void (expr) ;
+					 * which is mapped to:
+					 * 	return (expr) ;
+					 * 
+					 * Note that the parenthesis are necessary in the case of anything except a single symbol as "void" binds to
+					 * values before operator. In the case where we REALLY want to return undefined to the callback, a simple 
+					 * "return" or "return undefined" works. */
+					if (value.length>0 && value[0] instanceof U2.AST_UnaryPrefix && value[0].operator=="void") {
+						repl.value = value[0].expression ;
+					} else {
+						repl.value = new U2.AST_Call({
+							expression:new U2.AST_SymbolRef({name:config.$return}),
+							args:value
+						}) ;
+					}
+					repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
+					return repl ;
+				}
 			} else if (node instanceof U2.AST_Throw) {
-				var value = node.value.clone() ;
-				var repl = new U2.AST_Return({
-					value:new U2.AST_Call({
-						expression:getCatch(returnMapper)[0],
-						args:[value]
-					})
-				}) ;
-				repl.start = repl.value.start = node.start ;
-				repl.end = repl.value.end = node.end ;
-				repl.mapped = true ;
-				return repl ; 
+				var value ;
+				if (lambdaNesting>0) {
+					if ((node.value instanceof U2.AST_UnaryPrefix) && node.value.operator == "async") {
+						value = node.value.expression.clone() ;
+					}
+				} else {
+					if (!containers) {
+						value = node.value.clone() ;
+					}
+				}
+				
+				if (!value) {
+					descend(node, this);
+					return node ;
+				} else {
+					var repl = new U2.AST_Return({
+						value:new U2.AST_Call({
+							expression:getCatch(returnMapper)[0],
+							args:[value]
+						})
+					}) ;
+					repl.start = repl.value.start = node.start ;
+					repl.end = repl.value.end = node.end ;
+					repl.mapped = true ;
+					return repl ; 
+				}
 			} else if (node instanceof U2.AST_Lambda) {
+				lambdaNesting++ ;
+				descend(node, this);
+				lambdaNesting-- ;
 				return node ;
 			}  else {
 				descend(node, this);
@@ -567,7 +635,7 @@ myfn("ok") ;
 				ref.parent[ref.field][idx] = synthBlock ;
 				if (deferredCode.length) {
 					var call = new U2.AST_Return({value:thisCall(symName)}) ;
-					synthBlock.body.push(asyncWalk.walkDown(makeContinuation(symName,deferredCode))) ;
+					synthBlock.body.unshift(asyncWalk.walkDown(makeContinuation(symName,deferredCode))) ;
 					synthBlock.body.push(call.clone()) ;
 
 					function transformConditional(cond) {
@@ -609,7 +677,7 @@ myfn("ok") ;
 			var synthBlock = new U2.AST_BlockStatement({body:[switchStmt]}) ; 
 
 			if (deferredCode.length) {
-				synthBlock.body.push(makeContinuation(symName,deferredCode)) ;
+				synthBlock.body.unshift(makeContinuation(symName,deferredCode)) ;
 				synthBlock.body.push(new U2.AST_SimpleStatement({body:deferred.clone()})) ;
 			} else {
 				deferred = null ;
@@ -618,7 +686,7 @@ myfn("ok") ;
 			synthBlock.body[0].body.forEach(function(n){ asyncWalk.walkDown(n) } ) ;
 			
 			// Now transform each case so that 'break' looks like return <deferred>
-			synthBlock.body[0].body.forEach(function(caseStmt,idx){
+			switchStmt.body.forEach(function(caseStmt,idx){
 				if (!(caseStmt instanceof U2.AST_SwitchBranch)) {
 					throw new Error("switch contains non-case/default statement: "+caseStmt.TYPE) ;
 				}
@@ -647,7 +715,7 @@ myfn("ok") ;
 				var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
-					ref.parent[ref.field].push(makeContinuation(ctnName,afterTry)) ;
+					ref.parent[ref.field].unshift(makeContinuation(ctnName,afterTry)) ;
 					continuation = thisCall(ctnName) ; 
 				}
 			} else {
@@ -661,13 +729,12 @@ myfn("ok") ;
 			}
 			if (node.bcatch) {
 				var symCatch = "$catch_"+generateSymbol(node.bcatch.argname) ;
-				// catcher is not a continuation as it has arguments,
-				// but we set the prop nothositable so it doesn't get hoisted
+				// catcher is not a continuation as it has arguments
 				var catcher = makeFn(symCatch,node.bcatch.body,[node.bcatch.argname.clone()]) ; 
-				catcher.setProperties({nothositable:true});
-				node.bcatch.body = [catcher,thisCall(symCatch,[node.bcatch.argname.clone()])] ;
+				node.bcatch.body = [thisCall(symCatch,[node.bcatch.argname.clone()])] ;
+				node.body.unshift(catcher) ;
 			}
-			if (node.bfinally) {
+			if (node.bfinally) { /** TODO: Not yet working! **/
 				var symFinal = "finally_"+generateSymbol() ;
 				var finalize = makeContinuation(symFinal,node.bfinally.body) ; 
 				node.bfinally.body = [finalize,thisCall(symFinal)] ;
@@ -1076,7 +1143,7 @@ myfn("ok") ;
 						name:new U2.AST_SymbolRef({name:"*"}),
 						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
 						          new U2.AST_SymbolFunarg({name:config.$error})],
-						body:fn.body
+						body:mapReturns(fn.body,true).concat(new U2.AST_Return({value:new U2.AST_SymbolRef({name:config.$return})}))
 					}) ;
 					var awaits = scopedNodes(generator,function(n){
 						return (n instanceof U2.AST_UnaryPrefix) && n.operator=="await" ;
@@ -1131,7 +1198,7 @@ myfn("ok") ;
 				var functions = scopedNodes(node,function hoistable(n){
 					// YES: We're a named function, but not a continuation
 					if ((n instanceof U2.AST_Lambda) && n.name) { 
-						return !(n.props && (n.props.nothositable || n.props.continuation)) ;
+						return !(n.props && n.props.continuation) ;
 					}
 					
 					// YES: We're a named async function
@@ -1608,31 +1675,35 @@ function initialize(initOpts){
 		nodent.spawnGenerator = function(promiseProvider,self) {
 			var genF = this ;
 		    return new promiseProvider(function(resolve, reject) {
-		        var gen = genF.call(self,resolve, reject);
-		        function step(nextF) {
+		        var gen = genF.call(self, resolve, reject);
+		        function step(fn,arg) {
 		            var next;
 		            try {
-		                next = nextF();
-		            } catch(e) {
-		                reject(e); 
-		                return;
-		            }
-		            if(next.done) {
-		                resolve(next.value);
-		                return;
-		            } 
+		                next = fn.call(gen,arg);
+			            if(next.done) {
+			            	if (next.value !== resolve) {
+				            	resolve && resolve(next.value);
+				            	resolve = null ;
+			            	}
+			                return;
+			            } 
 
-		            if (next.value.then) {
-			            next.value.then(function(v) {
-			                step(function() { return gen.next(v); });      
-			            }, function(e) {
-			                step(function() { return gen.throw(e); });
-			            });
-		            } else {
-		            	step(function() { return gen.next(next.value); })
+			            if (next.value.then) {
+				            next.value.then(function(v) {
+				                step(gen.next,v); 
+				            }, function(e) {
+				                step(gen.throw,e); 
+				            });
+			            } else {
+			            	step(gen.next,next.value); 
+			            }
+		            } catch(e) {
+		            	reject && reject(e);
+		            	reject = null ;
+		                return;
 		            }
 		        }
-		        step(function() { return gen.next(undefined); });
+		        step(gen.next); 
 		    });
 		}
 
@@ -1747,25 +1818,12 @@ function initialize(initOpts){
 			writable:true
 		}) ;
 
-		function matches(str,match){
-			if (!match)
-				return false ;
-			if (typeof match==="string")
-				return match==str ;
-			if ("test" in match)
-				return match.test(str) ;
-		}
-
 		var stdJSLoader = require.extensions['.js'] ; 
 		if (initOpts.useDirective || initOpts.useES7Directive || initOpts.usePromisesDirective) {
 			require.extensions['.js'] = function(mod,filename) {
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var parseOpts = {
-						promises: !!content.match(initOpts.usePromisesDirective),
-						es7: !!content.match(initOpts.useES7Directive)
-				} ; 
-				if (parseOpts.promises) parseOpts.es7 = true ;
-				if (parseOpts.promises || parseOpts.es7 || content.match(initOpts.useDirective)) 
+				var parseOpts = parseCompilerOptions(content,initOpts) ;
+				if (parseOpts) 
 					return require.extensions[initOpts.extension](mod,filename,parseOpts) ;
 				return stdJSLoader(mod,filename) ;
 			} ;
@@ -1775,17 +1833,7 @@ function initialize(initOpts){
 			try {
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				var pr = nodent.parse(content,filename,parseOpts);
-				if (!parseOpts) {
-					parseOpts = {} ;
-					for (var i=0; i<pr.ast.body.length; i++) {
-						if (pr.ast.body[i] instanceof U2.AST_Directive) {
-							var test = "'"+pr.ast.body[i].value+"'" ;
-							parseOpts.promises = matches(test,initOpts.usePromisesDirective) ;
-							parseOpts.es7 = parseOpts.promises || matches(test,initOpts.useES7Directive) ;
-						}
-					}
-				}
-
+				parseOpts = parseOpts || parseCompilerOptions(pr.ast,initOpts) ;
 				nodent.asynchronize(pr,undefined,parseOpts,initOpts) ;
 				nodent.prettyPrint(pr,undefined,parseOpts) ;
 				mod._compile(pr.code, pr.filename);
@@ -1819,7 +1867,8 @@ module.exports = initialize ;
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	// Initialise nodent
-	initialize(process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;	
+	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ; 
+	initialize(initOpts) ;	
 	var path = require('path') ;
 	var n = 2 ;
 	if (process.argv[n]=="--out") {
@@ -1827,12 +1876,8 @@ if (require.main===module && process.argv.length>=3) {
 		n += 1 ;
 		var filename = path.resolve(process.argv[n]) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-		var parseOpts = {
-				promises: !!content.match(config.usePromisesDirective),
-				es7: !!content.match(config.useES7Directive)
-		} ;
-		if (parseOpts.promises) parseOpts.es7 = true ;
-		if (!(parseOpts.promises || parseOpts.es7 || content.match(config.useDirective))) {
+		var parseOpts = parseCompilerOptions(content,initOpts) ;
+		if (!parseOpts) {
 			parseOpts = {es7:true} ;
 			console.warn("/* "+filename+": No 'use nodent' directive, assumed -es7 mode */") ;
 		}
@@ -1841,7 +1886,6 @@ if (require.main===module && process.argv.length>=3) {
 		nodent.asynchronize(pr,undefined,parseOpts,config) ;
 		nodent.prettyPrint(pr,undefined,parseOpts) ;
 		console.log(pr.code) ;
-		
 	} else {
 		// Compile & require
 		var mod = path.resolve(process.argv[n]) ;
