@@ -95,6 +95,8 @@ as opposed to:
 
 Changing the directive will change the generated ES5 JavaScript code, but nothing else. If you use Promises, you must define the variable `Promise` in any files which declare `async` functions, or define a `global.Promise`. Nodent has a `Thenable` member that implements the bare minimum needed by Nodent. This implementation is NOT a full Promise-compliant type, but defines a constructor that creates a type with a Promise friendly `then()` method. 
 
+Versions of nodent since v1.1.0 also support using generators, in common with traceur, regenerator and the ES7 specification. This requires an ES6-compliant JS engine, and has not been tested in production (although it passes the test suite). Note that using generators is considerably slower that using Promises, which is itself slower than using Nodent Thenables or ES7 mode. (See Testing below). If you wish to experiement with generators, `use nodent-generators`.
+
 Declaring Async Functions
 =========================
 
@@ -204,19 +206,24 @@ Defining async functions from ES5
 Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function:
 
 	async function sleep(t) {
-	    setTimeout($return) ;
+	    setTimeout(function(){
+	    	return async t;
+	    },t) ;
 	} 
 
 This works because Nodent translates this into:
 
 	function sleep(t) {
 	    return new Promise(function($return, $error) {
-	        setTimeout($return);
+	        setTimeout(function(){
+	        		return $return(t) ;
+	        },t);
 	    });
 	}
 [_TRY-IT_](http://nodent.mailed.me.uk/#%09async%20function%20sleep(t)%20%7B%0A%09%20%20%20%20setTimeout(%24return)%20%3B%0A%09%7D%20%0A)
 
-...the functions `$return` and `$error` respectively resolve and reject the Promise. This is Nodent-specific. If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above.
+Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38).
+If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
 Gotchas & ES7 compatibility
 ===========================
@@ -311,11 +318,13 @@ values - $return and $error. This can make implementing variable argument functi
 
 Diffrences from the ES7 specification
 -------------------------------------
-* No generators are used. Nodent works simply by transforming your original source
-* As the current version, `finally { }` blocks are NOT transformed by Nodent
-* As the current version, `for (...in...)` loops are NOT transformed by Nodent
+* Generators and Promises are optional. Nodent works simply by transforming your original source
+* As of current version, `finally { }` blocks are NOT transformed by Nodent
+* As of current version, `for (...in...)` loops are NOT transformed by Nodent
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted.
 * Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
+* The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38)
+* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otehrwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
 
 Auto-parse from Nodejs
 ======================
@@ -501,32 +510,33 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	cd ..
 	./nodent.js tests
 	
-	await-usage.js  x5000   nodent-es7,34ms     nodent.Thenable,73%     native,1279%        bluebird,229%       rsvp,220%       when,152%           
-	complex.js      x753    nodent-es7,100ms    nodent.Thenable,86%     native,234%         bluebird,227%       rsvp,149%       when,133%           
-	declarations.js x5000   nodent-es7,74ms     nodent.Thenable,77%     native,232%         bluebird,113%       rsvp,117%       when,100%           
-	dowhile.js      x5000   nodent-es7,48ms     nodent.Thenable,79%     native,1014%        bluebird,183%       rsvp,216%       when,156%           
-	else-if.js      x5000   nodent-es7,46ms     nodent.Thenable,78%     native,1204%        bluebird,232%       rsvp,219%       when,165%           
-	for-if.js       x5000   nodent-es7,49ms     nodent.Thenable,93%     native,1312%        bluebird,242%       rsvp,222%       when,191%           
-	for.js          x5000   nodent-es7,52ms     nodent.Thenable,88%     native,784%         bluebird,175%       rsvp,150%       when,142%           
-	fs-sync.js      x18     nodent-es7,100ms    nodent.Thenable,95%     native,94%          bluebird,95%        rsvp,95%        when,93%        
-	fs.js           x1      nodent-es7,204ms    nodent.Thenable,99%     native,105%         bluebird,112%       rsvp,103%       when,103%           
-	if-stmt-map.js  x1916   nodent-es7,100ms    nodent.Thenable,73%     native,206%         bluebird,118%       rsvp,141%       when,115%           
-	if-stmt.js      x5000   nodent-es7,46ms     nodent.Thenable,89%     native,1247%        bluebird,267%       rsvp,230%       when,156%           
-	inline.js       x5000   nodent-es7,52ms     nodent.Thenable,59%     native,917%         bluebird,173%       rsvp,165%       when,121%           
-	method.js       x929    nodent-es7,100ms    nodent.Thenable,112%    native,186%         bluebird,216%       rsvp,137%       when,136%           
-	nested-async.js x5000   nodent-es7,16ms     nodent.Thenable,68%     native,725%         bluebird,206%       rsvp,112%       when,118%           
-	nested-await.js x5000   nodent-es7,24ms     nodent.Thenable,50%     native,887%         bluebird,175%       rsvp,162%       when,91%        
-	obj.js          x867    nodent-es7,100ms    nodent.Thenable,92%     native,200%         bluebird,178%       rsvp,134%       when,120%           
-	optimized.js    x5000   nodent-es7,20ms     nodent.Thenable,25%     native,360%         bluebird,95%        rsvp,60%        when,45%        
-	perf-2.js       x1      nodent-es7,852ms    nodent.Thenable,101%    native,197%         bluebird,193%       rsvp,135%       when,139%           
-	perf.js         x2      nodent-es7,127ms    nodent.Thenable,134%    native,1162%        bluebird,262%       rsvp,192%       when,175%           
-	ret-fn.js       x5000   nodent-es7,61ms     nodent.Thenable,70%     native,491%         bluebird,131%       rsvp,118%       when,91%        
-	sleep.js        x1      nodent-es7,293ms    nodent.Thenable,100%    native,100%         bluebird,99%        rsvp,103%       when,100%           
-	switch-stmt.js  x5000   nodent-es7,28ms     nodent.Thenable,64%     native,835%         bluebird,178%       rsvp,146%       when,114%           
-	sync-await.js   x24     nodent-es7,107ms    nodent.Thenable,143%    native,88%          bluebird,31%        rsvp,28%        when,32%        
-	sync-ret.js     x1      nodent-es7,101ms    nodent.Thenable,?,n/a   native,?,n/a        bluebird,?,n/a      rsvp,?,n/a      when,?,n/a          
-	try.js          x773    nodent-es7,100ms    nodent.Thenable,94%     native,195%         bluebird,184%       rsvp,129%       when,130%           
-	while.js        x942    nodent-es7,100ms    nodent.Thenable,94%     native,173%         bluebird,178%       rsvp,124%       when,124%           
+	await-usage.js  x2423       nodent-es7,100ms    nodent.Thenable,92%     native,307%     bluebird,187%       rsvp,140%       when,125%       
+	complex.js      x294        nodent-es7,100ms    nodent.Thenable,86%     native,186%     bluebird,144%       rsvp,136%       when,123%       
+	declarations.js x1908       nodent-es7,100ms    nodent.Thenable,96%     native,165%     bluebird,128%       rsvp,128%       when,124%       
+	dowhile.js      x2006       nodent-es7,100ms    nodent.Thenable,100%    native,330%     bluebird,133%       rsvp,122%       when,108%       
+	else-if.js      x2086       nodent-es7,100ms    nodent.Thenable,92%     native,380%     bluebird,128%       rsvp,143%       when,151%       
+	for-if.js       x2120       nodent-es7,100ms    nodent.Thenable,86%     native,400%     bluebird,164%       rsvp,154%       when,141%       
+	for.js          x1814       nodent-es7,100ms    nodent.Thenable,93%     native,273%     bluebird,117%       rsvp,108%       when,111%       
+	fs-sync.js      x19         nodent-es7,103ms    nodent.Thenable,92%     native,91%      bluebird,94%        rsvp,149%       when,100%       
+	fs.js           x1          nodent-es7,198ms    nodent.Thenable,93%     native,94%      bluebird,110%       rsvp,100%       when,96%    
+	if-stmt-map.js  x1101       nodent-es7,100ms    nodent.Thenable,99%     native,194%     bluebird,122%       rsvp,112%       when,113%       
+	if-stmt.js      x2136       nodent-es7,100ms    nodent.Thenable,91%     native,379%     bluebird,161%       rsvp,164%       when,138%       
+	if-try.js       x1197       nodent-es7,100ms    nodent.Thenable,96%     native,174%     bluebird,147%       rsvp,125%       when,126%       
+	inline.js       x2287       nodent-es7,100ms    nodent.Thenable,90%     native,370%     bluebird,163%       rsvp,161%       when,144%       
+	method.js       x621        nodent-es7,100ms    nodent.Thenable,107%    native,172%     bluebird,186%       rsvp,145%       when,149%       
+	nested-async.js x2788       nodent-es7,100ms    nodent.Thenable,94%     native,197%     bluebird,132%       rsvp,150%       when,147%       
+	nested-await.js x3008       nodent-es7,100ms    nodent.Thenable,93%     native,258%     bluebird,141%       rsvp,135%       when,123%       
+	optimized.js    x2786       nodent-es7,100ms    nodent.Thenable,80%     native,156%     bluebird,110%       rsvp,98%        when,104%       
+	perf-2.js       x1          nodent-es7,181ms    nodent.Thenable,100%    native,200%     bluebird,203%       rsvp,139%       when,140%       
+	perf.js         x17         nodent-es7,104ms    nodent.Thenable,137%    native,1361%    bluebird,276%       rsvp,205%       when,268%       
+	ret-fn.js       x1813       nodent-es7,101ms    nodent.Thenable,82%     native,193%     bluebird,106%       rsvp,114%       when,98%    
+	sleep.js        x1          nodent-es7,293ms    nodent.Thenable,100%    native,100%     bluebird,100%       rsvp,100%       when,100%       
+	switch-stmt.js  x2612       nodent-es7,100ms    nodent.Thenable,87%     native,276%     bluebird,137%       rsvp,136%       when,127%       
+	sync-await.js   x62         nodent-es7,101ms    nodent.Thenable,99%     native,96%      bluebird,151%       rsvp,72%        when,286%       
+	sync-ret.js     x1          nodent-es7,101ms    nodent.Thenable,?,n/a   native,?,n/a    bluebird,?,n/a      rsvp,?,n/a      when,?,n/a      
+	try-if.js       x1187       nodent-es7,100ms    nodent.Thenable,98%     native,151%     bluebird,121%       rsvp,116%       when,115%       
+	try.js          x521        nodent-es7,100ms    nodent.Thenable,92%     native,179%     bluebird,172%       rsvp,119%       when,117%       
+	while.js        x656        nodent-es7,100ms    nodent.Thenable,97%     native,176%     bluebird,160%       rsvp,143%       when,137%       
 	
 The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
@@ -545,6 +555,10 @@ The test runner in tests/index.js accepts the following options:
 
 Changelog
 ==========
+
+06Apr15: Hoist continuations as Firefox doesn't like forward references 
+06Apr15: Implement `return async` and `throw async` for callbacks nested within async functions to replace $return and $error
+
 
 04Apr15: Correct documentation for "use nodent-promise". In generator mode, bind the generator to the caller's `this` to enable constructs such as `myclass.prototype.fn = async function ... ;`. The ES7 specification is not clear as to whether as to how this construct is exectued (i.e. there is no mechanism for binding the generator to the calling object, but it is syntactically valid).
  
