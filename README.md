@@ -152,6 +152,7 @@ This is transformed into the code:
 		var result = $await_myFunc$1 ;
 		moreStuff(result) ;
 	},$error) ;
+
 [_TRY-IT_](http://nodent.mailed.me.uk/#var%20result%20%3D%20await%20myFunc(args)%20%3B%0AmoreStuff(result)%20%3B%0A)
 
 Yes, it hides a return statement in your code. If you step line by line, you WON'T hit "moreStuff"
@@ -259,8 +260,8 @@ Intentionally omit the return as we want another function to do it later:
 		fs.readFile("404.html",function(err,data){
 				// The callback is NOT mapped by Nodent - this function 
 				// is a standard callback, not an async function
-				if (err) return $error(err) ;
-				return $return(data) ;
+				if (err) throw async err ;
+				return async data ;
 		}) ;
 		// NB: An implicit return here would cause $return() to be invoked twice
 		// so exit without doing anything
@@ -301,8 +302,7 @@ Function.prototype.toString & arguments
 ---------------------------------------
 Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
 
-The JavaScript arguments value is problematic in async functions. Typically you will only ever see two
-values - $return and $error. This can make implementing variable argument functions difficult. If you must do this either use type-testing of each parameter, or implement your async function 'by hand':
+The JavaScript arguments value is problematic in async functions as the body of the code is wrapped in another function. This can make implementing variable argument functions difficult. If you must do this either use type-testing of each parameter, or implement your async function 'by hand':
 
 	// Can be 'await'ed like an async function
 	function varArgs() {
