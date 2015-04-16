@@ -1,16 +1,5 @@
-function wait(){
-	return new Promise(function($return,$error){
-		setImmediate(function(){
-			try{
-				$return();
-			} catch(ex){ 
-				$error(ex) 
-			}}) ;
-	}) ;
-} 
-
 async function maybe(x) {
-	await wait() ;
+	await breathe() ;
 	if (x>2) {
 		JSON.parse("*") ;
 		return -1 ;

@@ -556,6 +556,8 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+16Apr15: Fix case where try-for-throw nesting did not thread exception handling correctly and create test case.
+
 06Apr15: Hoist continuations as Firefox doesn't like forward references 
 06Apr15: Implement `return async` and `throw async` for callbacks nested within async functions to replace $return and $error
 

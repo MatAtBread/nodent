@@ -433,13 +433,13 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 		// Because we create functions (and scopes), we need all declarations before use
 		pr.ast = hoistDeclarations(pr.ast) ;
 
+		// Convert async functions and their contained returns & throws
+		pr.ast = asyncDefine(pr.ast) ;
+
 		// Loops are asynchronized in an odd way - the loop is turned into a function that is
 		// invoked through tail recursion OR callback. They are like the inner functions of
 		// async functions to allow for completion and throwing
 		pr.ast = asyncLoops(pr.ast) ;
-		
-		// Convert async functions and their contained returns & throws
-		pr.ast = asyncDefine(pr.ast) ;
 		
 		// Handle the various JS control flow keywords by splitting into continuations that could
 		// be invoked asynchronously
@@ -941,12 +941,7 @@ myfn("ok") ;
 				for (var i=0; i<body.length;i++) {
 					var w ;
 					body[i].walk(w = new U2.TreeWalker(function(n,descend){
-						if (n instanceof U2.AST_Return) {
-							n.value = new U2.AST_Call({
-								expression:new U2.AST_SymbolRef({name:config.$return}),
-								args:[n.value.clone()]}) ; 
-							return true ;
-						} else if (n instanceof U2.AST_Break) {
+						if (n instanceof U2.AST_Break) {
 							coerce(n,mapBreak.clone()) ;
 						} else if (n instanceof U2.AST_Continue) {
 							coerce(n,mapContinue.clone()) ;
@@ -1876,7 +1871,7 @@ if (require.main===module && process.argv.length>=3) {
 		n += 1 ;
 		var filename = path.resolve(process.argv[n]) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-		var parseOpts = parseCompilerOptions(content,initOpts) ;
+		var parseOpts = parseCompilerOptions(content,config) ;
 		if (!parseOpts) {
 			parseOpts = {es7:true} ;
 			console.warn("/* "+filename+": No 'use nodent' directive, assumed -es7 mode */") ;
