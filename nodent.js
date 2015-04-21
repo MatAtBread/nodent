@@ -715,7 +715,9 @@ myfn("ok") ;
 				var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
-					ref.parent[ref.field].unshift(makeContinuation(ctnName,afterTry)) ;
+					var afterContinuation = makeContinuation(ctnName,afterTry) ;
+					afterContinuation = asyncWalk.walkDown(afterContinuation) ;
+					ref.parent[ref.field].unshift(afterContinuation) ;
 					continuation = thisCall(ctnName) ; 
 				}
 			} else {
@@ -980,6 +982,7 @@ myfn("ok") ;
 
 				var replace = new U2.AST_SimpleStatement({body:
 					new U2.AST_UnaryPrefix({operator:'await',
+						//expression:subCall
 						expression:new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: subCall,
@@ -1650,22 +1653,30 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
+		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
-			var fn = this ;
-			fn.isAsync = true ;
-			var thenable = function(result,error){
+			var resolver = this ;
+			function thenable(result,error){
 				try {
-					return fn.call(self,result,error);
+					return resolver.call(self,result,error);
 				} catch (ex) {
-					return catcher.call(self,ex);
+					return (error||catcher).call(self,ex);
 				}
 			} ; 
 			thenable.then = thenable ;
 			return thenable ;
-		}
-		Object.defineProperty(Function.prototype,"$asyncbind",
-				{value:nodent.thenTryCatch,writeable:true}
-			) ;
+		};
+
+		nodent.Thenable = function(thenable) {
+			//return nodent.thenTryCatch.call(thenable,this) ;
+			thenable.then = thenable ;
+			return thenable ;
+		};
+
+		Object.defineProperty(Function.prototype,"$asyncbind",{
+			value:nodent.thenTryCatch,
+			writeable:true
+		}) ;
 		
 		nodent.spawnGenerator = function(promiseProvider,self) {
 			var genF = this ;
@@ -1705,19 +1716,6 @@ function initialize(initOpts){
 		Object.defineProperty(Function.prototype,"$asyncspawn",
 				{value:nodent.spawnGenerator,writeable:true}
 			) ;
-
-		// Give a funcback a thenable interface, so it can be invoked by Promises.
-		nodent.Promise = nodent.Thenable = function(resolver) {
-			var fn = function(result,error){
-				try {
-					return resolver.call(this,result,error) ;
-				} catch(ex) {
-					return error.call(this,ex) ;
-				}
-			} ;
-			fn.then = fn ;
-			return fn ;
-		};
 
 		nodent.asyncify = asyncify ;
 		/**
