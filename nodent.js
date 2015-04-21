@@ -1465,7 +1465,7 @@ myfn("ok") ;
 
 var nodent ;
 function asyncify(promiseProvider) {
-	promiseProvider = promiseProvider || nodent.Promise ;
+	promiseProvider = promiseProvider || nodent.Thenable ;
 	return function(obj,filter,suffix) {
 		if (Array.isArray(filter)) {
 			var names = filter ;
@@ -1675,6 +1675,12 @@ function initialize(initOpts){
 			thenable.then = thenable ;
 			return thenable ;
 		};
+		Object.defineProprety(nodent,"Promise",{
+			get:function(){
+				initOpts.log("Warning: nodent.Promise is deprecated in favour of nodent.Thenable");
+				return nodent.Thenable;
+			}
+		}) ;
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
 			value:nodent.thenTryCatch,
@@ -1771,7 +1777,7 @@ function initialize(initOpts){
 		 */
 		Object.defineProperty(Function.prototype,"noDentify",{
 			value:function(idx,errorIdx,resultIdx,promiseProvider) {
-				promiseProvider = promiseProvider || nodent.Promise ;
+				promiseProvider = promiseProvider || nodent.Thenable ;
 				var fn = this ;
 				return function() {
 					var scope = this ;
