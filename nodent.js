@@ -314,7 +314,7 @@ function stripBOM(content) {
 		content = content.slice(1);
 	}
 	if (content.substring(0,2) === "#!") {
-		content = content.indexOf("\n");
+		content = content.slice(content.indexOf("\n"));
 	}
 	return content;
 }
