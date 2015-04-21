@@ -1,7 +1,7 @@
 async function doStuff(x) {
     setTimeout(function() {
         throw async new Error(x);
-    }, 1e3);
+    }, 10);
 };
 
 module.exports = async function() {

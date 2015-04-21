@@ -556,11 +556,12 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+21Apr15: Fix issue https://github.com/MatAtBread/nodent/issues/4 reported by https://github.com/michal-grzejszczak, where functions hoisted out of try-catch block (for Firefox) lost their exception handlers. 
+ 
 16Apr15: Fix case where try-for-throw nesting did not thread exception handling correctly and create test case.
 
 06Apr15: Hoist continuations as Firefox doesn't like forward references 
 06Apr15: Implement `return async` and `throw async` for callbacks nested within async functions to replace $return and $error
-
 
 04Apr15: Correct documentation for "use nodent-promise". In generator mode, bind the generator to the caller's `this` to enable constructs such as `myclass.prototype.fn = async function ... ;`. The ES7 specification is not clear as to whether as to how this construct is exectued (i.e. there is no mechanism for binding the generator to the calling object, but it is syntactically valid).
  

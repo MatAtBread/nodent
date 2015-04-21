@@ -1668,9 +1668,9 @@ function initialize(initOpts){
 		};
 
 		nodent.Thenable = function(thenable) {
-			return nodent.thenTryCatch.call(thenable,this) ;
-			//thenable.then = thenable ;
-			//return thenable ;
+			//return nodent.thenTryCatch.call(thenable,this) ;
+			thenable.then = thenable ;
+			return thenable ;
 		};
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
