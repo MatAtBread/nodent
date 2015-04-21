@@ -92,10 +92,10 @@ function toArray(ast) {
 var config = {
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
-		useDirective:/['"]use\s+nodent['"]/,
-		useES7Directive:/['"]use\s+nodent\-es7['"]/,
-		usePromisesDirective:/['"]use\s+nodent\-promise['"]/,
-		useGeneratorsDirective:/['"]use\s+nodent\-generators['"]/,
+		useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
+		useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
+		usePromisesDirective:/^\s*['"]use\s+nodent\-promise['"]\s*;/,
+		useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators['"]\s*;/,
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -148,7 +148,7 @@ function parseCompilerOptions(code,initOpts) {
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.es5assign || parseOpts.generators) {
 		if ((parseOpts.promises || parseOpts.es7) && (parseOpts.es5assign || parseOpts.generators)) {
-			initOpts.log("Invalid combination of 'use nodent*' directives. Assuming 'use nodent-es7'") ;
+			initOpts.log("No valid 'use nodent*' directive, assumed -es7 mode") ;
 			parseOpts = {es7:true} ;
 		}
 		return parseOpts ;
@@ -1875,7 +1875,7 @@ if (require.main===module && process.argv.length>=3) {
 		var parseOpts = parseCompilerOptions(content,config) ;
 		if (!parseOpts) {
 			parseOpts = {es7:true} ;
-			console.warn("/* "+filename+": No 'use nodent' directive, assumed -es7 mode */") ;
+			console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
 		}
 		
 		var pr = nodent.parse(content,filename,parseOpts);
