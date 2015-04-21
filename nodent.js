@@ -1675,7 +1675,7 @@ function initialize(initOpts){
 			thenable.then = thenable ;
 			return thenable ;
 		};
-		Object.defineProprety(nodent,"Promise",{
+		Object.definePropety(nodent,"Promise",{
 			get:function(){
 				initOpts.log("Warning: nodent.Promise is deprecated in favour of nodent.Thenable");
 				return nodent.Thenable;
