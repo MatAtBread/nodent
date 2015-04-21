@@ -1650,22 +1650,28 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
+		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
-			var fn = this ;
-			fn.isAsync = true ;
+			var resolver = this ;
 			var thenable = function(result,error){
 				try {
-					return fn.call(self,result,error);
+					return resolver.call(self,result,error);
 				} catch (ex) {
-					return catcher.call(self,ex);
+					return (error||catcher).call(self,ex);
 				}
 			} ; 
-			thenable.then = thenable ;
-			return thenable ;
-		}
-		Object.defineProperty(Function.prototype,"$asyncbind",
-				{value:nodent.thenTryCatch,writeable:true}
-			) ;
+			return thenable.then = thenable ;
+		};
+
+		nodent.Thenable = function(resolver) {
+			// return nodent.thenTryCatch.call(resolver,this) ;
+			return resolver.then = resolver ;
+		};
+
+		Object.defineProperty(Function.prototype,"$asyncbind",{
+			value:nodent.thenTryCatch,
+			writeable:true
+		}) ;
 		
 		nodent.spawnGenerator = function(promiseProvider,self) {
 			var genF = this ;
@@ -1705,19 +1711,6 @@ function initialize(initOpts){
 		Object.defineProperty(Function.prototype,"$asyncspawn",
 				{value:nodent.spawnGenerator,writeable:true}
 			) ;
-
-		// Give a funcback a thenable interface, so it can be invoked by Promises.
-		nodent.Promise = nodent.Thenable = function(resolver) {
-			var fn = function(result,error){
-				try {
-					return resolver.call(this,result,error) ;
-				} catch(ex) {
-					return error.call(this,ex) ;
-				}
-			} ;
-			fn.then = fn ;
-			return fn ;
-		};
 
 		nodent.asyncify = asyncify ;
 		/**
