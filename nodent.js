@@ -715,7 +715,9 @@ myfn("ok") ;
 				var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
-					ref.parent[ref.field].unshift(makeContinuation(ctnName,afterTry)) ;
+					var afterContinuation = makeContinuation(ctnName,afterTry) ;
+					afterContinuation = asyncWalk.walkDown(afterContinuation) ;
+					ref.parent[ref.field].unshift(afterContinuation) ;
 					continuation = thisCall(ctnName) ; 
 				}
 			} else {
@@ -980,6 +982,7 @@ myfn("ok") ;
 
 				var replace = new U2.AST_SimpleStatement({body:
 					new U2.AST_UnaryPrefix({operator:'await',
+						//expression:subCall
 						expression:new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: subCall,
@@ -1653,19 +1656,21 @@ function initialize(initOpts){
 		// Give a funcback a thenable interface, so it can be invoked by Promises.
 		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
 			var resolver = this ;
-			var thenable = function(result,error){
+			function thenable(result,error){
 				try {
 					return resolver.call(self,result,error);
 				} catch (ex) {
 					return (error||catcher).call(self,ex);
 				}
 			} ; 
-			return thenable.then = thenable ;
+			thenable.then = thenable ;
+			return thenable ;
 		};
 
-		nodent.Thenable = function(resolver) {
-			// return nodent.thenTryCatch.call(resolver,this) ;
-			return resolver.then = resolver ;
+		nodent.Thenable = function(thenable) {
+			return nodent.thenTryCatch.call(thenable,this) ;
+			//thenable.then = thenable ;
+			//return thenable ;
 		};
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
