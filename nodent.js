@@ -313,6 +313,9 @@ function stripBOM(content) {
 	if (content.charCodeAt(0) === 0xFEFF) {
 		content = content.slice(1);
 	}
+	if (content.substring(0,2) === "#!") {
+		content = content.indexOf("\n");
+	}
 	return content;
 }
 
