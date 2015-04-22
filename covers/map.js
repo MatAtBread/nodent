@@ -50,7 +50,11 @@ module.exports = function(nodent) {
 				if (asyncFn) {
 					asyncFn.apply(this,arguments).then(complete,completeError);	
 				} else {
-					(isArray?e:what[e]).then(complete,completeError);
+					var fn = (isArray?e:what[e]) ;
+					if ((fn instanceof Object) && typeof fn.then==="function")
+						fn.then(complete,completeError);
+					else // Not Thenable - just pass back the value
+						complete(fn) ;
 				}
 			}) ;
 		});

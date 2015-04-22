@@ -164,20 +164,21 @@ Awaiting multiple times
 A statement or expression can combine multiple async results, for example:
 
 	console.log(await as1(1),await as2("hello")+await as1(3)) ;
-[_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%20)
+[_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%3B)
 
 This is both syntactically and semantically meaningful, but in the current implementation will
 call the async functions serially (note: the order in which they are invoked is note guaranteed).
 It might well be more efficient in this case to use the 'map' cover function (see below) to execute
 all the functions in parallel first, and use the results:
 
-	var map = require('nodent')({use:['map']}).map ;
+	var nodent = require('nodent')() ;
+	var map = nodent.require('map') ;
 	// Execute all the async functions at the same time
 	mapped = await map([as1(1),as2("hello"),as1(3)]) ;
 	// When they're done:
 	console.log(mapped[0],mapped[1]+mapped[2]) ;
 
-Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`, but more flexible in someways (it accepts array members that are NOT Promises), and less in others (it only accepts arrays - `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). 
+Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is  more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). As of nodent v1.2.1, any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
 
 async, await and ES5
 ====================
@@ -204,10 +205,11 @@ or just:
 Defining async functions from ES5
 ---------------------------------
    
-Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function:
+Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function, and in its callback use the form `return async <expression>` to not only return from the callback, but also the surrounding async function:
 
 	async function sleep(t) {
 	    setTimeout(function(){
+	    	// NB: "return async" and "throw async" are NOT ES7 standard syntax
 	    	return async t;
 	    },t) ;
 	} 
@@ -234,26 +236,26 @@ As of version 1.2.x, Nodent's return resolution routine (called $asyncbind, unle
 	// A simple async function that always returns "abc"
 	async function abc() { return "abc" } 
 
-	// Call abc(), wait (resolve) the result (i.i. "abc"), and return it 
+	// Call abc(), wait (resolve) the result (i.i. "abc"), and return it in a hidden Promise
 	async function test1() { return await abc() ; }
+	// Wait for the hidden Promise to resolve, and show it's result
 	console.log(await test1()) ; // "abc"
 
 	// Call abc() and return it
 	async function test2() { return abc() ; }
-	console.log(await test2()) ; // Now await the result of test2(), which is the Promise of abc(): "abc"
+	// Now await the result of test2(), which is the Promise of abc()
+	console.log(await test2()) ; 	// "abc"
 
 This is potentially a breaking change from versions prior to v1.2.0, if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself.
 
 This is the behaviour implied by the ES7 specification.
 
-If you are cross-compiling ES7 code using Nodent for use in another environment (e.g. a Browser), the return resolution routine can be exposed using the expression:
-
-	nodent.$asyncbind.toString()
+If you are cross-compiling ES7 code using Nodent for use in another environment (e.g. a Browser), the return resolution routine can be exposed using the expression `nodent.$asyncbind.toString()`. See the section "Use in the Browser" for more details.
 
 Gotchas & ES7 compatibility
 ===========================
 
-Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as generators and promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
+Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
 
 Implicit return
 ---------------
@@ -346,10 +348,10 @@ Diffrences from the ES7 specification
 * As of current version, `finally { }` blocks are NOT transformed by Nodent
 * As of current version, `for (...in...)` loops are NOT transformed by Nodent
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The return value from the aynchronous function is compilation mode dependent, but generally a Thenable protocol. 
-* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
+* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from default-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
 * The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38)
 * async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otehrwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
-* Versions prior to 1.2.x did NOT unwrap Thenable returns. The ES7 specification assumes that this is the case as Promises never resolve to a Promise (see Thenable Umwrapping).
+* Versions prior to 1.2.x did NOT unwrap Thenable returns. The ES7 specification assumes that this is the case as Promises never resolve to a Promise (see Thenable Unwrapping).
 
 Use in the Browser
 ==================
@@ -364,9 +366,13 @@ For example, with connect:
 	...
 	var app = connect() ;
 	...
-	app.use(nodent.generateRequestHandler("./static-files/web", 	// Path to where the files are located,
-		/\.njs$/,	// Parse & compiles ending in ".njs"
-		{})) ;	// Options (none)
+	app.use(nodent.generateRequestHandler(
+		// Path to where the files are located,
+		"./static-files/web",
+		// Only parse & compiles ending in ".njs" 	
+		/\.njs$/,
+		// Options (see below)	
+		{})) ;	
 
 The regex can be omitted, in which case it has the value above.
 
@@ -376,7 +382,7 @@ The currently supported options are:
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 	runtime: <boolean>			// Set to preceed the compiled code with the runtime support required by Nodent v1.x (see below)
 
-NB: As of v1.0.x there is a small runtime routine that should be defined on the Function.prototype in the execution environment. This was to provide compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`.
+NB: As of v1.0.x there is a runtime routine that should be defined on the Function.prototype in the execution environment. This was to provide compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`.
 
 If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example 
 
@@ -389,19 +395,19 @@ Further information on using Nodent in the browser can be found at https://githu
 Built-in conversions & helpers
 ==============================
 
-NB: As of v1.2.x, the previous nodent option `{use:["name"]}` option is deprecated, as it was dependent on module loading order in the case where you require a module that itself requires nodent with different options. To access a cover or helper, use the `nodent.require("name")` function.
-
 Nodentify has a (small but possibly growing) set of covers for common Node modules. You specify these through the `require` function:
 
 	var nodent = require('nodent')() ;
 	var nhttp = nodent.require('http') ; 
 
-Some covers can accept a configuation object, in this case specify the options as a nested object:
+Some covers can accept a configuation object, in this case specify the options in the second parameter:
 
 	var http = nodent.require('http',{autoProtocol:true}) ;
 
-http(s)
--------
+NB: As of v1.2.x, the previous nodent option `{use:["name"]}` option is deprecated (although still implemented), as it was dependent on module loading order in the case where you require a module that itself requires nodent with different options. To access a cover or helper, use the `nodent.require("name")` function.
+
+"http" and "https"
+------------------
 The nodent version of http.get returns a Thenable:
 
 	nhttp.get(options).then(function(response){},function(error){}) ;
@@ -450,9 +456,12 @@ The "http" cover (not https) can accept a single configuration option 'autoProto
 
 "map"
 -----
-The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map(). The map function takes three parameters: the entity to iterate over, optionally an object in which to place the results (they are returned from the async map in any case), and the async function to call on each iteration.
+The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map(). The map function takes three parameters: 
+* the entity to iterate over, 
+* optionally an object in which to place the results (they are returned from the async map in any case),
+* the async function to call on each iteration.
 
-The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as return asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
+The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as returned asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
 
 * An Object - each field is passed to the async-iterator function
 * An Array - each element is passed to the async-iterator function
@@ -466,7 +475,8 @@ Example: mapping an object
 
 	// Asynchronously map every key in "myObject" by adding 1 to the value of the key
 	mapped = await map(myObject,async function(key){
-		return myObject[key]+1 ;	// This can be async without issues
+		// This can be async without issues
+		return myObject[key]+1 ;	
 	}) ;
 	// All done - mapped contains the new object with all the elements "incremeneted"
 
@@ -502,7 +512,8 @@ Example: execute arbitrary async functions in parallel and return when they are 
 
 	mapped = await map([asyncFn("abc"),asyncFn2("def")]) ;
 	
-	/* All done - mapped is an new array containing the async-return of the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception. */
+	/* All done - mapped is an new array containing the async-returns */
+
 	
 
 Example: execute arbitrary labelled async functions in parallel and return when they are all complete
@@ -513,9 +524,15 @@ Example: execute arbitrary labelled async functions in parallel and return when 
 	mapped = await map({for:asyncFn("abc"),bar:asyncFn2("def")}) ;
 	console.log(mapped.foo, mapped.bar) ;
 
-	/* All done - mapped is an new object containing the async-returns in each named memeber. The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception. */
+	/* All done - mapped is an new object containing the async-returns in each named member */
 
-In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, as they can be easily tested for in the mapped object after completion. The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
+In the latter two cases, where there is only an single parameter, the async return value from `map` is a corresponding array or object to the parameter where each member has been resolved if Thenable (a Promise or async function value), or passed through unchanged if not Thenable.
+
+The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.  the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.
+
+In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, and so they can be easily tested for in the mapped object after completion. 
+
+The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
 
 nodent.asyncify
 ---------------
@@ -602,7 +619,7 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
-22Apr15: Implement un-wrapping in $asyncbind (see Thenable Umwrapping). This is potentially a breaking change (if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself).
+22Apr15: Implement un-wrapping in $asyncbind (see Thenable Unwrapping). This is potentially a breaking change (if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself).
 
 21Apr15: Fix issue https://github.com/MatAtBread/nodent/issues/4 reported by https://github.com/michal-grzejszczak, where functions hoisted out of try-catch block (for Firefox) lost their exception handlers. 
  
