@@ -1687,7 +1687,8 @@ function initialize(initOpts){
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
 			value:nodent.$asyncbind,
-			writeable:true
+			writeable:true, 
+			configurable:true
 		}) ;
 		
 		nodent.spawnGenerator = function(promiseProvider,self) {
