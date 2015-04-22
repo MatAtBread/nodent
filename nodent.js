@@ -1727,7 +1727,7 @@ function initialize(initOpts){
 		}
 
 		Object.defineProperty(Function.prototype,"$asyncspawn",
-				{value:nodent.spawnGenerator,writeable:true}
+				{value:nodent.spawnGenerator,writeable:true,configurable:true}
 			) ;
 
 		nodent.asyncify = asyncify ;
@@ -1805,12 +1805,13 @@ function initialize(initOpts){
 					return new promiseProvider(resolver) ;
 				};
 			},
-			configurable:false,
+			configurable:true,
 			enumerable:false,
 			writable:true
 		}) ;
 
 		// Method to wrap error handlers
+		/* Deprecated
 		Object.defineProperty(Function.prototype,"chain$error",{
 			value:function(handler){ 
 				var prev = this ; return function(){
@@ -1819,10 +1820,10 @@ function initialize(initOpts){
 					return handler.apply(this,a);
 				} ; 
 			},
-			configurable:false,
+			configurable:true,
 			enumerable:false,
 			writable:true
-		}) ;
+		}) ;*/
 
 		var stdJSLoader = require.extensions['.js'] ; 
 		if (initOpts.useDirective || initOpts.useES7Directive || initOpts.usePromisesDirective) {
