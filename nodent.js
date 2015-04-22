@@ -1641,6 +1641,8 @@ function initialize(initOpts){
 					} else {
 						try {
 							var pr = nodent.compile(content.toString(),req.url,2,options.compiler);
+							if (options.runtime)
+								pr.code = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+";\n"+pr.code ;
 							if (options.enableCache)
 								cache[req.url] = pr.code ; // Don't cache for now
 							res.setHeader("Content-Type", "application/javascript");
@@ -1656,12 +1658,13 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
-		// Give a funcback a thenable interface, so it can be invoked by Promises.
-		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
+		nodent.$asyncbind = function $asyncbind(self,catcher) {
+			/* Give a funcback a thenable interface, so it can be assimilated by a Promise */
 			var resolver = this ;
 			function thenable(result,error){
 				try {
-					return resolver.call(self,result,error);
+					var isThenableResult = (typeof result==="function") && result.then && !resolver.then && (error===void 0) ;
+					return isThenableResult ? result.then(thenable,catcher) : resolver.call(self,result,error);
 				} catch (ex) {
 					return (error||catcher).call(self,ex);
 				}
@@ -1671,7 +1674,7 @@ function initialize(initOpts){
 		};
 
 		nodent.Thenable = function(thenable) {
-			//return nodent.thenTryCatch.call(thenable,this) ;
+			//return nodent.$asyncbind.call(thenable,this) ;
 			thenable.then = thenable ;
 			return thenable ;
 		};
@@ -1683,8 +1686,9 @@ function initialize(initOpts){
 		}) ;
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
-			value:nodent.thenTryCatch,
-			writeable:true
+			value:nodent.$asyncbind,
+			writeable:true, 
+			configurable:true
 		}) ;
 		
 		nodent.spawnGenerator = function(promiseProvider,self) {
@@ -1723,7 +1727,7 @@ function initialize(initOpts){
 		}
 
 		Object.defineProperty(Function.prototype,"$asyncspawn",
-				{value:nodent.spawnGenerator,writeable:true}
+				{value:nodent.spawnGenerator,writeable:true,configurable:true}
 			) ;
 
 		nodent.asyncify = asyncify ;
@@ -1801,12 +1805,13 @@ function initialize(initOpts){
 					return new promiseProvider(resolver) ;
 				};
 			},
-			configurable:false,
+			configurable:true,
 			enumerable:false,
 			writable:true
 		}) ;
 
 		// Method to wrap error handlers
+		/* Deprecated
 		Object.defineProperty(Function.prototype,"chain$error",{
 			value:function(handler){ 
 				var prev = this ; return function(){
@@ -1815,10 +1820,10 @@ function initialize(initOpts){
 					return handler.apply(this,a);
 				} ; 
 			},
-			configurable:false,
+			configurable:true,
 			enumerable:false,
 			writable:true
-		}) ;
+		}) ;*/
 
 		var stdJSLoader = require.extensions['.js'] ; 
 		if (initOpts.useDirective || initOpts.useES7Directive || initOpts.usePromisesDirective) {
