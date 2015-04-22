@@ -1642,7 +1642,7 @@ function initialize(initOpts){
 						try {
 							var pr = nodent.compile(content.toString(),req.url,2,options.compiler);
 							if (options.runtime)
-								pr.code = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+"\n"+pr.code ;
+								pr.code = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+";\n"+pr.code ;
 							if (options.enableCache)
 								cache[req.url] = pr.code ; // Don't cache for now
 							res.setHeader("Content-Type", "application/javascript");
