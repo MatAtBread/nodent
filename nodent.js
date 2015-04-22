@@ -1641,6 +1641,8 @@ function initialize(initOpts){
 					} else {
 						try {
 							var pr = nodent.compile(content.toString(),req.url,2,options.compiler);
+							if (options.runtime)
+								pr.code = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+"\n"+pr.code ;
 							if (options.enableCache)
 								cache[req.url] = pr.code ; // Don't cache for now
 							res.setHeader("Content-Type", "application/javascript");
@@ -1656,12 +1658,13 @@ function initialize(initOpts){
 		};
 		nodent.AST = U2;
 
-		// Give a funcback a thenable interface, so it can be invoked by Promises.
-		nodent.thenTryCatch = function thenTryCatch(self,catcher) {
+		nodent.$asyncbind = function $asyncbind(self,catcher) {
+			/* Give a funcback a thenable interface, so it can be assimilated by a Promise */
 			var resolver = this ;
 			function thenable(result,error){
 				try {
-					return resolver.call(self,result,error);
+					var isThenableResult = (typeof result==="function") && result.then && !resolver.then && (error===void 0) ;
+					return isThenableResult ? result.then(thenable,catcher) : resolver.call(self,result,error);
 				} catch (ex) {
 					return (error||catcher).call(self,ex);
 				}
@@ -1671,7 +1674,7 @@ function initialize(initOpts){
 		};
 
 		nodent.Thenable = function(thenable) {
-			//return nodent.thenTryCatch.call(thenable,this) ;
+			//return nodent.$asyncbind.call(thenable,this) ;
 			thenable.then = thenable ;
 			return thenable ;
 		};
@@ -1683,7 +1686,7 @@ function initialize(initOpts){
 		}) ;
 
 		Object.defineProperty(Function.prototype,"$asyncbind",{
-			value:nodent.thenTryCatch,
+			value:nodent.$asyncbind,
 			writeable:true
 		}) ;
 		

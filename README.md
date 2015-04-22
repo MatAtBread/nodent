@@ -226,6 +226,30 @@ This works because Nodent translates this into:
 Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38).
 If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
+
+Thenable Umwrapping
+-------------------
+As of version 1.2.x, Nodent's return resolution routine (called $asyncbind, unless you configure nodent differently) automatically resolves returns from async functions that are themselves Thenable. In simple terms this means that `test1`  and `test2` produce the identical results:
+
+	// A simple async function that always returns "abc"
+	async function abc() { return "abc" } 
+
+	// Call abc(), wait (resolve) the result (i.i. "abc"), and return it 
+	async function test1() { return await abc() ; }
+	console.log(await test1()) ; // "abc"
+
+	// Call abc() and return it
+	async function test2() { return abc() ; }
+	console.log(await test2()) ; // Now await the result of test2(), which is the Promise of abc(): "abc"
+
+This is potentially a breaking change from versions prior to v1.2.0, if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself.
+
+This is the behaviour implied by the ES7 specification.
+
+If you are cross-compiling ES7 code using Nodent for use in another environment (e.g. a Browser), the return resolution routine can be exposed using the expression:
+
+	nodent.$asyncbind.toString()
+
 Gotchas & ES7 compatibility
 ===========================
 
@@ -321,10 +345,11 @@ Diffrences from the ES7 specification
 * Generators and Promises are optional. Nodent works simply by transforming your original source
 * As of current version, `finally { }` blocks are NOT transformed by Nodent
 * As of current version, `for (...in...)` loops are NOT transformed by Nodent
-* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted.
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The return value from the aynchronous function is compilation mode dependent, but generally a Thenable protocol.
 * Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from global-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
 * The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38)
 * async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otehrwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
+* Versions prior to 1.2.x did NOT unwrap Thenable returns. The ES7 specification assumes that this is the case as Promises never resolve to a Promise (see Thenable Umwrapping).
 
 Auto-parse from Nodejs
 ======================
@@ -346,6 +371,9 @@ The currently supported options are:
 
 	enableCache: <boolean>		// Caches the compiled output in memory for speedy serving.
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
+	runtime: <boolean>			// Set to preceed the compiled code with the runtime support required by Nodent v1.x (see below)
+
+NB: As of v1.0.x there is a small runtime routine that should be defined on the Function.prototype in the execution environment. This was to provide compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`.
 
 Built-in conversions & helpers
 ==============================
@@ -555,6 +583,8 @@ The test runner in tests/index.js accepts the following options:
 
 Changelog
 ==========
+
+22Apr15: Implement un-wrapping in $asyncbind (see Thenable Umwrapping). This is potentially a breaking change (if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself).
 
 21Apr15: Fix issue https://github.com/MatAtBread/nodent/issues/4 reported by https://github.com/michal-grzejszczak, where functions hoisted out of try-catch block (for Firefox) lost their exception handlers. 
  
