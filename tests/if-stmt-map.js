@@ -19,7 +19,7 @@ async function test(x) {
 	return z ;
 };
 
-var map = require('../nodent')({use:['map']}).map ;
+var map = require('../nodent')().require('map') ;
 module.exports = async function() {
 	var s = (await map([test(1),test(0),test(10)])).join("") ;
 	return s == "1 is Odd.0 is Zero and Even.10 is Even.";
