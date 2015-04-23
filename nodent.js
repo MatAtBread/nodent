@@ -1351,7 +1351,8 @@ myfn("ok") ;
 		// and replace with:
 		//		_call_
 		// If the [sym] exists and is referenced elsewhere, replace those too. This
-		// needs to be done recursively from the bottom of the tree upwards
+		// needs to be done recursively from the bottom of the tree upwards.
+		// NB: If _call_ is in the parameter list for the function, this is NOT a correct optimization
 
 		/* For either of the call forms above, return the actually invoked symbol name */
 		function simpleCallName(node) {
@@ -1376,7 +1377,7 @@ myfn("ok") ;
 			if (node instanceof U2.AST_Lambda) {
 				if ((node.body[0] instanceof U2.AST_Return) && node.body[0].value) {
 					var to = simpleCallName(node.body[0].value) ;
-					if (to) {
+					if (to && node.argnames.every(function(sym){ return sym.name != to })) {
 						if (replaced[to])
 							to = replaced[to] ;
 						var from = node.name && node.name.name ;
