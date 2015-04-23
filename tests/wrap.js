@@ -37,7 +37,16 @@ async function go() {
 				passes += 1 ;
 		}
 	}
-	return passes==tests.length*2 ;
+	return passes==tests.length*2  ;
 }
 
-module.exports = go ;
+var map = require('../nodent')().require('map') ;
+async function wrapMap() {
+	var m = await map(tests.map(function(f){ return f()}).concat(['abc'])) ;
+//	console.log(m) ;
+	return m.every(function(x){return x==="abc"}) ;
+}
+
+module.exports = async function() {
+	return (await go() & await wrapMap()) == true ;
+}
