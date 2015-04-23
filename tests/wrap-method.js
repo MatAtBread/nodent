@@ -40,7 +40,7 @@ async function go() {
 	for (var i=1; i<6; i++) {
 		fn = "test"+i ;
 		try {
-			await await a[fn](1) ;
+			await a[fn](1) ;
 		} catch(ex) {
 			if (ex===a.fail)
 				passes += 1 ;

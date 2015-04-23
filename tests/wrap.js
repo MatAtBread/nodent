@@ -5,10 +5,12 @@ async function abc(x) {
 	return "abc" ;
 };
 
+async function test1(x) {
+	return abc(x) ;
+}
+
 var tests = [
-	async function test1(x) {
-		return abc(x) ;
-	},
+    test1,
 	async function(x) {
 		return await abc(x) ;
 	},
@@ -26,27 +28,30 @@ var tests = [
 async function go() {
 	var passes = 0 ;
 	for (var i=0; i<tests.length; i++) {
-		if (await tests[i]()==="abc")
-			passes += 1 ;
-	}
-	for (var i=0; i<tests.length; i++) {
-		try {
-			await tests[i](1) ;
-		} catch(ex) {
-			if (ex==="def")
-				passes += 1 ;
+		for (var j=0; j<2; j++) {
+			try {
+				var k = await tests[i](j) ;
+				if (k==="abc")
+					passes += 1 ;
+			} catch(ex) {
+				if (ex==="def")
+					passes += 1 ;
+			}
 		}
+		
 	}
 	return passes==tests.length*2  ;
 }
 
 var map = require('../nodent')().require('map') ;
 async function wrapMap() {
-	var m = await map(tests.map(function(f){ return f()}).concat(['abc'])) ;
-//	console.log(m) ;
+	var fns = tests.map(function(f){ return f()}) ;
+	var m = await map(fns.concat(['abc'])) ;
 	return m.every(function(x){return x==="abc"}) ;
 }
 
-module.exports = async function() {
-	return (await go() & await wrapMap()) == true ;
+async function runTests() {
+	return (await go() & await wrapMap())==true ;
 }
+
+module.exports = runTests ;

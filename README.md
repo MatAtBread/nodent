@@ -619,6 +619,8 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+23Apr15: Implement un-wrapping in nodent.map, which has it's own async call implementation. Remove over-aggressive optimization of "f(x){return x()}" to "x", since x is not in the outer scope
+
 22Apr15: Implement un-wrapping in $asyncbind (see Thenable Unwrapping). This is potentially a breaking change (if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself).
 
 21Apr15: Fix issue https://github.com/MatAtBread/nodent/issues/4 reported by https://github.com/michal-grzejszczak, where functions hoisted out of try-catch block (for Firefox) lost their exception handlers. 
