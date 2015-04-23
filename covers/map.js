@@ -24,6 +24,9 @@ module.exports = function(nodent) {
 
 			array.forEach(function(e,i,ar){
 				function complete(r) {
+					if (r instanceof Object && typeof r.then==="function")
+						return r.then(complete,completeError) ;
+					
 					var k = isArray?i:e ; 
 					if (k in result) {
 						context.message = "mapAsync: multiple $returns/errors"+k.toString ; 
@@ -50,7 +53,11 @@ module.exports = function(nodent) {
 				if (asyncFn) {
 					asyncFn.apply(this,arguments).then(complete,completeError);	
 				} else {
-					(isArray?e:what[e]).then(complete,completeError);
+					var f = isArray?e:what[e] ; 
+					if (f instanceof Object && typeof f.then==="function")
+						f.then(complete,completeError);
+					else 
+						complete(f) ;
 				}
 			}) ;
 		});
