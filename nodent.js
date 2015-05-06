@@ -20,6 +20,17 @@ function U2patch(){
 	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
 	UNARY_PREFIX = function(str){ return str in preds || predicates.UNARY_PREFIX.apply(this,arguments) ; } ;
 	AST_Node.warn = function(){} ;
+	AST_Block.prototype._walk = function(visitor) {
+        return visitor._visit(this, function(){
+    	    if (this.body instanceof AST_Statement) {
+    	        this.body._walk(visitor);
+    	    } else {
+    	    	for (var i=0; i<this.body.length; i++) {
+    	    		this.body[i]._walk(visitor) ;
+    	    	}
+    	    }
+        });
+    } ;
 }
 var U2 = require("./ug2loader").load(U2patch) ;
 
@@ -900,7 +911,10 @@ myfn("ok") ;
 			descend() ;
 			function transformLoop() {
 				if (!containsAwait(node))
-					return ;
+					return ;				
+
+				var ref = parentBlockRef(asyncWalk) ;
+
 				var init = node.init ;
 				var condition = node.condition ;
 				var step = node.step ;
@@ -985,7 +999,6 @@ myfn("ok") ;
 
 				var replace = new U2.AST_SimpleStatement({body:
 					new U2.AST_UnaryPrefix({operator:'await',
-						//expression:subCall
 						expression:new U2.AST_Call({
 							expression:new U2.AST_Dot({
 								expression: subCall,
@@ -996,7 +1009,6 @@ myfn("ok") ;
 					})
 				});
 
-				var ref = parentBlockRef(asyncWalk) ;
 				if (init)
 					ref.parent[ref.field].splice(ref.index,1,init.clone(),replace) ;
 				else
