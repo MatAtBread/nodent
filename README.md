@@ -82,8 +82,9 @@ ES7 and Promises
 The ES7 proposal for async and await specified not only the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
 
 Nodent can operate either with of without Promises as this type. The pros and cons are:
+
 * Using promises makes it easy to, in particular, `await` on third-party code that returns a Promise, and create Promises by invoking an async function. The downside is your execution environment must somehow support Promises at run-time. Some browsers have Promises built in (later versions of Chrome and Firefox) as does Node v11. In other environments you must include a third-party implementation of Promises. Promises also make debugging a little more tricky as stepping in and out of async functions will go into your Promise implementation.
-* Not using Promises requires no run-time support, is easier to debug (pairs of callbacks are used to enter and exit async functions), but provides no compatibility with Nodent async functions.
+* Not using Promises requires minimal run-time support, is easier to debug (pairs of callbacks are used to enter and exit async functions), but provides no compatibility between Promises and Nodent async functions, other than via ES5 constructs.
 
 To specify that you wish to use Promises, make the first directive in your file:
 
@@ -345,12 +346,19 @@ The JavaScript arguments value is problematic in async functions as the body of 
 Diffrences from the ES7 specification
 -------------------------------------
 * Generators and Promises are optional. Nodent works simply by transforming your original source
-* As of current version, `finally { }` blocks are NOT transformed by Nodent
-* As of current version, `for (...in...)` loops are NOT transformed by Nodent
+
+* As of the current version, `finally { }` blocks are NOT transformed by Nodent
+
+* As of the current version, `for (...in...)` loops are NOT transformed by Nodent
+
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The return value from the aynchronous function is compilation mode dependent, but generally a Thenable protocol. 
-* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from default-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures.
-* The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38)
-* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otehrwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
+
+* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from default-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures. Nodent binds to the enclosing `this` as expected.
+
+* The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
+
+* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
+
 * Versions prior to 1.2.x did NOT unwrap Thenable returns. The ES7 specification assumes that this is the case as Promises never resolve to a Promise (see Thenable Unwrapping).
 
 Use in the Browser
@@ -618,6 +626,11 @@ The test runner in tests/index.js accepts the following options:
 
 Changelog
 ==========
+06May15: Fix case where a for-loop in a block statement would cause the final
+statement in the block to not be transformed, as the containing body
+would grow, but the body.forEach(walker) samples the length before
+execution. Replacing the body walker with a traditional for-loop rather than
+forEach() ensures all of the parent is walked
 
 23Apr15: Implement un-wrapping in nodent.map, which has it's own async call implementation. Remove over-aggressive optimization of "f(x){return x()}" to "x", since x is not in the outer scope
 
