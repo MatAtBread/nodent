@@ -20,17 +20,16 @@ function U2patch(){
 	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
 	UNARY_PREFIX = function(str){ return str in preds || predicates.UNARY_PREFIX.apply(this,arguments) ; } ;
 	AST_Node.warn = function(){} ;
-	AST_Block.prototype._walk = function(visitor) {
-        return visitor._visit(this, function(){
-    	    if (this.body instanceof AST_Statement) {
-    	        this.body._walk(visitor);
-    	    } else {
-    	    	for (var i=0; i<this.body.length; i++) {
-    	    		this.body[i]._walk(visitor) ;
-    	    	}
-    	    }
-        });
-    } ;
+	
+	walk_body = function(node, visitor) {
+	    if (node.body instanceof AST_Statement) {
+	        node.body._walk(visitor);
+	    } else {
+	    	for (var i=0; i<node.body.length; i++) {
+	    		node.body[i]._walk(visitor) ;
+	    	}
+	    }
+	};
 }
 var U2 = require("./ug2loader").load(U2patch) ;
 

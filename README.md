@@ -626,6 +626,9 @@ The test runner in tests/index.js accepts the following options:
 
 Changelog
 ==========
+
+08May15: Fix block-statement case (from v1.2.2) in a more general way so it also fixes the same issue in try/catch blocks. This is becuase AST_Block and AST_BlockStatement in Uglify2 do not implemented an inherited walker, but directly call `walk_body`
+
 06May15: Fix case where a for-loop in a block statement would cause the final
 statement in the block to not be transformed, as the containing body
 would grow, but the body.forEach(walker) samples the length before
