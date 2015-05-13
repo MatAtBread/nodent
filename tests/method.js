@@ -24,7 +24,6 @@ module.exports = async function() {
 	 *  Promise to the resolver
 	 *  
 	 * See https://promisesaplus.com/#point-35 */
-
 	var x = new AClass(100) ;
 	var y = new AClass(200) ;
 	var r = await x.total(23) ;

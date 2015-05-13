@@ -627,6 +627,8 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+13May15: Fix a nested exception case caused by transforming await via recursion (the recursive call lost any enclosing catch reference). Ensure correct binding of catch-functions without using .call(). Optimize calls to $asyncbind() that only bind and don't require a catch.
+
 08May15: Fix block-statement case (from v1.2.2) in a more general way so it also fixes the same issue in try/catch blocks. This is becuase AST_Block and AST_BlockStatement in Uglify2 do not implemented an inherited walker, but directly call `walk_body`
 
 06May15: Fix case where a for-loop in a block statement would cause the final

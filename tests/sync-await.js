@@ -11,8 +11,10 @@ function sync(y) {
 }
 
 module.exports = async function() {
+	syncReturnValue = {abc:123} ;
+	waited = false ;
 	var r = sync(10);
-	var thenable = ((r instanceof Object) && 'then' in r) ;
+	var thenable = ((r instanceof Object) && (typeof r.then === "function")) ;
 	setTimeout(function(){
 		// NB: For full Promise implementations, the sync-return "r" will
 		// be a Promise, with a '.then()' member. For nodent.Thenables or
@@ -28,6 +30,6 @@ module.exports = async function() {
 		// including a Promise (or Thenable) if you wish, or an object with additional
 		// methods to (for example) abandon the Promise/Thenable.
 		
-		$return(waited && (thenable?true:r===syncReturnValue)) ;
+		return async (waited && (thenable?true:r===syncReturnValue)) ;
 	},0) ;
 }

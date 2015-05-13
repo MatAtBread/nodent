@@ -1,4 +1,4 @@
-async function test() {
+async function test(error) {
 	var res = "" ;
 	async function progress(x) {
 		res += "x"+x ;
@@ -31,22 +31,25 @@ async function test() {
 		await progress(3) ;
 
 		// Check WPS
-		if (true) {
-			phase = "4" ;
-			for (i=0; i<[1].length; i++) {
-				if (true) {
-					await progress(4) ;
-					break ;
-				}
+		phase = "4" ;
+		for (i=0; i<[1].length; i++) {
+			if (true) {
+				await progress(4) ;
+				break ;
 			}
 		}
+
+		if (error) {
+			phase = "5" ;
+			throw new Error("error") ;
+		}
 	} catch (ex) {
-		ex.phase = phase ;
-		throw ex ;
+		res += "*"+phase ;
 	}
 	return res ;
 } ;
 
 module.exports = async function() {
-	return await test()=="x1p1x1p1x1p1x2p2x3p3x4p4" ;
+	return (await test(false)=="x1p1x1p1x1p1x2p2x3p3x4p4") &&
+		(await test(true)=="x1p1x1p1x1p1x2p2x3p3x4p4*5") ;
 }

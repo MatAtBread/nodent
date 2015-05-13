@@ -9,12 +9,23 @@ var nodent = require('../nodent')({
 var Promise = nodent.Thenable ;
 
 global.sleep = async function sleep(t) {
-	setTimeout($return,t) ;
+	setTimeout(function(){
+		try {
+			return async undefined ;
+		} catch (ex) {
+			throw async ex ;
+		}
+	},t) ;
 }
+
 global.breathe = async function breathe() {
 	var t = Date.now() ;
 	setImmediate(function(){
-		$return(Date.now()-t) ;
+		try {
+			return async (Date.now()-t) ;
+		} catch (ex) {
+			throw async (ex) ;
+		}
 	}) ;
 }
 
@@ -128,7 +139,7 @@ async function runTests() {
 						do {
 							result = await run(m.exports());
 							samples++ ;
-							if (!(samples&63))
+							if (!(samples&31))
 								t += await breathe() ;
 						}
 						while (Date.now()-t < 100 && samples<5000) ;
@@ -137,7 +148,7 @@ async function runTests() {
 					} else {
 						for (var reSample=0; reSample<samples; reSample++){
 							result = await run(m.exports()); 
-							if (!(reSample&63))
+							if (!(reSample&31))
 								t += await breathe() ;
 						}
 					}
