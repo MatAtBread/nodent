@@ -1520,36 +1520,40 @@ function asyncify(promiseProvider) {
 		var o = Object.create(obj) ;
 		for (var j in o) (function(){
 			var k = j ;
-			if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
-				o[k+suffix] = function() {
-					var a = Array.prototype.slice.call(arguments) ;
-					var resolver = function($return,$error) {
-						var cb = function(err,ok){
-							if (err)
-								return $error(err) ;
-							switch (arguments.length) {
-							case 0: return $return() ;
-							case 2: return $return(ok) ;
-							default: return $return(Array.prototype.slice.call(arguments,1)) ;
+			try {
+				if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
+					o[k+suffix] = function() {
+						var a = Array.prototype.slice.call(arguments) ;
+						var resolver = function($return,$error) {
+							var cb = function(err,ok){
+								if (err)
+									return $error(err) ;
+								switch (arguments.length) {
+								case 0: return $return() ;
+								case 2: return $return(ok) ;
+								default: return $return(Array.prototype.slice.call(arguments,1)) ;
+								}
+							} ;
+							// If more args were supplied than declared, push the CB
+							if (a.length > obj[k].length) {
+								a.push(cb) ;
+							} else {
+								// Assume the CB is the final arg
+								a[obj[k].length-1] = cb ;
 							}
+							var ret = obj[k].apply(obj,a) ;
+							/* EXPERIMENTAL !!
+							if (ret !== undefined) {
+								$return(ret) ;
+							}
+							 */
 						} ;
-						// If more args were supplied than declared, push the CB
-						if (a.length > obj[k].length) {
-							a.push(cb) ;
-						} else {
-							// Assume the CB is the final arg
-							a[obj[k].length-1] = cb ;
-						}
-						var ret = obj[k].apply(obj,a) ;
-						/* EXPERIMENTAL !!
-						if (ret !== undefined) {
-							$return(ret) ;
-						}
-						 */
-					} ;
-					return new promiseProvider(resolver) ;
+						return new promiseProvider(resolver) ;
+					}
+					o[k+suffix].isAsync = true ;
 				}
-				o[k+suffix].isAsync = true ;
+			} catch (ex) {
+				// Log the fact that we couldn't augment this member??
 			}
 		})() ;
 		o["super"] = obj ;
