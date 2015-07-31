@@ -1658,14 +1658,16 @@ function initialize(initOpts){
 				options = {} ;
 
 			return function (req, res, next) {
-				if (!req.url.match(matchRegex))
-					return next && next() ;
-
 				if (cache[req.url]) {
-					res.setHeader("Content-Type", "application/javascript");
+					res.setHeader("Content-Type", cache[req.url].contentType);
 					options.setHeaders && options.setHeaders(res) ;
-					res.write(cache[req.url]) ;
+					res.write(cache[req.url].output) ;
 					res.end();
+					return ;
+				}
+
+				if (!req.url.match(matchRegex) && !(options.htmlScriptRegex && req.url.match(options.htmlScriptRegex))) {
+					return next && next() ;
 				}
 
 				function sendException(ex) {
@@ -1675,19 +1677,34 @@ function initialize(initOpts){
 				}
 
 				var filename = path+req.url ;
+				if (options.extensions && !fs.existsSync(filename)) {
+					for (var i=0; i<options.extensions.length; i++) {
+						if (fs.existsSync(filename+"."+options.extensions[i])) {
+							filename = filename+"."+options.extensions[i] ;
+							break ;
+						}
+					}
+				}
 				fs.readFile(filename,function(err,content){
 					if (err) {
 						return sendException(err) ;
 					} else {
 						try {
-							var pr = nodent.compile(content.toString(),req.url,2,options.compiler);
-							if (options.runtime)
-								pr.code = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+";\n"+pr.code ;
+							var pr,contentType ;
+							if (options.htmlScriptRegex && req.url.match(options.htmlScriptRegex)) {
+								pr = require('./htmlScriptParser')(nodent,content.toString(),req.url,options) ;
+								contentType = "text/html" ;
+							} else {
+								pr = nodent.compile(content.toString(),req.url,2,options.compiler).code;
+								contentType = "application/javascript" ;
+								if (options.runtime)
+									pr = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+";\n"+pr ;
+							}
+							res.setHeader("Content-Type", contentType);
 							if (options.enableCache)
-								cache[req.url] = pr.code ; // Don't cache for now
-							res.setHeader("Content-Type", "application/javascript");
+								cache[req.url] = {output:pr,contentType:contentType} ; 
 							options.setHeaders && options.setHeaders(res) ;
-							res.write(pr.code) ;
+							res.write(pr) ;
 							res.end();
 						} catch (ex) {
 							return sendException(ex) ;

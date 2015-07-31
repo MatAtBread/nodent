@@ -1,0 +1,20 @@
+<html>
+<head>
+<title>Nodent SPA test</title>
+</head>
+<script>
+async function sleep(t) {
+	setTimeout(function(){
+		return async undefined ;
+	},t) ;
+} 
+</script>
+<script>
+console.log("Yawn") ;
+await sleep(1000) ;
+console.log("Yawned") ;
+</script>
+<body>
+OK
+</body>
+</html>
