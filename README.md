@@ -392,7 +392,7 @@ The currently supported options are:
 	extensions: <string-array>	// A set of file extensions to append if the specified URL path does not exist.
 	htmlScriptRegex: <optional regex> // If present, Nodent will attempt to read and parse <script> tags within matching HTML files
 
-Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text '<script>' (or similar), or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
+Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text 'script', or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
 
 NB: As of v1.0.x there is a runtime routine that should be defined on the Function.prototype in the execution environment. This was to provide compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`.
 
