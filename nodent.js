@@ -100,6 +100,7 @@ function toArray(ast) {
 }
 
 var config = {
+		augmentObject:false,
 		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		use:[],
 		useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
@@ -1742,6 +1743,9 @@ function initialize(initOpts){
 			thenable.then = thenable ;
 			return thenable ;
 		};
+		nodent.isThenable = function(obj) {
+			return ('then' in obj) && typeof obj.then==="function";
+		};
 		Object.defineProperty(nodent,"Promise",{
 			get:function(){
 				initOpts.log("Warning: nodent.Promise is deprecated in favour of nodent.Thenable");
@@ -1798,6 +1802,21 @@ function initialize(initOpts){
 		}) ;
 
 		nodent.asyncify = asyncify ;
+		if (initOpts.augmentObject) {
+			Object.defineProperties(Object.prototype,{
+				"asyncify":{
+					value:function(promiseProvider,filter,suffix){return nodent.asyncify(promiseProvider)(this,filter,suffix)},
+					writeable:true,
+					configurable:true
+				},
+				"isThenable":{
+					value:nodent.isThenable,
+					writeable:true,
+					configurable:true
+				}
+			}) ;
+		}
+		
 		/**
 		 * We need a global to handle funcbacks for which no error handler has ever been defined.
 		 */
