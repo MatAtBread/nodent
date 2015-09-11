@@ -1721,8 +1721,7 @@ function initialize(initOpts){
 			if (catcher) {
 				function thenable(result,error){
 					try {
-						var isThenableResult = (result instanceof Object) && (typeof result.then==="function") ; 
-						return isThenableResult ? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
+						return nodent.isThenable(result) ? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
 					} catch (ex) {
 						return (error||catcher)(ex);
 					}
@@ -1744,7 +1743,7 @@ function initialize(initOpts){
 			return thenable ;
 		};
 		nodent.isThenable = function(obj) {
-			return ('then' in obj) && typeof obj.then==="function";
+			return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
 		};
 		Object.defineProperty(nodent,"Promise",{
 			get:function(){

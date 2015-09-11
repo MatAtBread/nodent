@@ -1,6 +1,6 @@
 {
   "name": "nodent",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
@@ -8,15 +8,18 @@
   },
   "dependencies": {
     "source-map": ">=0.1.33",
-    "uglify-js": "^2.4.16"
+    "uglify-js": "^2.4.24"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/MatAtBread/nodent.git"
   },
-  "engine": "node >= 0.10.0",
+  "engines": "node >= 0.10.0",
   "keywords": [
-    "Javascript","ES7","async","await",
+    "Javascript",
+    "ES7",
+    "async",
+    "await",
     "language",
     "extensions",
     "Node",
