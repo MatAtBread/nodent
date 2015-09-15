@@ -70,10 +70,16 @@ var referencePrototypes = {
 			this.parent[this.field] = newNode ;
 		}
 		return r ;
-	},
+	}/*,
 	remove: function() {
-		return this.replace(cloneNode(deletedNode)) ;
-	}
+		if ('index' in this) {
+			return this.parent[this.field].splice(this.index,1)[0] ;
+		} else {
+			var r = this.parent[this.field] ;
+			this.parent[this.field] = cloneNode(deletedNode) ;
+			return r ;
+		}
+	}*/
 };
 
 function treeWalker(n,walker,state){
@@ -136,7 +142,7 @@ function info(node) {
 }
 
 function printNode(n) {
-	if (Array.isArray(n)) return n.map(printNode).join("\n") ;
+	if (Array.isArray(n)) return n.map(printNode).join("|\n") ;
 	try {
 		return require("escodegen").generate(n) ;
 	} catch (ex) {
@@ -235,13 +241,10 @@ function coerce(node,replace) {
 
 function getCatch(path,nesting,parent) {
 	nesting = nesting || 0 ;
-	function toSym(name) {
-		return {type:'Identifier',name:name} ;
-	}
 	for (var n=0;n<path.length;n++) {
-		if (path[n].$catcher) {
+		if (path[n].self.$catcher) {
 			if (!nesting)
-				return path[n].$catcher.map(toSym) ;
+				return {type:'Identifier',name:path[n].self.$catcher} ;
 			nesting -= 1 ;
 		}
 	}
@@ -279,99 +282,6 @@ function containsAwait(ast) {
 	return false ;
 }
 
-/* Given a 'parent' node, get the reference (i.e. a member) that contains target. Often
- * this will be 'parent.body', but it might be 'parent.body[x]', or even 'parent.alternate[3]'
- * or any other reference. We need to do this so we can manipulate blocks containing the target.
- * NB: Any structural change to the parent after a ref is generated is likely to invalidate
- * the ref, which will need to be re-referenced *
-function parentRef(walker,depth) {
-	var parent = walker.stack[walker.stack.length-(depth?depth+1:2)] ;
-	var target = walker.stack[walker.stack.length-(depth||1)] ;
-
-	if (typeof parent!=='object')
-		throw new Error("Bad parent "+parent) ;
-
-	// This is NOT a nice function. It examines each of the members of
-	// the parent and if it looks like an AST_Node, or an array of AST_Nodes
-	// it checks to see if the target is there, and if succesful returns the
-	// ref.
-	var k = Object.keys(parent) ;
-	var ref ;
-	if (k.some(function(key){
-		if (parent[key] instanceof U2.AST_Node) {
-			if (parent[key]===target) {
-				ref = {parent:parent,field:key,self:target} ;
-				return true ;
-			}
-		} else if (Array.isArray(parent[key]) && (parent[key][0] instanceof U2.AST_Node)) {
-			var j = parent[key].indexOf(target) ;
-			if (j>=0) {
-				ref = {
-					parent:parent,
-					field:key,
-					self:target,
-					get index(){
-						var l = parent[key].indexOf(target) ;
-						if (l>=0) return l ;
-						throw new Error("No parent for "+info(target)) ;
-					}} ;
-				return true ;
-			}
-		}
-	}) && ref)
-		return ref ;
-	throw new Error("No parent for "+info(target)) ;
-}
-
-/* Find a target in a parent, and ensure the target is part of a block,
- * if necessary by creating an intermediate BlockStatement. Return the
- * new parent (i.e. the same as passed, or the BlockStatement) in the ref.
- * This means that the returned ref will always have an 'index' and the
- * target will be transformed so that always is within a block *
-function parentBlockRef(walker,depth) {
-	var ref = parentRef(walker,depth) ;
-
-	if ('index' in ref) {
-		return ref ;
-	}
-
-	var target = ref.self ;
-	var block = new U2.AST_BlockStatement({body:[target]}) ;
-	ref.parent[ref.field] = block ;
-	return {parent:block,
-		field:'body',
-		self:target,
-		get index(){
-			var l = block.body.indexOf(target) ;
-			if (l>=0) return l ;
-			throw new Error("No parent for "+info(target)) ;
-		}} ;
-}
-*
-function deleteRef(ref) {
-	if ('index' in ref) {
-		return ref.parent[ref.field].splice(ref.index,1)[0] ;
-	}
-	var self = ref.self ;
-	ref.parent[ref.field] = new U2.AST_DeletedNode() ;
-	if (ref.parent instanceof U2.AST_SimpleStatement) {
-		coerce(ref.parent,ref.parent[ref.field]);
-	}
-	return self ;
-}
-
-function setRef(ref,node) {
-	var prev ;
-	if ('index' in ref) {
-		prev = ref.parent[ref.field][ref.index] ;
-		ref.parent[ref.field][ref.index] = node ;
-	} else {
-		prev = ref.parent[ref.field] ;
-		ref.parent[ref.field] = node ;
-	}
-	return prev ;
-}
-*/
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
 	// because the buffer-to-string conversion in `fs.readFileSync()`
@@ -519,7 +429,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 		pr.ast = asyncSpawn(pr.ast) ;
 	} else {
 		// Because we create functions (and scopes), we need all declarations before use
-		pr.ast = hoistDeclarations(pr.ast) ;
+//		pr.ast = hoistDeclarations(pr.ast) ;
 
 		// All TryCatch blocks need a name so we can (if necessary) find out what the enclosing catch routine is called
 		pr.ast = labelTryCatch(pr.ast) ;
@@ -1284,6 +1194,7 @@ myfn("ok") ;
 
 				var parent = path[0].parent ;
 				if (examine(parent).isExpressionStatement) {
+					replace.type = 'FunctionDeclaration' ;
 					coerce(parent,replace) ;
 				} else {
 					coerce(node,replace) ;
@@ -1349,16 +1260,16 @@ myfn("ok") ;
 	/* Find all nodes within this scope matching the specified function */
 	function scopedNodes(ast,matching) {
 		var matches = [] ;
-		treeWalker(ast,function(node, descend,path){
+		treeWalker(ast,function(node, descend, path){
 			if (node === ast)
 				return descend() ;
 			
-			if (matching(node)) {
+			if (matching(node,path)) {
 				matches.push(path[0]) ;
-				return true ;
+				return ;
 			}
 			if (examine(node).isScope) {
-				return true ;
+				return ;
 			}
 			descend() ;
 		}) ;
@@ -1370,8 +1281,12 @@ myfn("ok") ;
 		treeWalker(ast,function(node, descend,path){
 			descend() ;
 			if (examine(node).isScope) {
-				var nodeBody = node.type==='Program'?node.body:node.body.body ;
-				var functions = scopedNodes(node,function hoistable(n){
+				function orderRef(a,b) {
+					return (a.index||0)-(b.index||0)
+				}
+				
+				// For this scope, find all the hoistable functions, vars and directives
+				var functions = scopedNodes(node,function hoistable(n,path) {
 					// YES: We're a named function, but not a continuation
 					if (examine(n).isFunction && n.id) {
 						return !n.$continuation ;
@@ -1383,41 +1298,65 @@ myfn("ok") ;
 
 					// No, we're not a hoistable function
 					return false ;
-				}) ;
+				}).sort(orderRef) ;
+				var vars = scopedNodes(node,function(n,path){
+					if (n.type==='VariableDeclaration') {
+					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
+					    if (path[0].field=="left" && path[0].parent.type==='ForInStatement') return false ;
+					    if (path[0].field=="left" && path[0].parent.type==='ForOfStatement') return false ;
+					    return true ;
+					}
+				}).sort(orderRef) ;
+				var directives = scopedNodes(node,function(n){
+					/* TODO: directives are not obvious in ESTREE format */ 
+					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
+				}).sort(orderRef) ;
 
+				// Go through and remove them all. Note that this isn't "easy" as removing
+				// items will invalidate the references for other items since it involves 
+				// array modification (pulling the offending nodes). We avoid this issue
+				// by collecting together all the hoisted nodes in a new array (prefixed)
+				// and concatting them at the end
+				
+				var nodeBody = node.type==='Program'?node:node.body ;
 				var hoistedFn = {} ;
-				functions.forEach(function(ref,idx) {
+				var prefixed = [] ;
+				function remove(ref) {
+					var self = ref.self ;
+					if ('index' in ref) {
+						var idx = ref.parent[ref.field].indexOf(ref.self) ;
+						if (idx<0)
+							debugger ; // Aleady deleted
+						ref.parent[ref.field].splice(ref.parent[ref.field].indexOf(ref.self),1) ;
+					} else
+						delete ref.parent[ref.field] ;//= cloneNode(deletedNode) ;
+					return self ;
+				}
+				
+				functions.forEach(function(ref) {
 					// What is the name of this function (could be async, so check the expression if necessary)
 					var symName = ref.self.id?ref.self.id.name:ref.self.argument.id.name ;
-					if (symName in hoistedFn) {
+					if (hoistedFn.hasOwnProperty(symName)) {
 						initOpts.log(pr.filename+" - Duplicate 'function "+symName+"()'") ;
 					}
 					hoistedFn[symName] = true ;
-					var fnSym = {type:'Identifier',name:symName} ;
 
 					// In some contexts we need to leave the sym in place, in others we can delete it
 					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
 					var movedFn ;
-					if (ref.field!=='body')
-						movedFn = ref.replace(fnSym) ;
-					else
-						movedFn = ref.remove() ;
-
-					if (examine(movedFn).isFunction)
-						movedFn.type = 'FunctionDeclaration' ; // = new U2.AST_Defun(movedFn) ;
-					nodeBody.unshift(movedFn) ;
-				}) ;
-
-				var vars = scopedNodes(node,function(n){
-					return (n.type==='VariableDeclaration') ;
+					if (examine(ref.parent).isExpression) {
+						movedFn = ref.replace({type:'Identifier',name:symName}) ;
+					} else {
+						movedFn = remove(ref) ;
+					}
+					if (movedFn.type==='FunctionExpression')
+						movedFn.type = 'FunctionDeclaration' ; 
+					prefixed.unshift(movedFn) ;
 				}) ;
 
 				if (vars.length) {
 					var definitions = [] ;
 					vars.forEach(function(ref){
-						if ((ref.parent.type==='ForStatement' || ref.parent.type==='ForInStatement') && ref.field=="init")
-							return ; // Don't hoist loop vars
-
 						var self = ref.self ;
 						var values = [] ;
 						for (var i=0; i<self.declarations.length; i++) {
@@ -1441,7 +1380,7 @@ myfn("ok") ;
 							}
 						}
 						if (values.length==0)
-							ref.remove() ;
+							remove(ref) ;
 						else if (values.length==1) {
 							ref.replace(values[0]) ;
 						} else {
@@ -1459,23 +1398,26 @@ myfn("ok") ;
 								}
 							}
 						}) ;
-						if (!(nodeBody[0].type === 'VariableDeclaration')) {
-							nodeBody.unshift({
+						if (!prefixed[0] || prefixed[0].type !== 'VariableDeclaration') {
+							prefixed.unshift({
 								type:'VariableDeclaration',
 								kind:'var',
 								declarations:definitions}) ;
 						} else {
-							nodeBody[0].declarations = nodeBody[0].declarations.concat(definitions) ;
+							prefixed[0].declarations = prefixed[0].declarations.concat(definitions) ;
 						}
 					}
 				}
 
-				/*** TODO: directives are not obvious in ESTREE */ 
-				var directives = scopedNodes(node,function(n){
-					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
-				}) ;
 				directives.forEach(function(ref){
-					node.body.unshift(ref.remove()) ;
+					prefixed.unshift(remove(ref)) ;
+				}) ;
+
+				nodeBody.body = prefixed.concat(nodeBody.body.filter(function(node){
+					return !node.$deleted ;
+				})).map(function(node){
+					delete node.$deleted ;
+					return node ;
 				}) ;
 			}
 			return true ;
@@ -1510,7 +1452,7 @@ myfn("ok") ;
 
 	/* Remove un-necessary nested blocks and crunch down empty function implementations */
 	function cleanCode(ast) {
-		/* Inline continuations that are only referenced once */
+		/* Inline continuations that are only referenced once *
 		treeWalker(ast,function(node, descend, path){
 			descend();
 			if (node.type==='Identifier' && continuations[node.name] && node.$thisCall) {
@@ -1616,7 +1558,7 @@ myfn("ok") ;
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
-*/
+*
 		// Coalese BlockStatements
 		treeWalker(ast,function(node, descend, path){
 			descend();
@@ -1650,7 +1592,7 @@ myfn("ok") ;
 					}
 				}
 			}
-		}) ;
+		}) ;*/
 		return ast ;
 	}
 }
