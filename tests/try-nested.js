@@ -18,7 +18,7 @@ async function mode(m) {
 		setTimeout(complete,1) ;
 		break ;
 	case 2:
-		process.nextTick(complete) ;
+		setImmediate(complete) ;
 		break ;
 	case 3:
 		return ;

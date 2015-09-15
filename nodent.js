@@ -6,92 +6,155 @@
  * AST transforms and node loader extension
  */
 
-/* A patch that adds two new keywords to Uglify parsing: async and await, a la ES7 */
-function U2patch(){
-	var predicates = {
-			KEYWORDS:KEYWORDS,
-			KEYWORDS_BEFORE_EXPRESSION:KEYWORDS_BEFORE_EXPRESSION,
-			OPERATORS:OPERATORS,
-			UNARY_PREFIX:UNARY_PREFIX
-	} ;
-	var preds = {await:true,async:true} ;
-	KEYWORDS = function(str){ return str in preds || predicates.KEYWORDS.apply(this,arguments) ; } ;
-	KEYWORDS_BEFORE_EXPRESSION = function(str){ return str in preds || predicates.KEYWORDS_BEFORE_EXPRESSION.apply(this,arguments) ; } ;
-	OPERATORS = function(str){ return str in preds || predicates.OPERATORS.apply(this,arguments) ; } ;
-	UNARY_PREFIX = function(str){ return str in preds || predicates.UNARY_PREFIX.apply(this,arguments) ; } ;
-	AST_Node.warn = function(){} ;
-
-	walk_body = function(node, visitor) {
-	    if (node.body instanceof AST_Statement) {
-	        node.body._walk(visitor);
-	    } else {
-	    	for (var i=0; i<node.body.length; i++) {
-	    		node.body[i]._walk(visitor) ;
-	    	}
-	    }
-	};
-}
-var U2 = require("./ug2loader").load(U2patch) ;
-
-/* New node types that we use */
-U2.AST_DeletedNode = U2.DEFNODE("DeletedNode", null, {
-    $documentation: "A deleted node",
-    _walk: function(visitor) {}
-}, U2.AST_Node);
-U2.AST_DeletedNode.DEFMETHOD("_codegen",function(self,output){}) ;
-
-U2.AST_Node.DEFMETHOD("setProperties",function(props){
-	var prevClone = this.clone ;
-	var prevCodeGen = this._codegen ;
-	this.props = this.props || {} ;
-	for (var k in props)
-		this.props[k] = props[k] ;
-
-	this.clone = function() {
-		var n = prevClone.apply(this,arguments) ;
-		n.setProperties(this.props) ;
-		return n ;
-	}
-// Useful for debugging, not much else
-/*
-	this._codegen = function(self,output) {
-		if (self.props) {
-			var keys = Object.keys(self.props) ;//.filter(function(k){return k[0]=="$"}) ;
-			if (keys.length)
-				output.print("/* "+keys.map(function(k){
-					return k+":"+self.props[k]
-				})+" *"+"/") ;
+//var SourceMapConsumer = require('source-map').SourceMapConsumer;
+var fs = require('fs') ;
+var acorn = require("acorn");
+var acornWalk = require("acorn/dist/walk");
+var acornBase = acornWalk.make({
+	SwitchStatement: function (node, st, c) {
+		c(node.discriminant, st, "Expression");
+		for (var i = 0; i < node.cases.length; ++i) {
+			c(node.cases[i],st/*,"SwitchCase"*/) ;
 		}
-		var r = prevCodeGen.call(this,self,output) ;
-		return r ;
-	}*/
+	},
+	SwitchCase: function (node, st, c) {
+		if (node.test) c(node.test, st, "Expression");
+		for (var i = 0; i < node.consequent.length; ++i) {
+			c(node.consequent[i], st, "Statement");
+		}
+	},
+	TryStatement: function (node, st, c) {
+		c(node.block, st, "Statement");
+		if (node.handler) c(node.handler, st, "Statement");
+		if (node.finalizer) c(node.finalizer, st, "Statement");
+	},
+	CatchClause: function (node, st, c) {
+		c(node.param, st, "Pattern");
+		c(node.body, st, "ScopeBody");
+	}
 }) ;
 
-var SourceMapConsumer = require('source-map').SourceMapConsumer;
-var fs = require('fs') ;
+acorn.plugins.nodent = function(parser){
+	var tokens = {} ;
+	["async","await"].forEach(function(kw){
+		tokens[kw] = new acorn.TokenType(kw,{beforeExpr: true, prefix: true, startsExpr: true, keyword: kw}) ;
+	}) ;
+
+	parser.extend("finishToken",function(base){
+		return function(type,val){
+			type = type || (tokens.hasOwnProperty(val) && tokens[val]) ;
+			return base.call(this,type,val);
+		}
+	}) ;
+
+	parser.extend("isKeyword",function(base){
+		return function(str){
+			return tokens.hasOwnProperty(str) || base.apply(this,arguments);
+		}
+	}) ;
+
+	parser.extend("isReservedWord",function(base){
+		return function(str){
+			return tokens.hasOwnProperty(str) || base.apply(this,arguments);
+		}
+	}) ;
+}
+
+var deletedNode = {type:'Identifier',name:'/*$deleted*/',$deleted:true} ;
+var referencePrototypes = {
+	replace: function(newNode) {
+		var r = cloneNode(this.self) ;
+		if ('index' in this) {
+			this.parent[this.field][this.index] = newNode ;
+		} else {
+			this.parent[this.field] = newNode ;
+		}
+		return r ;
+	},
+	remove: function() {
+		return this.replace(cloneNode(deletedNode)) ;
+	}
+};
+
+function treeWalker(n,walker,state){
+	if (!state) {
+		state = [{self:n}] ;
+		state.replace = function(pos,newNode) {
+			state[pos].replace(newNode) ;
+		}
+		state.parentBlock = function(pos) {
+			for (var i=pos || 0; i<state.length; i++) {
+				if (examine(state[i].parent).isBlockStatement)
+					return state[i] ;
+			}
+			return null ;
+		}
+	} 
+	
+	function descend() {
+		acornBase[n.type](n,state,function down(sub,_,derivedFrom){
+			if (sub===n)
+				return acornBase[derivedFrom || n.type](n,state,down) ;
+			
+			function goDown(ref) {
+				ref.__proto__ = referencePrototypes ;
+				state.unshift(ref) ;
+				treeWalker(sub,walker,state) ;
+				state.shift() ;
+			}
+			
+			Object.keys(n).forEach(function(k){
+				if (Array.isArray(n[k])) {
+					for (var i=0; i<n[k].length; i++)
+						if (n[k][i] instanceof Object && sub===n[k][i]) {
+							return goDown({
+								self:sub,
+								parent:n,
+								field:k,
+								index:i
+							}) ;
+						}
+				} else if (n[k] instanceof Object && sub===n[k]) {
+					return goDown({
+						self:sub,
+						parent:n,
+						field:k
+					}) ;
+				}
+			}) ;
+		}) ;
+	} ;
+	walker(n,descend,state) ;
+	return n ;
+}
 
 /** Helpers **/
-function pretty(node) {
-	if (Array.isArray(node))
-		return node.map(pretty) ;
-	var str = U2.OutputStream({beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
-	node.print(str);
-	return str.toString() ;
-}
-function info(node,quiet) {
+function info(node) {
 	if (Array.isArray(node))
 		return node.map(info) ;
-	var s = "" ;
-	for (var q = node.__proto__; q.TYPE; q=q.__proto__)
-		s += q.TYPE+"." ;
-	return s+(quiet?"":":"+node.print_to_string()) ;
+	return node.type ;
+}
+
+function printNode(n) {
+	if (Array.isArray(n)) return n.map(printNode).join("\n") ;
+	try {
+		return require("escodegen").generate(n) ;
+	} catch (ex) {
+		return ex.message+"\n"+JSON.stringify(n) ;
+	}
+}
+
+function cloneNode(n) {
+	var o = {} ;
+	Object.keys(n).forEach(function(k){ o[k] = n[k] }) ;
+	return o ;
 }
 function cloneNodes(nodes) {
-	return nodes.map(function(n){return n.clone()}) ;
+	return nodes.map(function(n){return cloneNode(n)}) ;
 }
 
 function toArray(ast) {
-	if (ast instanceof U2.AST_BlockStatement)
+	if (examine(ast).isBlockStatement)
 		ast = ast.body ;
 	if (!Array.isArray(ast))
 		ast = [ast] ;
@@ -113,14 +176,8 @@ var config = {
 		log:function(msg){ console.warn("Nodent: "+msg) },
 		bindAwait:"$asyncbind",
 		bindAsync:"$asyncbind",
-		bindLoop:"$asyncbind",
-		// Pre-ES7 tokens: for async-function() ** OBSOLETE **
-		// define:"-",
-		// async:"async",
-		// Pre-ES7 tokens for async assignment
-		$except:"$except",
-		assign:"<<=",
-		ltor:true	/* true: val <<= async(),   false: async() <<= val */
+		bindLoop:"$asyncbind"
+//		$except:"$except"
 };
 
 /* Extract compiler options from code (either a string or AST) */
@@ -147,7 +204,8 @@ function parseCompilerOptions(code,initOpts) {
 	} else {
 		// code is an AST
 		for (var i=0; i<pr.ast.body.length; i++) {
-			if (code.body[i] instanceof U2.AST_Directive) {
+			if (examine(code.body[i]).isExpressionStatement
+				&& examine(code.body[i].expression).isLiteral) {
 				var test = "'"+code.body[i].value+"'" ;
 				parseOpts.promises = matches(test,initOpts.usePromisesDirective) ;
 				parseOpts.es7 = parseOpts.promises || matches(test,initOpts.useES7Directive) ;
@@ -175,34 +233,29 @@ function coerce(node,replace) {
 	Object.keys(replace).forEach(function(k){ node[k] = replace[k]}) ;
 }
 
-function getCatch(w,nesting,parent) {
+function getCatch(path,nesting,parent) {
 	nesting = nesting || 0 ;
 	function toSym(name) {
-		return new U2.AST_SymbolRef({name:name}) ;
+		return {type:'Identifier',name:name} ;
 	}
-	for (var n=w.stack.length-1;n>=0;n--)
-		if (w.stack[n].catcher) {
+	for (var n=0;n<path.length;n++) {
+		if (path[n].$catcher) {
 			if (!nesting)
-				return w.stack[n].catcher.map(toSym) ;
+				return path[n].$catcher.map(toSym) ;
 			nesting -= 1 ;
 		}
-	return parent || [new U2.AST_SymbolRef({name:config.$error})] ;
+	}
+	return parent || {type:'Identifier',name:config.$error} ;
 }
 
 function setCatch(n,sym) {
-	if (!(n instanceof U2.AST_Node))
-		throw new Error("setCatch(!instanceof AST_Node)") ;
-	n.catcher = sym ;
-	var clone = n.clone.bind(n) ;
-	n.clone = function() {
-		var x = clone() ;
-		x.catcher = sym ;
-		x.clone = n.clone ;
-		return x ;
-	};
+	n.$catcher = sym ;
 }
 
 function containsAwait(ast) {
+	if (!ast)
+		return false ;
+	
 	if (Array.isArray(ast)) {
 		for (var i=0;i<ast.length;i++)
 			if (containsAwait(ast[i]))
@@ -211,12 +264,13 @@ function containsAwait(ast) {
 	}
 	var foundAwait = {} ;
 	try {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
-			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+		treeWalker(ast,function(node, descend, path){
+			if (examine(node).isUnaryExpression && node.operator=="await") {
 				throw foundAwait ;
 			}
+			if (!examine(node).isFunction)
+				descend() ;
 		});
-		ast.walk(asyncWalk) ;
 	} catch (ex) {
 		if (ex===foundAwait)
 			return true ;
@@ -226,10 +280,10 @@ function containsAwait(ast) {
 }
 
 /* Given a 'parent' node, get the reference (i.e. a member) that contains target. Often
- * this will be 'parent.body', but it might be 'parent.body[x]', or even 'parent.alternative[3]'
+ * this will be 'parent.body', but it might be 'parent.body[x]', or even 'parent.alternate[3]'
  * or any other reference. We need to do this so we can manipulate blocks containing the target.
  * NB: Any structural change to the parent after a ref is generated is likely to invalidate
- * the ref, which will need to be re-referenced */
+ * the ref, which will need to be re-referenced *
 function parentRef(walker,depth) {
 	var parent = walker.stack[walker.stack.length-(depth?depth+1:2)] ;
 	var target = walker.stack[walker.stack.length-(depth||1)] ;
@@ -273,7 +327,7 @@ function parentRef(walker,depth) {
  * if necessary by creating an intermediate BlockStatement. Return the
  * new parent (i.e. the same as passed, or the BlockStatement) in the ref.
  * This means that the returned ref will always have an 'index' and the
- * target will be transformed so that always is within a block */
+ * target will be transformed so that always is within a block *
 function parentBlockRef(walker,depth) {
 	var ref = parentRef(walker,depth) ;
 
@@ -293,7 +347,7 @@ function parentBlockRef(walker,depth) {
 			throw new Error("No parent for "+info(target)) ;
 		}} ;
 }
-
+*
 function deleteRef(ref) {
 	if ('index' in ref) {
 		return ref.parent[ref.field].splice(ref.index,1)[0] ;
@@ -317,7 +371,7 @@ function setRef(ref,node) {
 	}
 	return prev ;
 }
-
+*/
 function stripBOM(content) {
 	// Remove byte order marker. This catches EF BB BF (the UTF-8 BOM)
 	// because the buffer-to-string conversion in `fs.readFileSync()`
@@ -343,7 +397,7 @@ function btoa(str) {
 	return buffer.toString('base64');
 }
 
-//Hack: go though and create "padding" mappings between lines
+/*Hack: go though and create "padding" mappings between lines
 //Without this, whole blocks of code resolve to call & return sequences.
 //This has dependency on the implementation of source-map  which is
 //not a healthy thing to have.
@@ -418,13 +472,33 @@ function createMappingPadding(mapping) {
 			source: m[m.length-1].source
 		}) ;
 }
-
+*/
 function reportParseException(ex,content,filename) {
 	var sample = content.substring(ex.pos-30,ex.pos-1)+
 		"^"+content.substring(ex.pos,ex.pos+1)+"^"+
 		content.substring(ex.pos+1,ex.pos+31) ;
 	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
 	return ("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
+}
+
+function examine(node) {
+	if (!node) 
+		return {} ;
+
+	return {
+		isScope:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='Program',
+		isFunction:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='ArrowFunction',
+		isBlockStatement:node.type==='Program' || node.type==='SwitchCase' || node.type==='BlockStatement',
+		isExpressionStatement:node.type==='ExpressionStatement',
+		isLiteral:node.type==='Literal',
+		isUnaryExpression:node.type==='UnaryExpression',
+		isAwait:node.type==='UnaryExpression' && node.operator==='await',
+		isAsync:node.type==='UnaryExpression' && node.operator==='async',
+		isStatement:node.type==='VariableDeclaration' || node.type.match(/[a-zA-Z]+Statement/)!==null,
+		isExpression:node.type.match(/[a-zA-Z]+Expression/)!==null,
+		isLoop:node.type==='ForStatement' || node.type==='WhileStatement' || node.type==='DoWhileStatement', // Other loops?
+		isJump:node.type==='ReturnStatement' || node.type==='ThrowStatement' || node.type==='BreakStatement' || node.type==='ContinueStatement'
+	};
 }
 
 function asynchronize(pr,sourceMapping,opts,initOpts) {
@@ -438,7 +512,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 
 	var generatedSymbol = 1 ;
 	function generateSymbol(node) {
-		return (node?node.print_to_string().replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;
+		return (node?(node.name||(node.id?node.id.name:"_")||"_").replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;
 	}
 
 	if (opts.generators) {
@@ -471,27 +545,47 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	return pr ;
 
 	function makeFn(name,body,argnames) {
-		return new U2.AST_Defun({
-			name:new U2.AST_SymbolDefun({name:name}),
-			argnames:argnames||[],
-			body:cloneNodes(body)}) ;
+		return {
+			type:'FunctionDeclaration',
+			id:{type:'Identifier',name:name},
+			params:argnames||[],
+			body:{type:'BlockStatement',body:cloneNodes(body)}
+		}
 	}
 
 	function makeBoundFn(name,body,argnames) {
-		return new U2.AST_Var({definitions:[
-		    new U2.AST_VarDef({
-		    	name:new U2.AST_SymbolVar({name:name}),
-		    	value:new U2.AST_Call({
-		    		expression:new U2.AST_Dot({
-			    		expression:new U2.AST_Function({
-							argnames:argnames||[],
-							body:cloneNodes(body)}),
-						property:"$asyncbind"
-		    		}),
-		    		args:[new U2.AST_This()]
-		    	})
-		    })
-		]}) ;
+		// :> var name = function(args}{body}.$asyncbind(this)
+		return {
+			type:'VariableDeclaration',
+			kind:'var',
+			declarations:[{
+				type:'VariableDeclarator',
+				id:{type:'Identifier',name:name},
+				init:{
+		            "type": "CallExpression",
+		            "callee": {
+		              "type": "MemberExpression",
+		              "object": {
+		                "type": "FunctionExpression",
+		                "id": null,
+		                "generator": false,
+		                "expression": false,
+		                "params": argnames||[],
+		                "body": {
+		                  "type": "BlockStatement",
+		                  "body": cloneNodes(body)
+		                }
+		              },
+		              "property": {
+		                "type": "Identifier",
+		                "name": "$asyncbind"
+		              },
+		              "computed": false
+		            },
+		            "arguments": [{"type": "ThisExpression"}]
+		          }
+			}]
+		};
 	}
 
 	/* Create a 'continuation' - a block of statements that have been hoisted
@@ -499,7 +593,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	function makeContinuation(name,body) {
 		var ctn = makeFn(name,body) ;
 		continuations[name] = {def:ctn} ;
-		ctn.setProperties({continuation:true}) ;
+		ctn.$continuation = true ;
 		return ctn ;
 	}
 
@@ -511,14 +605,24 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	 * must also have the correct 'this'.*/
 	function thisCall(name,args){
 		if (typeof name==='string')
-			name = new U2.AST_SymbolRef({name:name}) ;
+			name = {type:'Identifier',name:name} ;
 
-		var n = new U2.AST_Call({
-			expression:new U2.AST_Dot({expression:name,property:"call"}),
-			args:[new U2.AST_This()].concat(args||[])
-		}) ;
-		name.setProperties({thisCall:n}) ;
-		n.setProperties({thisCallName:name.name}) ;
+		var n = {
+			"type": "CallExpression",
+			"callee": {
+				"type": "MemberExpression",
+				"object": name,
+				"property": {
+					"type": "Identifier",
+					"name": "call"
+				},
+				"computed": false
+			},
+			"arguments": [{"type": "ThisExpression"}].concat(args||[])
+		};
+	
+		name.$thisCall = n ;
+		n.$thisCallName = name.name ;
 		return n ;
 	}
 
@@ -532,28 +636,28 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	 * This allows us to capture a normal "return" statement and actually implement it
 	 * by calling the locally-scoped function $return()
 	 */
-	function mapReturns(n,containers){
+	function mapReturns(n,path,containers){
 		if (Array.isArray(n)) {
-			return n.map(function(m){return mapReturns(m,containers)}) ;
+			return n.map(function(m){return mapReturns(m,path,containers)}) ;
 		}
 		var lambdaNesting = 0 ;
-		var returnMapper = new U2.TreeTransformer(function(node,descend) {
+		return treeWalker(n,function(node,descend,path) {
 			var repl,value ;
-			if ((node instanceof U2.AST_Return) && !node.mapped) {
+			if (node.type==='ReturnStatement' && !node.$mapped) {
 				if (lambdaNesting > 0) {
-					if ((node.value instanceof U2.AST_UnaryPrefix) && node.value.operator == "async") {
-						value = [node.value.expression.clone()] ;
-						repl = node.clone() ; //repl = new U2.AST_Return({value:undefined}) ;
+					if (examine(node.argument).isAsync) {
+						value = [cloneNode(node.argument.argument)] ;
+						repl = node ; //cloneNode(node) ; //repl = new AST_Return({value:undefined}) ;
 					}
 				} else {
 					if (!containers) {
-						repl = node.clone() ;
-						value = repl.value?[repl.value.clone()]:[] ;
+						repl = node ; //cloneNode(node) ;
+						value = repl.argument?[cloneNode(repl.argument)]:[] ;
 					}
 				}
 				if (!value) {
-					descend(node, this);
-					return node ;
+					descend(node);
+					return ;
 				} else {
 					/* NB: There is a special case where we do a REAL return to allow for chained async-calls and synchronous returns
 					 *
@@ -565,54 +669,57 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 					 * Note that the parenthesis are necessary in the case of anything except a single symbol as "void" binds to
 					 * values before operator. In the case where we REALLY want to return undefined to the callback, a simple
 					 * "return" or "return undefined" works. */
-					if (value.length>0 && value[0] instanceof U2.AST_UnaryPrefix && value[0].operator=="void") {
-						repl.value = value[0].expression ;
+					if (value.length>0 && examine(value[0]).isUnaryExpression && value[0].operator==="void") {
+						repl.argument = value[0].expression ;
 					} else {
-						repl.value = new U2.AST_Call({
-							expression:new U2.AST_SymbolRef({name:config.$return}),
-							args:value
-						}) ;
+						repl.argument = {
+							"type": "CallExpression",
+							"callee": {
+								"type": "Identifier",
+								"name": "$return"
+							},
+							"arguments": value
+						} ;
 					}
-					repl.end = repl.value.end = repl.start = repl.value.start = new U2.AST_Token(node.end);
-					return repl ;
+					return ;
 				}
-			} else if (node instanceof U2.AST_Throw) {
+			} else if (node.type === 'ThrowStatement') {
 				if (lambdaNesting>0) {
-					if ((node.value instanceof U2.AST_UnaryPrefix) && node.value.operator == "async") {
-						value = node.value.expression.clone() ;
+					if (examine(node.argument).isAsync) {
+						value = cloneNode(node.argument.argument) ;
 					}
 				} else {
 					if (!containers) {
-						value = node.value.clone() ;
+						value = cloneNode(node.argument) ;
 					}
 				}
 
 				if (!value) {
-					descend(node, this);
-					return node ;
+					descend(node);
+					return ;
 				} else {
-					repl = new U2.AST_Return({
-						value:new U2.AST_Call({
-							expression:getCatch(returnMapper)[0],
-							args:[value]
-						})
-					}) ;
-					repl.start = repl.value.start = node.start ;
-					repl.end = repl.value.end = node.end ;
-					repl.mapped = true ;
-					return repl ;
+					repl = {
+					    type:'ReturnStatement',
+					    argument:{
+					    	type:'CallExpression',
+					    	callee:getCatch(path),
+					    	arguments:[value]
+					    }
+					} ;
+					repl.$mapped = true ;
+					coerce(node,repl) ;
+					return ;
 				}
-			} else if (node instanceof U2.AST_Lambda) {
+			} else if (examine(node).isFunction) {
 				lambdaNesting++ ;
-				descend(node, this);
+				descend(node);
 				lambdaNesting-- ;
-				return node ;
+				return ;
 			}  else {
-				descend(node, this);
-				return node ;
+				descend(node);
+				return ;
 			}
-		});
-		return n.transform(returnMapper) ;
+		},path);
 	}
 
 	/**
@@ -638,42 +745,42 @@ myfn("ok") ;
 	 * ...in case 'y' uses await, in which case we need to invoke $more() at the end of the
 	 * callback to continue execution after the case.
 	 */
-	function mapIfStmt(ifStmt, asyncWalk){
-		if ((ifStmt instanceof U2.AST_If) &&
-				(containsAwait(ifStmt.body) || (ifStmt.alternative && containsAwait(ifStmt.alternative)))) {
+	function mapIfStmt(ifStmt, path, down){
+		if (ifStmt.type==='IfStatement' && containsAwait([ifStmt.consequent,ifStmt.alternate])) {
+			var symName = "$post_if_"+generateSymbol(ifStmt.test) ;
+			var synthBlock = {type:'BlockStatement',body:[ifStmt]} ;
 
-			var symName = "$post_if_"+generateSymbol(ifStmt.condition) ;
-			var synthBlock = new U2.AST_BlockStatement({body:[ifStmt]}) ;
-
-			var ref = parentRef(asyncWalk) ;
+			var ref = path[0] ;
 			if ('index' in ref) {
 				var idx = ref.index ;
 				var deferredCode = ref.parent[ref.field].splice(idx+1,ref.parent[ref.field].length-(idx+1)) ;
 				ref.parent[ref.field][idx] = synthBlock ;
 				if (deferredCode.length) {
-					var call = new U2.AST_Return({value:thisCall(symName)}) ;
-					synthBlock.body.unshift(asyncWalk.walkDown(makeContinuation(symName,deferredCode))) ;
-					synthBlock.body.push(call.clone()) ;
-
-					function transformConditional(cond) {
+					var call = {type:'ReturnStatement',argument:thisCall(symName)} ;
+					synthBlock.body.unshift(down(makeContinuation(symName,deferredCode))) ;
+					
+					[ifStmt.consequent,ifStmt.alternate].forEach(function(cond) {
+						if (!cond)
+							return ;
 						var blockEnd ;
-						if (!(cond instanceof U2.AST_BlockStatement))
+						if (!examine(cond).isBlockStatement)
 							blockEnd = cond ;
 						else
 							blockEnd = cond.body[cond.body.length-1] ;
-						if (!(blockEnd instanceof U2.AST_Return)) {
-							if (!(cond instanceof U2.AST_BlockStatement)) {
-								coerce(cond,new U2.AST_BlockStatement({body:[cond.clone()]})) ;
+						if (!(blockEnd.type==='ReturnStatement')) {
+							if (!(cond.type==='BlockStatement')) {
+								coerce(cond,{type:'BlockStatement',body:[cloneNode(cond)]}) ;
 							}
-							cond.body.push(call.clone()) ;
+							cond.$deferred = true ;
+							cond.body.push(cloneNode(call)) ;
 						}
-						asyncWalk.walkDown(cond) ;
-					}
+						down(cond) ;
+					}) ;
 
-					transformConditional(ifStmt.body) ;
-					if (ifStmt.alternative) {
-						transformConditional(ifStmt.alternative) ;
-					}
+					// If both blocks are transformed, the trailing call to $post_if()
+					// can be omitted as it'll be unreachable via a synchronous path
+					if (!(ifStmt.consequent && ifStmt.alternate && ifStmt.consequent.$deferred && ifStmt.alternate.$deferred))
+						synthBlock.body.push(cloneNode(call)) ;
 				}
 			} else {
 				ref.parent[ref.field] = synthBlock ;
@@ -681,41 +788,42 @@ myfn("ok") ;
 		}
 	}
 
-	function mapSwitch(switchStmt, asyncWalk){
-		if ((switchStmt instanceof U2.AST_Switch) && containsAwait(switchStmt.body)){
-			var ref = parentBlockRef(asyncWalk) ;
+	function mapSwitch(switchStmt, path, down){
+		if (switchStmt.type==='SwitchStatement' && containsAwait(switchStmt.cases)){
+			var ref = path.parentBlock() ;
 
 			var j = ref.index+1 ;
 			var deferredCode = ref.parent[ref.field].splice(j,ref.parent[ref.field].length-j) ;
-			if (deferredCode[deferredCode.length-1] instanceof U2.AST_Break)
+			if (deferredCode[deferredCode.length-1].type === 'BreakStatement')
 				ref.parent[ref.field].push(deferredCode.pop()) ;
 			var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
 			var deferred = thisCall(symName) ;
-			var synthBlock = new U2.AST_BlockStatement({body:[switchStmt]}) ;
+			var synthBlock = {type:'BlockStatement',body:[switchStmt]} ;
 
 			if (deferredCode.length) {
 				synthBlock.body.unshift(makeContinuation(symName,deferredCode)) ;
-				synthBlock.body.push(new U2.AST_SimpleStatement({body:deferred.clone()})) ;
+				synthBlock.body.push({type:'ExpressionStatement',expression:cloneNode(deferred)}) ;
 			} else {
 				deferred = null ;
 			}
 			ref.parent[ref.field][ref.index] = synthBlock ;
-			synthBlock.body[0].body.forEach(function(n){ asyncWalk.walkDown(n) } ) ;
+			//synthBlock.body[0].body.forEach(down) ;
+			down(synthBlock.body[0]) ;
 
 			// Now transform each case so that 'break' looks like return <deferred>
-			switchStmt.body.forEach(function(caseStmt,idx){
-				if (!(caseStmt instanceof U2.AST_SwitchBranch)) {
-					throw new Error("switch contains non-case/default statement: "+caseStmt.TYPE) ;
+			switchStmt.cases.forEach(function(caseStmt,idx){
+				if (!(caseStmt.type === 'SwitchCase')) {
+					throw new Error("switch contains non-case/default statement: "+caseStmt.type) ;
 				}
 				if (containsAwait(caseStmt)) {
-					var end = caseStmt.body[caseStmt.body.length-1] ;
-					if (end  instanceof U2.AST_Break) {
-						caseStmt.body[caseStmt.body.length-1] = new U2.AST_Return({value:deferred.clone()}) ;
-					} else if (end instanceof U2.AST_Exit) {
+					var end = caseStmt.consequent[caseStmt.consequent.length-1] ;
+					if (end.type === 'BreakStatement') {
+						caseStmt.consequent[caseStmt.consequent.length-1] = {type:'ReturnStatement',argument:cloneNode(deferred)} ;
+					} else if (end.type==='ReturnStatement' || end.type==='ThrowStatement') {
 						// Do nothing - block ends in return or throw
 					} else {
 						initOpts.log(pr.filename+" - switch-case fall-through not supported - added break") ;
-						caseStmt.body.push(new U2.AST_Return({value:deferred.clone()})) ;
+						caseStmt.consequent.push({type:'ReturnStatement',argument:cloneNode(deferred)}) ;
 					}
 				}
 			}) ;
@@ -723,17 +831,17 @@ myfn("ok") ;
 		}
 	}
 
-	function mapTryCatch(node, asyncWalk) {
-		if ((node instanceof U2.AST_Try) && containsAwait(node) && !node.mapped) {
+	function mapTryCatch(node, path, down) {
+		if (node.type==='TryStatement' && containsAwait(node) && !node.$mapped) {
 			var continuation ;
-			var ref = parentRef(asyncWalk) ;
+			var ref = path[0] ;
 			if ('index' in ref) {
 				var i = ref.index+1 ;
 				var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
 				if (afterTry.length) {
 					var ctnName = "$post_try_"+generateSymbol() ;
 					var afterContinuation = makeContinuation(ctnName,afterTry) ;
-					afterContinuation = asyncWalk.walkDown(afterContinuation) ;
+					afterContinuation = down(afterContinuation) ;
 					ref.parent[ref.field].unshift(afterContinuation) ;
 					continuation = thisCall(ctnName) ;
 				}
@@ -741,24 +849,25 @@ myfn("ok") ;
 				throw new Error(pr.filename+" - malformed try/catch blocks") ;
 			}
 
-			node.mapped = true ;
-			node.body = toArray(node.body) ;
+			node.$mapped = true ;
+//			node.block.body = toArray(node.block) ;
 			if (continuation) {
-				node.body.push(continuation.clone()) ;
-				node.bcatch.body.push(continuation.clone()) ;
+				node.block.body.push(cloneNode(continuation)) ;
+				node.handler.body.body.push(cloneNode(continuation)) ;
 			}
-			if (node.bcatch) {
-				var symCatch = getCatch(asyncWalk)[0] ; 
+			if (node.handler) {
+				var symCatch = getCatch(path) ; 
 				// catcher is not a continuation as it has arguments
-				var catcher = makeBoundFn(symCatch.name,node.bcatch.body,[node.bcatch.argname.clone()]) ;
-				node.bcatch.body = [new U2.AST_Call({expression:symCatch,args:[node.bcatch.argname.clone()]})] ;
+				var catcher = makeBoundFn(symCatch.name,node.handler.body.body,[cloneNode(node.handler.param)]) ;
+				node.handler.body.body = [{
+					type:'CallExpression',
+					callee:symCatch,
+					arguments:[cloneNode(node.handler.param)]
+				}] ;
 				ref.parent[ref.field].unshift(catcher) ;
 			}
-			if (node.bfinally) { /** TODO: Not yet working! **/
+			if (node.finalizer) { /** TODO: Not yet working! **/
 				initOpts.log("Warning: try...finally does not implement finally correctly");
-/*				var symFinal = "$finally_"+generateSymbol() ;
-				var finalize = makeContinuation(symFinal,node.bfinally.body) ;
-				node.bfinally.body = [finalize,thisCall(symFinal)] ;*/
 			}
 		}
 	}
@@ -770,67 +879,62 @@ myfn("ok") ;
 			return walkDown(node,mapper) ;
 		}
 
-		ast.walk(new U2.TreeWalker(function(node,descend){
+		return treeWalker(ast,function(node,descend,path){
 			if (walked.indexOf(node)>=0)
-				return true ;
+				return ;
 
-			this.walkDown = walkDownSubtree ;
 			if (Array.isArray(mapper)) {
 				var walk = this ;
 				mapper.forEach(function(m){
-					m(node,walk);
+					m(node,path,walkDownSubtree);
 				}) ;
 			} else {
-				mapper(node,this) ;
+				mapper(node,path,walkDownSubtree) ;
 			}
 			descend() ;
-			return true ;
-		})) ;
-		return ast ;
+			return ;
+		}) ;
 	}
 
 	function asyncAwait(ast,inAsync,parentCatcher) {
 		if (!opts.es7) {
-			// Only load deprecated ES5 behaviour if the app uses it.
-			initOpts.log("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords") ;
-			var asyncAssignTransfom = require('./es5plus')(U2,config) ;
-			return ast.transform(asyncAssignTransfom) ;
+			throw new Error("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords, or use nodent <=1.2.x") ;
 		}
 
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend();
-			if (node instanceof U2.AST_UnaryPrefix && node.operator=="await") {
+			if (examine(node).isAwait) {
 				/* Warn if this await expression is not inside an async function, as the return
 				 * will depend on the Thenable implementation, and references to $return might
 				 * not resolve to anything */
-				inAsync = inAsync || asyncWalk.stack.some(function(ancestor){
-					return ancestor.props && ancestor.props.wasAsync ;
+				inAsync = inAsync || path.some(function(ancestor){
+					return ancestor.self && ancestor.self.$wasAsync ;
 				}) ;
 
 				if (!inAsync) {
 					if (opts.promises)
-						initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value Promise runtime-specific") ;
+						initOpts.log(pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. 'return' value Promise runtime-specific") ;
 					else
-						initOpts.log(pr.filename+" - Warning: '"+node.print_to_string()+"' used inside non-async function. 'return' value from await is synchronous") ;
+						initOpts.log(pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. 'return' value from await is synchronous") ;
 				}
 
-				var parent = asyncWalk.parent(0) ;
-				if ((parent instanceof U2.AST_Binary) && (parent.operator=="||" || parent.operator=="&&") && parent.right===node) {
-					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' on right of "+parent.operator+" will always evaluate '"+node.print_to_string()+"'") ;
+				var parent = path[0].parent ;
+				if ((parent.type==='BinaryExpression') && (parent.operator=="||" || parent.operator=="&&") && parent.right===node) {
+					initOpts.log(pr.filename+" - Warning: '"+printNode(parent)+"' on right of "+parent.operator+" will always evaluate '"+printNode(node)+"'") ;
 				}
-				if ((parent instanceof U2.AST_Conditional) && parent.condition!==node) {
-					initOpts.log(pr.filename+" - Warning: '"+parent.print_to_string()+"' will always evaluate '"+node.print_to_string()+"'") ;
+				if ((parent.type==='ConditionalExpression') && parent.condition!==node) {
+					initOpts.log(pr.filename+" - Warning: '"+printNode(parent)+"' will always evaluate '"+printNode(node)+"'") ;
 				}
 
-				var result = new U2.AST_SymbolRef({name:"$await_"+generateSymbol(node.expression)}) ;
-				var expr = node.expression.clone() ;
+				var result = {type:'Identifier',name:"$await_"+generateSymbol(node.argument)} ;
+				var expr = cloneNode(node.argument) ;
 				coerce(node,result) ;
 
 				// Find the statement containing this await expression (and it's parent)
 				var stmt ;
-				for (var n=0; n<asyncWalk.stack.length; n++) {
-					if (asyncWalk.stack[asyncWalk.stack.length-(n+1)] instanceof U2.AST_Statement) {
-						stmt = parentBlockRef(asyncWalk,n+1) ;
+				for (var n=1; n<path.length; n++) {
+					if (examine(path[n].self).isBlockStatement) {
+						stmt = path[n-1] ;
 						break ;
 					}
 				}
@@ -839,48 +943,55 @@ myfn("ok") ;
 
 				var i = stmt.index ;
 				var callBack = stmt.parent[stmt.field].splice(i,stmt.parent[stmt.field].length-i).slice(1);
+				
 				// If stmt is only a reference to the result, suppress the result
 				// reference as it does nothing
-				if (!stmt.self.equivalent_to(result))
+				if (!((stmt.self.type==='Identifier' || stmt.self.name===result.name) || 
+						(stmt.self.type==='ExpressionStatement' && 
+								stmt.self.expression.type==='Identifier' && 
+								stmt.self.expression.name===result.name)))
 					callBack.unshift(stmt.self);
-
+				
 				// Wrap the callback statement(s) in a Block and transform them
-				var cbBody = new U2.AST_BlockStatement({body:cloneNodes(callBack)}) ;
-				var catcher = getCatch(asyncWalk,0,parentCatcher) ;
+				var cbBody = {type:'BlockStatement',body:cloneNodes(callBack)} ;
+				var catcher = getCatch(path,0,parentCatcher) ;
 				cbBody = asyncAwait(cbBody,inAsync,catcher) ;
 
-				var returner = new U2.AST_Function({argnames:[],body:[]}) ;
+				var returner = {type:'FunctionExpression', params:[],body:{type:'BlockStatement',body:[]}} ;
 				if (cbBody.body.length) {
-					returner = new U2.AST_Function({
-						argnames:[result.clone()],
-						body:cbBody.body
-					}) ;
-					returner = new U2.AST_Call({
-						expression:new U2.AST_Dot({
-							expression: returner,
-							property: initOpts.bindAwait
-						}),
-						args:[new U2.AST_This(),catcher[0]]
-					}) ;
+					returner = {
+						type:'CallExpression',
+						callee:{
+							type:'MemberExpression',
+							object:{
+								type:'FunctionExpression', 
+								params:[cloneNode(result)],
+								body:{type:'BlockStatement',body:cbBody.body}
+							},
+							property:{
+								type:'Identifier',name:initOpts.bindAwait
+							},
+							computed:false
+						},
+						arguments:[{type:'ThisExpression'},catcher]
+					} ;
 				}
 
 				if (opts.promises) {
-					expr = new U2.AST_Dot({
-						expression:expr.clone(),
-						property:"then"
-					}) ;
+					expr = {
+						type:'MemberExpression',
+						object:cloneNode(expr),
+						property:{type:'Identifier',name:'then'},
+						computed:false
+					} ;
 				}
 
-				var call = new U2.AST_Call({
-					expression:expr,
-					args:[returner,catcher[0]]
-				}) ;
+				var call = {type:'CallExpression',callee:expr,arguments:[returner,catcher]} ;
 
-				stmt.parent[stmt.field].push(new U2.AST_Return({ value:call })) ;
+				stmt.parent[stmt.field].push({type:'ReturnStatement',argument:call }) ;
 			}
 			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
@@ -912,122 +1023,157 @@ myfn("ok") ;
 	})() ;
 	 */
 	function asyncLoops(ast) {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend() ;
-			function transformLoop() {
-				if (!containsAwait(node))
-					return ;
-
-				var ref = parentBlockRef(asyncWalk) ;
+			if (examine(node).isLoop && containsAwait(node)) {
+				var ref = path[0] ;
 
 				var init = node.init ;
-				var condition = node.condition ;
-				var step = node.step ;
+				var condition = node.test ;
+				var step = node.update ;
 				var body = node.body ;
 
-				if (init && (!init instanceof U2.AST_Statement))
-					init = new U2.AST_SimpleStatement({body:init}) ;
-				step = step?new U2.AST_SimpleStatement({body:step}):null ;
-				body = (body instanceof U2.AST_BlockStatement) ? body.clone().body:[body.clone()] ;
+				if (init && (!examine(init).isStatement))
+					init = {type:'ExpressionStatement',expression:init} ;
+				step = step?{type:'ExpressionStatement',expression:step}:null ;
+				body = (examine(body).isBlockStatement) ? cloneNode(body).body:[cloneNode(body)] ;
 
-				var symName = "$"+node.TYPE.toLowerCase()+"_"+generateSymbol(condition) ;
+				var symName = "$"+node.type.toLowerCase()+"_"+generateSymbol(condition) ;
 				var symExit = "$exit_"+generateSymbol(condition) ;
-				var loop = new U2.AST_SymbolRef({name:symName}) ;
+				var loop = {type:'Identifier',name:symName} ;
 
 				// How to exit the loop
-				var mapBreak = new U2.AST_Return({
-					value:new U2.AST_UnaryPrefix({
-						operator:"void",
-						expression:new U2.AST_Call({
-							args:[],
-							expression:new U2.AST_SymbolRef({name:symExit})
-						})})}) ;
+				var mapBreak = {
+					type:'ReturnStatement',
+					argument:{
+						type:'UnaryExpression',
+						operator:'void',
+						argument:{
+							type:'CallExpression',
+							callee:{type:'Identifier',name:symExit},
+							arguments:[]
+						}
+					}
+				} ;
 
 				// How to continue the loop
 				var symContinue = "$next_"+generateSymbol() ;
-				var defContinue = makeContinuation(symContinue,[new U2.AST_Return({value:
-					new U2.AST_Call({
-						args:[new U2.AST_SymbolRef({name:symExit}),
-						      new U2.AST_SymbolRef({name:config.$error})],
-						      expression:loop.clone()
-					})
-				})]) ;
+				var defContinue = makeContinuation(symContinue,[
+				    {
+				    	type:'ReturnStatement',
+				    	argument:{
+				    		type:'CallExpression',
+				    		callee:cloneNode(loop),
+				    		arguments:[{
+				    			type:'Identifier',
+				    			name:symExit
+				    		},{
+				    			type:'Identifier',
+				    			name:config.$error
+				    		}]
+				    	}
+				    }
+				]) ;
 
 				if (step)
-					defContinue.body.unshift(step) ;
+					defContinue.body.body.unshift(step) ;
 
-				var mapContinue = new U2.AST_Return({
-					value:new U2.AST_UnaryPrefix({
-						operator:"void",
-						expression:thisCall(symContinue)
-					})}) ;
+				var mapContinue = {
+					type:'ReturnStatement',
+					argument:{
+						type:'UnaryExpression',
+						operator:'void',
+						argument:thisCall(symContinue)
+					}
+				} ;
 
 				for (var i=0; i<body.length;i++) {
-					var w ;
-					body[i].walk(w = new U2.TreeWalker(function(n,descend){
-						if (n instanceof U2.AST_Break) {
-							coerce(n,mapBreak.clone()) ;
-						} else if (n instanceof U2.AST_Continue) {
-							coerce(n,mapContinue.clone()) ;
-						} else if (n instanceof U2.AST_Lambda) {
+					treeWalker(body[i],function(n,descend){
+						if (n.type==='BreakStatement') {
+							coerce(n,cloneNode(mapBreak)) ;
+						} else if (n.type==='ContinueStatement') {
+							coerce(n,cloneNode(mapContinue)) ;
+						} else if (examine(n).isFunction) {
 							return true ;
 						}
-					})) ;
+						descend() ;
+					}) ;
 				}
 
-				body.push(mapContinue.clone());
+				body.push(cloneNode(mapContinue));
 
-				var subCall = new U2.AST_Defun({
-					name:loop.clone(),
-					argnames:[new U2.AST_SymbolRef({name:symExit}),
-						      new U2.AST_SymbolRef({name:config.$error})],
-					body:[defContinue]
-				});
+				var subCall = {
+					type:'FunctionDeclaration',
+					id:{type:'Identifier',name:symName/*cloneNode(loop)*/},
+					params:[{
+						type:'Identifier',
+						name:symExit
+					},{
+						type:'Identifier',
+						name:config.$error
+					}],
+					body:{type:'BlockStatement',body:[defContinue]}
+					
+				} ;
 
 				var nextTest ;
-				if (node instanceof U2.AST_Do) {
-					defContinue.body = [new U2.AST_If({condition:condition.clone(),
-						body:new U2.AST_BlockStatement({body:defContinue.body}),
-						alternative:new U2.AST_Return({value:new U2.AST_Call({
-							expression:new U2.AST_SymbolRef({name:symExit}),
-							args:[]
-						})})
-					})] ;
-					subCall.body = [defContinue].concat(body) ;
+				if (node.type==='DoWhileStatement') {
+					defContinue.body.body = [{
+						type:'IfStatement',
+						test:cloneNode(condition),
+						consequent:{type:'BlockStatement',body:cloneNodes(defContinue.body.body)},
+						alternate:{
+							type:'ReturnStatement',
+							argument:{
+								type:'CallExpression',
+								callee:{
+									type:'Identifier',
+									name:symExit
+								},
+								arguments:[]
+							}
+						}
+					}] ;
+					subCall.body.body = [defContinue].concat(body) ;
 				} else {
-					var nextTest = new U2.AST_If({condition:condition.clone(),
-						body:new U2.AST_BlockStatement({body:body}),
-						alternative:mapBreak.clone()
-					}) ;
-					subCall.body.push(nextTest) ;
+					var nextTest = {
+						type:'IfStatement',
+						test:cloneNode(condition),
+						consequent:{
+							type:'BlockStatement',
+							body:body
+						},
+						alternate:cloneNode(mapBreak)
+					} ;
+
+					subCall.body.body.push(nextTest) ;
 				}
 
-				var replace = new U2.AST_SimpleStatement({body:
-					new U2.AST_UnaryPrefix({operator:'await',
-						expression:new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: subCall,
-								property: initOpts.bindLoop
-							}),
-							args:[new U2.AST_This()]
-						})
-					})
-				});
+				var replace = {
+					type:'ExpressionStatement',
+					expression:{
+						type:'UnaryExpression',
+						operator:'await',
+						argument:{
+							type:'CallExpression',
+							arguments:[{type:'ThisExpression'}],
+							callee:{
+								type:'MemberExpression',
+								object:subCall,
+								property:{type:'Identifier',name:initOpts.bindLoop},
+								computed:false
+							}
+						}
+					}
+				} ;
 
 				if (init)
-					ref.parent[ref.field].splice(ref.index,1,init.clone(),replace) ;
+					ref.parent[ref.field].splice(ref.index,1,cloneNode(init),replace) ;
 				else
 					ref.parent[ref.field][ref.index] = replace ;
 			}
-			if (node instanceof U2.AST_For)
-				transformLoop() ;
-			else if (node instanceof U2.AST_While)
-				transformLoop() ;
-			else if (node instanceof U2.AST_DWLoop)
-				transformLoop() ;
 			return true ;
 		});
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
@@ -1053,93 +1199,99 @@ myfn("ok") ;
 	 */
 
 	function asyncDefine(ast) {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
-			if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
-				// "async" is unary operator that takes a function as it's operand,
-				// OR, for old-style declarations, a unary negative expression yielding a function, e.g.
-				// async function(){} or async-function(){}
-				// The latter form is deprecated, but has the advantage of being ES5 syntax compatible
-				var fn = node.expression ;
-				if (!(opts.es7) && (fn instanceof U2.AST_UnaryPrefix && fn.operator=='-'))
-					fn = fn.expression.clone() ;
-				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
-					var replace = fn.clone() ;
-					/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
-					 * with a call to "$return" */
-					var fnBody = fn.body.map(function(sub){
-						var ast = mapReturns(sub) ;
-						ast.walk(asyncWalk) ;
-						return ast ;
-					}) ;
+		treeWalker(ast,function(node, descend, path){
+			if (examine(node).isAsync && examine(node.argument).isFunction) {
+				// "async" is unary operator that takes a function as it's operand, e.g.
+				// async function <name?>([args]?){ <body> }
 
-					/* Removed as ES7 now has a (tiny) runtime: asyncbind. Prior to
-					 * using $asyncbind, each async function caught it's own exceptions
-					 * and was invoked via bind(), so no exception handler was passed.
-					 * $asyncbind passes the exception handler as a parameter, and the
-					 * invoked function doesn't require a try{} catch() {}
-					 */
-					/*if (!opts.promises) {
-						fnBody = [new U2.AST_Try({body:fnBody,bcatch: new U2.AST_Catch({
-							argname:new U2.AST_SymbolFunarg({name:initOpts.$except}),
-							body:[thisCall(getCatch(asyncWalk)[0],[new U2.AST_SymbolRef({name:initOpts.$except})])]})})] ;
-					}*/
+				var fn = node.argument ;
+				var replace = cloneNode(fn) ;
+				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
+				 * with a call to "$return" */
+				var fnBody = {type:'BlockStatement',body:fn.body.body.map(function(sub){
+					return asyncDefine(mapReturns(sub,path)) ;
+				})} ;
 
-					var funcback = new U2.AST_Function({
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
-						          new U2.AST_SymbolFunarg({name:config.$error})],
-						          body:fnBody
-					}) ;
-					funcback.setProperties({wasAsync:true}) ;
-					setCatch(funcback,[config.$error]) ;
-					
+				/* Removed as ES7 now has a (tiny) runtime: asyncbind. Prior to
+				 * using $asyncbind, each async function caught it's own exceptions
+				 * and was invoked via bind(), so no exception handler was passed.
+				 * $asyncbind passes the exception handler as a parameter, and the
+				 * invoked function doesn't require a try{} catch() {}
+				 */
+				/*if (!opts.promises) {
+					fnBody = [new U2.AST_Try({body:fnBody,bcatch: new U2.AST_Catch({
+						argname:new U2.AST_SymbolFunarg({name:initOpts.$except}),
+						body:[thisCall(getCatch(asyncWalk)[0],[new U2.AST_SymbolRef({name:initOpts.$except})])]})})] ;
+				}*/
+
+				var funcback = {
+					type:'FunctionExpression',
+					params:[{
+						type:'Identifier',
+						name:config.$return
+					},{
+						type:'Identifier',
+						name:config.$error
+					}],
+					body:fnBody,
+					$wasAsync:true
+				} ;
+
+				setCatch(funcback,config.$error) ;
+				
+				funcback = {
+					type:'CallExpression',
+					arguments:[{type:'ThisExpression'}],
+					callee:{
+						type:'MemberExpression',
+						object:funcback,
+						property:{type:'Identifier',name:initOpts.bindAsync},
+						computed:false
+					}
+				} ;
+				
+				if (opts.promises) {
+					/*
+					 * Promises logically only need .bind() here, as
+					 * the surrounding TryCatch will handle any exceptions,
+					 * but for some V8 specific reason, .bind() is around
+					 * three times slower than using $asyncbind(), which
+					 * wraps the function in context and (unecessarily)
+					 * handles exceptions.
+					 *
 					funcback = new U2.AST_Call({
 						expression:new U2.AST_Dot({
 							expression: funcback,
-							property: initOpts.bindAsync
+							property: "bind"
 						}),
 						args:[new U2.AST_This()]
 					}) ;
-					
-					if (opts.promises) {
-						/*
-						 * Promises logically only need .bind() here, as
-						 * the surrounding TryCatch will handle any exceptions,
-						 * but for some V8 specific reason, .bind() is around
-						 * three times slower than using $asyncbind(), which
-						 * wraps the function in context and (unecessarily)
-						 * handles exceptions.
-						 *
-						funcback = new U2.AST_Call({
-							expression:new U2.AST_Dot({
-								expression: funcback,
-								property: "bind"
-							}),
-							args:[new U2.AST_This()]
-						}) ;
-						*/
-						replace.body = [new U2.AST_Return({
-							value:new U2.AST_New({
-								expression:new U2.AST_SymbolRef({name:"Promise"}),
-								args:[funcback]
-							})
-						})] ;
-					} else {
-						replace.body = [new U2.AST_Return({
-							value:funcback
-						})] ;
-					}
-
-					var parent = asyncWalk.parent(0) ;
-					if (parent instanceof U2.AST_SimpleStatement) {
-						coerce(parent,replace) ;
-					} else {
-						coerce(node,replace) ;
-					}
-					return true ;
+					*/
+					replace.body.body = [{
+						type:'ReturnStatement',
+						argument:{
+							type:'NewExpression',
+							callee:{type:'Identifier',name:'Promise'},
+							arguments:[funcback]
+						}
+					}] ;
+				} else {
+					replace.body.body = [{
+						type:'ReturnStatement',
+						argument:funcback
+					}];
 				}
-			}
+
+				var parent = path[0].parent ;
+				if (examine(parent).isExpressionStatement) {
+					coerce(parent,replace) ;
+				} else {
+					coerce(node,replace) ;
+				}
+				return ;
+			} 
+			descend() ;
 		});
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
@@ -1150,81 +1302,83 @@ myfn("ok") ;
 			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); }
 	 */
 	function asyncSpawn(ast) {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
-			if (node instanceof U2.AST_UnaryPrefix && node.operator=="async") {
-				descend() ;
-				// "async" is unary operator that takes a function as it's operand,
-				// async function(){}
-				var fn = node.expression ;
-
-				if ((fn instanceof U2.AST_Function) || (fn instanceof U2.AST_Defun)) {
-					var ref = parentRef(asyncWalk) ;
-					var generator = new U2.AST_Defun({
-						name:new U2.AST_SymbolRef({name:"*"}),
-						argnames:[new U2.AST_SymbolFunarg({name:config.$return}),
-						          new U2.AST_SymbolFunarg({name:config.$error})],
-						body:mapReturns(fn.body,true).concat(new U2.AST_Return({value:new U2.AST_SymbolRef({name:config.$return})}))
-					}) ;
-					var awaits = scopedNodes(generator,function(n){
-						return (n instanceof U2.AST_UnaryPrefix) && n.operator=="await" ;
-					}) ;
-					awaits.forEach(function(r){
-						r.self.operator = "yield" ;
-						r.self.needs_parens = function(){ return true };
-					}) ;
-					fn.body = [
-					    new U2.AST_Return({value:
-						    new U2.AST_Call({
-								expression:new U2.AST_Dot({
-									expression:generator,
-									property:"$asyncspawn"}),
-								args:[new U2.AST_SymbolRef({name:"Promise"}),new U2.AST_This()]
-						})})] ;
-
-					fn.needs_parens = function(){ return false };
-					setRef(ref,fn) ;
-					return true ;
+		treeWalker(ast,function(node, path, descend){
+			descend() ;
+			if (examine(node).isAsync && examine(node.argument).isFunction) {
+				var fn = node.argument ;
+				//var repl = /*acorn.parse("{return function*(){}.$asyncspawn()}",{ecmaVersion:6,allowReturnOutsideFunction:true}) ;*/
+				fn.body = {
+			      "type": "BlockStatement",
+			      "body": [{
+			          "type": "ReturnStatement",
+			          "argument": {
+			            "type": "CallExpression",
+			            "callee": {
+			              "type": "MemberExpression",
+			              "object": {
+			                "type": "FunctionExpression",
+			                "id": null,
+			                "generator": true,
+			                "expression": false,
+			                "params": [],
+			                "body": fn.body
+			              },
+			              "property": {
+			                "type": "Identifier",
+			                "name": "$asyncspawn"
+			              },
+			              "computed": false
+			            },
+			            "arguments": []
+			          }
+			        }]
+			    };
+//				repl.body[0].body[0].argument.callee.object.body = fn.body ;
+//				fn.body = repl ;
+				if (path[0].parent.type==='ExpressionStatement') {
+					fn.type = 'FunctionDeclaration' ;
+					pull(path[0].parent,fn) ;
+				} else {
+					pull(node,fn) ;
 				}
 			}
 		});
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
 	/* Find all nodes within this scope matching the specified function */
 	function scopedNodes(ast,matching) {
 		var matches = [] ;
-		var walk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend,path){
 			if (node === ast)
-				return ;
-
-			if (matching(node,walk)) {
-				matches.push(parentRef(walk)) ;
+				return descend() ;
+			
+			if (matching(node)) {
+				matches.push(path[0]) ;
 				return true ;
 			}
-			if (node instanceof U2.AST_Scope) {
+			if (examine(node).isScope) {
 				return true ;
 			}
+			descend() ;
 		}) ;
-		ast.walk(walk) ;
 		return matches ;
 	}
 
 	/* Move directives, vars and named functions to the top of their scope */
 	function hoistDeclarations(ast) {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend,path){
 			descend() ;
-			if (node instanceof U2.AST_Scope) {
+			if (examine(node).isScope) {
+				var nodeBody = node.type==='Program'?node.body:node.body.body ;
 				var functions = scopedNodes(node,function hoistable(n){
 					// YES: We're a named function, but not a continuation
-					if ((n instanceof U2.AST_Lambda) && n.name) {
-						return !(n.props && n.props.continuation) ;
+					if (examine(n).isFunction && n.id) {
+						return !n.$continuation ;
 					}
 
 					// YES: We're a named async function
-					if ((n instanceof U2.AST_UnaryPrefix)
-							&& n.operator=="async"
-							&& hoistable(n.expression))
+					if (examine(n).isAsync && hoistable(n.argument))
 						return true ;
 
 					// No, we're not a hoistable function
@@ -1232,154 +1386,160 @@ myfn("ok") ;
 				}) ;
 
 				var hoistedFn = {} ;
-				functions.forEach(function(ref) {
+				functions.forEach(function(ref,idx) {
 					// What is the name of this function (could be async, so check the expression if necessary)
-					var symName = ref.self.name?ref.self.name.name:ref.self.expression.name.name ;
+					var symName = ref.self.id?ref.self.id.name:ref.self.argument.id.name ;
 					if (symName in hoistedFn) {
 						initOpts.log(pr.filename+" - Duplicate 'function "+symName+"()'") ;
 					}
 					hoistedFn[symName] = true ;
-					var fnSym = new U2.AST_SymbolRef({name:symName}) ;
+					var fnSym = {type:'Identifier',name:symName} ;
 
 					// In some contexts we need to leave the sym in place, in others we can delete it
 					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
 					var movedFn ;
 					if (ref.field!=='body')
-						movedFn = setRef(ref,fnSym) ;
+						movedFn = ref.replace(fnSym) ;
 					else
-						movedFn = deleteRef(ref) ;
+						movedFn = ref.remove() ;
 
-					if (movedFn instanceof U2.AST_Function)
-						movedFn = new U2.AST_Defun(movedFn) ;
-					node.body.unshift(movedFn) ;
+					if (examine(movedFn).isFunction)
+						movedFn.type = 'FunctionDeclaration' ; // = new U2.AST_Defun(movedFn) ;
+					nodeBody.unshift(movedFn) ;
 				}) ;
 
 				var vars = scopedNodes(node,function(n){
-					return (n instanceof U2.AST_Var) ;
+					return (n.type==='VariableDeclaration') ;
 				}) ;
 
 				if (vars.length) {
 					var definitions = [] ;
 					vars.forEach(function(ref){
-						if ((ref.parent instanceof U2.AST_For || ref.parent instanceof U2.AST_ForIn) && ref.field=="init")
+						if ((ref.parent.type==='ForStatement' || ref.parent.type==='ForInStatement') && ref.field=="init")
 							return ; // Don't hoist loop vars
 
 						var self = ref.self ;
 						var values = [] ;
-						for (var i=0; i<self.definitions.length; i++) {
-							var name = self.definitions[i].name.name ;
+						for (var i=0; i<self.declarations.length; i++) {
+							var name = self.declarations[i].id.name ;
 							if (definitions.indexOf(name)>=0) {
 								initOpts.log(pr.filename+" - Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"()'") ;
 							} else {
 								definitions.push(name) ;
 							}
-							if (self.definitions[i].value) {
-								var value = new U2.AST_Assign({
-									left:new U2.AST_SymbolRef({name:name}),
+							if (self.declarations[i].init) {
+								var value = {
+									type:'AssignmentExpression',
+									left:{type:'Identifier',name:name},
 									operator:'=',
-									right:self.definitions[i].value.clone()
-								}) ;
-								if (!(ref.parent instanceof U2.AST_For))
-									value = new U2.AST_SimpleStatement({body:value}) ;
-								values.push(value) ;
+									right:cloneNode(self.declarations[i].init)
+								} ;
 
+								if (!(ref.parent.type==='ForStatement'))
+									value = {type:'ExpressionStatement',expression:value} ;
+								values.push(value) ;
 							}
 						}
 						if (values.length==0)
-							deleteRef(ref) ;
+							ref.remove() ;
 						else if (values.length==1) {
-							setRef(ref,values[0]) ;
+							ref.replace(values[0]) ;
 						} else {
-							setRef(ref,new U2.AST_BlockStatement({body:values})) ;
+							ref.replace({type:'BlockStatement',body:values}) ;
 						}
 					}) ;
 
 					if (definitions.length) {
-						definitions = definitions.map(function(name){ return new U2.AST_VarDef({
-							name: new U2.AST_SymbolVar({name:name})
-						})}) ;
-						if (!(node.body[0] instanceof U2.AST_Var)) {
-							node.body.unshift(new U2.AST_Var({definitions:definitions})) ;
+						definitions = definitions.map(function(name){ 
+							return {
+								type:'VariableDeclarator',
+								id:{
+									type:'Identifier',
+									name:name
+								}
+							}
+						}) ;
+						if (!(nodeBody[0].type === 'VariableDeclaration')) {
+							nodeBody.unshift({
+								type:'VariableDeclaration',
+								kind:'var',
+								declarations:definitions}) ;
 						} else {
-							node.body[0].definitions = node.body[0].definitions.concat(definitions) ;
+							nodeBody[0].declarations = nodeBody[0].declarations.concat(definitions) ;
 						}
 					}
 				}
 
+				/*** TODO: directives are not obvious in ESTREE */ 
 				var directives = scopedNodes(node,function(n){
-					return (n instanceof U2.AST_Directive) ;
+					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
 				}) ;
 				directives.forEach(function(ref){
-					node.body.unshift(deleteRef(ref)) ;
+					node.body.unshift(ref.remove()) ;
 				}) ;
 			}
 			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
 	/* Give unique names to TryCatch blocks */
 	function labelTryCatch(ast) {
-		var asyncWalk = new U2.TreeWalker(function(node, descend){
-			if (node instanceof U2.AST_Try) {
+		treeWalker(ast,function(node, descend,path){
+			if (node.type==='TryStatement') {
 				// Every try-catch needs a name, so asyncDefine/asyncAwait knows who's handling errors
-				var parent = getCatch(asyncWalk).map(function(c){ return c.name }) ;
-				setCatch(node,["$catch_"+generateSymbol(node.bcatch.argname)]) ;
-				node.bcatch && setCatch(node.bcatch,parent) ;
-				node.bfinally && setCatch(node.bfinally,parent) ;
+				var parent = getCatch(path).name ;
+				setCatch(node,"$catch_"+generateSymbol(node.handler.param)) ;
+				node.handler && setCatch(node.handler,parent) ;
+				node.finalizer && setCatch(node.finalizer,parent) ;
 			}
 			descend() ;
-			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 		return ast ;
 	}
 
 	function replaceSymbols(ast,from,to) {
-		var walk = new U2.TreeWalker(function(node,descend){
+		treeWalker(ast,function(node,descend,path){
 			descend() ;
-			if (node.TYPE=="SymbolRef" && node.name==from) {
-				coerce(node,new U2.AST_SymbolRef({name:to})) ;
+			if (node.type=='Identifier' && node.name==from) {
+				node.name = to ;
 			}
-			return true ;
 		}) ;
-		ast.walk(walk) ;
+		return ast ;
 	}
 
 	/* Remove un-necessary nested blocks and crunch down empty function implementations */
 	function cleanCode(ast) {
-		var asyncWalk ;
-
 		/* Inline continuations that are only referenced once */
-		asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend();
-			if ((node instanceof U2.AST_SymbolRef) && continuations[node.name] && node.props && node.props.thisCall) {
+			if (node.type==='Identifier' && continuations[node.name] && node.$thisCall) {
 				if (continuations[node.name].ref) {
 					delete continuations[node.name] ;
 				} else {
-					continuations[node.name].ref = node.props.thisCall ;
+					continuations[node.name].ref = node.$thisCall ;
 				}
 			}
-			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
-		asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend();
 			if (calls.indexOf(node)>=0) {
-				var parent = asyncWalk.parent() ;
-				if (parent instanceof U2.AST_Return) {
+				var parent = path[0].parent ;
+				if (parent.type==='ReturnStatement') {
+					debugger ;
 					var sym = node.expression.expression.name ;
-					coerce(parent,new U2.AST_BlockStatement({body:toArray(continuations[sym].def.body).concat(new U2.AST_Return())})) ;
-					coerce(continuations[sym].def,new U2.AST_DeletedNode()) ;
+					coerce(parent,{
+						type:'BlockStatement',
+						body:toArray(continuations[sym].def.body).concat({type:'ReturnStatement'}) 
+					}) ;
+					coerce(continuations[sym].def,cloneNode(deletedNode)) ;
 				}
 			}
-			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 
+/*
 		// Find declarations of functions of the form:
 		// 		function [sym]() { return _call_.call(this) }
 		// or
@@ -1390,7 +1550,7 @@ myfn("ok") ;
 		// needs to be done recursively from the bottom of the tree upwards.
 		// NB: If _call_ is in the parameter list for the function, this is NOT a correct optimization
 
-		/* For either of the call forms above, return the actually invoked symbol name */
+		// For either of the call forms above, return the actually invoked symbol name 
 		function simpleCallName(node) {
 			if ((node.TYPE=="Call")
 					&& node.args.length==0
@@ -1399,8 +1559,8 @@ myfn("ok") ;
 			}
 
 			if ((node.TYPE=="Call")
-					&& node.props && node.props.thisCallName) {
-				return node.props.thisCallName ;
+					&& node.$thisCallName) {
+				return node.$thisCallName ;
 			}
 
 			return null ;
@@ -1456,46 +1616,41 @@ myfn("ok") ;
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
-
+*/
 		// Coalese BlockStatements
-		asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend();
 			// If this node is a block with vanilla BlockStatements
 			// (not controlling entity), merge them
 			if (Array.isArray(node.body)) {
 				// Remove any empty statements from within the block
 				for (var n=node.body.length-1; n>=0; n--) {
-					if (node.body[n].TYPE=="BlockStatement") {
+					if (examine(node.body[n]).isBlockStatement) {
 						node.body.splice.apply(node.body,[n,1].concat(node.body[n].body))
 					}
 				}
 			}
-			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
 
 		// Truncate BlockStatements with a Jump (break;continue;return;throw) inside
-		asyncWalk = new U2.TreeWalker(function(node, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend();
-			if (node instanceof U2.AST_Jump) {
-				var ref = parentRef(asyncWalk) ;
+			if (examine(node).isJump) {
+				var ref = path[0] ;
 				if ('index' in ref) {
 					var i = ref.index+1 ;
 					while (i<ref.parent[ref.field].length) {
 						// Remove any statements EXCEPT for function/var definitions
-						if ((ref.parent[ref.field][i] instanceof U2.AST_Definitions)
-							|| ((ref.parent[ref.field][i] instanceof U2.AST_Lambda)
-								&& ref.parent[ref.field][i].name))
+						if ((ref.parent[ref.field][i].type==='VariableDeclaration')
+							|| ((examine(ref.parent[ref.field][i]).isFunction)
+								&& ref.parent[ref.field][i].id))
 							i += 1 ;
 						else
 							ref.parent[ref.field].splice(i,1) ;
 					}
 				}
 			}
-			return true ;
 		}) ;
-		ast.walk(asyncWalk) ;
-
 		return ast ;
 	}
 }
@@ -1606,8 +1761,14 @@ function initialize(initOpts){
 			if (sourceMapping==2)
 				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
-			r.ast = U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
-			r.ast.figure_out_scope();
+			r.ast = acorn.parse(r.origCode,{
+				plugins:{nodent:true},
+				ecmaVersion:6, // TODO: Set from option/config
+				allowHashBang:true,
+				allowReturnOutsideFunction:true
+			}) ;
+//				U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
+//			r.ast.figure_out_scope();
 			return r ;
 		};
 		nodent.asynchronize = asynchronize ;
@@ -1615,24 +1776,25 @@ function initialize(initOpts){
 			sourceMapping = sourceMapping || config.sourceMapping ;
 
 			var map ;
-			if (sourceMapping==1 || sourceMapping==2)
-				map = U2.SourceMap({
-					file:pr.filename,
-					orig: pr.origMap?pr.origMap.toString():null}) ;
+//			if (sourceMapping==1 || sourceMapping==2)
+//				map = U2.SourceMap({
+//					file:pr.filename,
+//					orig: pr.origMap?pr.origMap.toString():null}) ;
 
-			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
-			pr.ast.print(str);
+//			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
+//			pr.ast.print(str);
+			var str = require("escodegen").generate(pr.ast) ;
 
-			if (map) {
-				createMappingPadding(map.get()) ;
-
-				var jsmap = map.get().toJSON() ;
-				jsmap.sourcesContent = [pr.origCode] ;
-				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-				var mapUrl = "\n"
-					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-					+"\n" ;
-			}
+//			if (map) {
+//				createMappingPadding(map.get()) ;
+//
+//				var jsmap = map.get().toJSON() ;
+//				jsmap.sourcesContent = [pr.origCode] ;
+//				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+//				var mapUrl = "\n"
+//					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+//					+"\n" ;
+//			}
 			pr.code = str.toString()+(map?mapUrl:"") ;
 		};
 		nodent.decorate = function(pr) {
@@ -1714,7 +1876,7 @@ function initialize(initOpts){
 				}) ;
 			};
 		};
-		nodent.AST = U2;
+//		nodent.AST = U2;
 
 		nodent.$asyncbind = function $asyncbind(self,catcher) {
 			var resolver = this ;
