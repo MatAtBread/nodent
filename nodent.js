@@ -60,7 +60,6 @@ acorn.plugins.nodent = function(parser){
 	}) ;
 }
 
-var deletedNode = {type:'Identifier',name:'/*$deleted*/',$deleted:true} ;
 var referencePrototypes = {
 	replace: function(newNode) {
 		var r = cloneNode(this.self) ;
@@ -70,16 +69,18 @@ var referencePrototypes = {
 			this.parent[this.field] = newNode ;
 		}
 		return r ;
-	}/*,
-	remove: function() {
-		if ('index' in this) {
-			return this.parent[this.field].splice(this.index,1)[0] ;
-		} else {
-			var r = this.parent[this.field] ;
-			this.parent[this.field] = cloneNode(deletedNode) ;
-			return r ;
-		}
-	}*/
+	},
+	index: function(){
+		return this.parent[this.field].indexOf(this.self) ;
+	},
+	removeElement: function() {
+		return this.parent[this.field].splice(this.index,1)[0] ;
+	},
+	removeNode: function() {
+		var r = this.parent[this.field] ;
+		delete this.parent[this.field] ;
+		return r ;
+	}
 };
 
 function treeWalker(n,walker,state){
@@ -103,30 +104,33 @@ function treeWalker(n,walker,state){
 				return acornBase[derivedFrom || n.type](n,state,down) ;
 			
 			function goDown(ref) {
-				ref.__proto__ = referencePrototypes ;
+				ref.replace = referencePrototypes.replace ;
+				if (ref.index) {
+					Object.defineProperties(ref, {index:{enumerable:true,get:referencePrototypes.index}}) ;
+					ref.remove = referencePrototypes.removeElement ;
+				} else {
+					ref.remove = referencePrototypes.removeNode ;
+				}
 				state.unshift(ref) ;
 				treeWalker(sub,walker,state) ;
 				state.shift() ;
 			}
 			
 			Object.keys(n).forEach(function(k){
-				if (Array.isArray(n[k])) {
-					for (var i=0; i<n[k].length; i++)
-						if (n[k][i] instanceof Object && sub===n[k][i]) {
-							return goDown({
-								self:sub,
-								parent:n,
-								field:k,
-								index:i
-							}) ;
-						}
+				if (Array.isArray(n[k]) && n[k].indexOf(sub)>=0) {
+					return goDown({
+						self:sub,
+						parent:n,
+						field:k,
+						index:true
+					}) ;
 				} else if (n[k] instanceof Object && sub===n[k]) {
 					return goDown({
 						self:sub,
 						parent:n,
 						field:k
 					}) ;
-				}
+				} // else - dude, where's my node??
 			}) ;
 		}) ;
 	} ;
@@ -429,7 +433,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 		pr.ast = asyncSpawn(pr.ast) ;
 	} else {
 		// Because we create functions (and scopes), we need all declarations before use
-//		pr.ast = hoistDeclarations(pr.ast) ;
+		pr.ast = hoistDeclarations(pr.ast) ;
 
 		// All TryCatch blocks need a name so we can (if necessary) find out what the enclosing catch routine is called
 		pr.ast = labelTryCatch(pr.ast) ;
@@ -1265,7 +1269,7 @@ myfn("ok") ;
 				return descend() ;
 			
 			if (matching(node,path)) {
-				matches.push(path[0]) ;
+				matches.push([].concat(path)) ;
 				return ;
 			}
 			if (examine(node).isScope) {
@@ -1281,24 +1285,22 @@ myfn("ok") ;
 		treeWalker(ast,function(node, descend,path){
 			descend() ;
 			if (examine(node).isScope) {
-				function orderRef(a,b) {
-					return (a.index||0)-(b.index||0)
-				}
-				
 				// For this scope, find all the hoistable functions, vars and directives
 				var functions = scopedNodes(node,function hoistable(n,path) {
+					// YES: We're a named async function
+					if (examine(n).isAsync 
+							&& examine(n.argument).isFunction
+							&& n.argument.id)
+						return true ;
+
 					// YES: We're a named function, but not a continuation
 					if (examine(n).isFunction && n.id) {
 						return !n.$continuation ;
 					}
 
-					// YES: We're a named async function
-					if (examine(n).isAsync && hoistable(n.argument))
-						return true ;
-
 					// No, we're not a hoistable function
 					return false ;
-				}).sort(orderRef) ;
+				}) ;
 				var vars = scopedNodes(node,function(n,path){
 					if (n.type==='VariableDeclaration') {
 					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
@@ -1306,11 +1308,11 @@ myfn("ok") ;
 					    if (path[0].field=="left" && path[0].parent.type==='ForOfStatement') return false ;
 					    return true ;
 					}
-				}).sort(orderRef) ;
+				}) ;
 				var directives = scopedNodes(node,function(n){
 					/* TODO: directives are not obvious in ESTREE format */ 
 					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
-				}).sort(orderRef) ;
+				}) ;
 
 				// Go through and remove them all. Note that this isn't "easy" as removing
 				// items will invalidate the references for other items since it involves 
@@ -1319,44 +1321,41 @@ myfn("ok") ;
 				// and concatting them at the end
 				
 				var nodeBody = node.type==='Program'?node:node.body ;
-				var hoistedFn = {} ;
 				var prefixed = [] ;
-				function remove(ref) {
-					var self = ref.self ;
-					if ('index' in ref) {
-						var idx = ref.parent[ref.field].indexOf(ref.self) ;
-						if (idx<0)
-							debugger ; // Aleady deleted
-						ref.parent[ref.field].splice(ref.parent[ref.field].indexOf(ref.self),1) ;
-					} else
-						delete ref.parent[ref.field] ;//= cloneNode(deletedNode) ;
-					return self ;
-				}
 				
-				functions.forEach(function(ref) {
-					// What is the name of this function (could be async, so check the expression if necessary)
-					var symName = ref.self.id?ref.self.id.name:ref.self.argument.id.name ;
-					if (hoistedFn.hasOwnProperty(symName)) {
-						initOpts.log(pr.filename+" - Duplicate 'function "+symName+"()'") ;
+				functions.forEach(function(path) {
+					var ref = path[0], symName ;
+					// What is the name of this function (could be async, so check the expression if necessary),
+					// and should we remove and hoist, or reference and hoist?
+					if (examine(ref.self).isAsync) {
+						symName = ref.self.argument.id.name ;
+						// If we're nested ExpressionStatement(UnaryExpression<async>), we're actually a top-level
+						// async FunctionDeclaration, otherwise we're an async FunctionExpression
+						if (examine(ref.parent).isExpressionStatement) {
+							ref.self.argument.type = 'FunctionDeclaration' ;
+							prefixed.push(ref.self) ;
+							path[1].remove() ; 
+						} else {
+							// We're an async FunctionExpression
+							prefixed.push(ref.replace({type:'Identifier',name:symName})) ;
+						}
+					} else {
+						// We're just a vanilla FunctionDeclaration or FunctionExpression
+						symName = ref.self.id.name ;
+						var movedFn = (ref.self.type==='FunctionDeclaration')?
+								ref.remove():
+								ref.replace({type:'Identifier',name:symName}) ;
+						prefixed.push(movedFn) ;
 					}
-					hoistedFn[symName] = true ;
 
 					// In some contexts we need to leave the sym in place, in others we can delete it
 					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
-					var movedFn ;
-					if (examine(ref.parent).isExpression) {
-						movedFn = ref.replace({type:'Identifier',name:symName}) ;
-					} else {
-						movedFn = remove(ref) ;
-					}
-					if (movedFn.type==='FunctionExpression')
-						movedFn.type = 'FunctionDeclaration' ; 
-					prefixed.unshift(movedFn) ;
 				}) ;
 
 				if (vars.length) {
 					var definitions = [] ;
-					vars.forEach(function(ref){
+					vars.forEach(function(path){
+						var ref = path[0] ;
 						var self = ref.self ;
 						var values = [] ;
 						for (var i=0; i<self.declarations.length; i++) {
@@ -1380,7 +1379,7 @@ myfn("ok") ;
 							}
 						}
 						if (values.length==0)
-							remove(ref) ;
+							ref.remove() ;
 						else if (values.length==1) {
 							ref.replace(values[0]) ;
 						} else {
@@ -1409,16 +1408,12 @@ myfn("ok") ;
 					}
 				}
 
-				directives.forEach(function(ref){
-					prefixed.unshift(remove(ref)) ;
+				directives.forEach(function(path){
+					var ref = path[0] ;
+					prefixed.unshift(ref.remove()) ;
 				}) ;
 
-				nodeBody.body = prefixed.concat(nodeBody.body.filter(function(node){
-					return !node.$deleted ;
-				})).map(function(node){
-					delete node.$deleted ;
-					return node ;
-				}) ;
+				nodeBody.body = prefixed.concat(nodeBody.body) ;
 			}
 			return true ;
 		}) ;
