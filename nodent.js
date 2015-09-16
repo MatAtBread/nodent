@@ -1694,42 +1694,38 @@ function initialize(initOpts){
 		nodent = {} ;
 
 		nodent.compile = function(code,origFilename,sourceMapping,opts) {
-			try {
-				opts = opts || {} ;
-				if (opts.promises)
-					opts.es7 = true ;
-				sourceMapping = sourceMapping || config.sourceMapping ;
+			opts = opts || {} ;
+			if (opts.promises)
+				opts.es7 = true ;
+			sourceMapping = sourceMapping || config.sourceMapping ;
 
-				var pr = nodent.parse(code,origFilename,sourceMapping,opts);
-				nodent.asynchronize(pr,sourceMapping,opts,initOpts) ;
-				nodent.prettyPrint(pr,sourceMapping,opts) ;
-				return pr ;
-			} catch (ex) {
-				if (ex.constructor.name=="JS_Parse_Error")
-					initOpts.log(reportParseException(ex,code,origFilename)) ;
-				else
-					initOpts.log("Warning - couldn't parse "+origFilename+" (line:"+ex.line+",col:"+ex.col+"). Reason: "+ex.message) ;
-				if (ex instanceof Error)
-					throw ex ;
-				else {
-					var wrapped = new Error(ex.toString()) ;
-					wrapped.causedBy = ex ;
-					throw wrapped ;
-				}
-			}
+			var pr = nodent.parse(code,origFilename,sourceMapping,opts);
+			nodent.asynchronize(pr,sourceMapping,opts,initOpts) ;
+			nodent.prettyPrint(pr,sourceMapping,opts) ;
+			return pr ;
 		};
 		nodent.parse = function(code,origFilename,sourceMapping,opts) {
 			sourceMapping = sourceMapping || config.sourceMapping ;
 			if (sourceMapping==2)
 				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
-			r.ast = acorn.parse(r.origCode,{
-				plugins:{nodent:true},
-				ecmaVersion:6, // TODO: Set from option/config
-				allowHashBang:true,
-				allowReturnOutsideFunction:true
-			}) ;
-			return r ;
+			try {
+				r.ast = acorn.parse(r.origCode,{
+					plugins:{nodent:true},
+					ecmaVersion:6, // TODO: Set from option/config
+					allowHashBang:true,
+					allowReturnOutsideFunction:true
+				}) ;
+				return r ;
+			} catch (ex) {
+				if (ex instanceof SyntaxError) {
+					var l = r.origCode.substr(ex.pos-ex.loc.column) ;
+					l = l.split("\n")[0] ;
+					ex.message = ex.message+" (nodent)\n"+l+"\n"+l.replace(/[\S ]/g,"-").substring(0,ex.loc.column)+"^" ;
+					ex.stack = "" ;
+				}
+				throw ex ;
+			}
 		};
 		nodent.asynchronize = asynchronize ;
 		nodent.prettyPrint = function(pr,sourceMapping,opts) {
@@ -2028,18 +2024,12 @@ function initialize(initOpts){
 		}
 
 		require.extensions[initOpts.extension] = function(mod, filename, parseOpts) {
-			try {
-				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var pr = nodent.parse(content,filename,parseOpts);
-				parseOpts = parseOpts || parseCompilerOptions(pr.ast,initOpts) ;
-				nodent.asynchronize(pr,undefined,parseOpts,initOpts) ;
-				nodent.prettyPrint(pr,undefined,parseOpts) ;
-				mod._compile(pr.code, pr.filename);
-			} catch (ex) {
-				if (ex.constructor.name=="JS_Parse_Error")
-					initOpts.log(reportParseException(ex,content,filename)) ;
-				throw ex ;
-			}
+			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+			var pr = nodent.parse(content,filename,parseOpts);
+			parseOpts = parseOpts || parseCompilerOptions(pr.ast,initOpts) ;
+			nodent.asynchronize(pr,undefined,parseOpts,initOpts) ;
+			nodent.prettyPrint(pr,undefined,parseOpts) ;
+			mod._compile(pr.code, pr.filename);
 		};
 	}
 
