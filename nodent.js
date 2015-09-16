@@ -64,9 +64,17 @@ var referencePrototypes = {
 	replace: function(newNode) {
 		var r = cloneNode(this.self) ;
 		if ('index' in this) {
-			this.parent[this.field][this.index] = newNode ;
+			if (Array.isArray(newNode)) {
+				[].splice.apply(this.parent[this.field],[this.index,1].concat(newNode)) ;
+			} else {
+				this.parent[this.field][this.index] = newNode ;
+			}
 		} else {
-			this.parent[this.field] = newNode ;
+			if (Array.isArray(newNode)) {
+				this.parent[this.field] = {type:'BlockStatement',body:newNode} ;
+			} else {
+				this.parent[this.field] = newNode ;
+			}
 		}
 		return r ;
 	},
@@ -1217,11 +1225,14 @@ myfn("ok") ;
 			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); }
 	 */
 	function asyncSpawn(ast) {
-		treeWalker(ast,function(node, path, descend){
+		treeWalker(ast,function(node, descend, path){
 			descend() ;
-			if (examine(node).isAsync && examine(node.argument).isFunction) {
+			if (examine(node).isAwait) {
+				// TODO: For precedence reasons, this should probably be parenthesized
+				node.operator = 'yield' ;
+//				path[0].replace({type:'UnaryExpression', operator:'+',argument:cloneNode(node)}) ;
+			} else if (examine(node).isAsync && examine(node.argument).isFunction) {
 				var fn = node.argument ;
-				//var repl = /*acorn.parse("{return function*(){}.$asyncspawn()}",{ecmaVersion:6,allowReturnOutsideFunction:true}) ;*/
 				fn.body = {
 			      "type": "BlockStatement",
 			      "body": [{
@@ -1235,8 +1246,14 @@ myfn("ok") ;
 			                "id": null,
 			                "generator": true,
 			                "expression": false,
-			                "params": [],
-			                "body": fn.body
+			                "params": [{type:'Identifier',name:'$return'},{type:'Identifier',name:'$error'}],
+			                "body": {
+			                	type:'BlockStatement',
+			                	body:fn.body.body.concat({
+				                	type:'ReturnStatement',
+				                	argument:{type:'Identifier',name:'$return'}
+			                	})
+			                 }
 			              },
 			              "property": {
 			                "type": "Identifier",
@@ -1244,17 +1261,15 @@ myfn("ok") ;
 			              },
 			              "computed": false
 			            },
-			            "arguments": []
+			            "arguments": [{type:'Identifier',name:'Promise'}]
 			          }
 			        }]
 			    };
-//				repl.body[0].body[0].argument.callee.object.body = fn.body ;
-//				fn.body = repl ;
 				if (path[0].parent.type==='ExpressionStatement') {
 					fn.type = 'FunctionDeclaration' ;
-					pull(path[0].parent,fn) ;
+					path[1].replace(fn) ;
 				} else {
-					pull(node,fn) ;
+					path[0].replace(fn) ;
 				}
 			}
 		});
@@ -1314,16 +1329,8 @@ myfn("ok") ;
 					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
 				}) ;
 
-				// Go through and remove them all. Note that this isn't "easy" as removing
-				// items will invalidate the references for other items since it involves 
-				// array modification (pulling the offending nodes). We avoid this issue
-				// by collecting together all the hoisted nodes in a new array (prefixed)
-				// and concatting them at the end
-				
 				var nodeBody = node.type==='Program'?node:node.body ;
-				var prefixed = [] ;
-				
-				functions.forEach(function(path) {
+				functions = functions.map(function(path) {
 					var ref = path[0], symName ;
 					// What is the name of this function (could be async, so check the expression if necessary),
 					// and should we remove and hoist, or reference and hoist?
@@ -1333,25 +1340,22 @@ myfn("ok") ;
 						// async FunctionDeclaration, otherwise we're an async FunctionExpression
 						if (examine(ref.parent).isExpressionStatement) {
 							ref.self.argument.type = 'FunctionDeclaration' ;
-							prefixed.push(ref.self) ;
 							path[1].remove() ; 
-						} else {
-							// We're an async FunctionExpression
-							prefixed.push(ref.replace({type:'Identifier',name:symName})) ;
+							return ref.self ;
 						}
-					} else {
-						// We're just a vanilla FunctionDeclaration or FunctionExpression
-						symName = ref.self.id.name ;
-						var movedFn = (ref.self.type==='FunctionDeclaration')?
-								ref.remove():
-								ref.replace({type:'Identifier',name:symName}) ;
-						prefixed.push(movedFn) ;
-					}
+						// We're an async FunctionExpression
+						return ref.replace({type:'Identifier',name:symName}) ;
+					} 
 
-					// In some contexts we need to leave the sym in place, in others we can delete it
-					// Don't hoist functions that are part of an expression or otherwise not in a 'body'
+					// We're just a vanilla FunctionDeclaration or FunctionExpression
+					symName = ref.self.id.name ;
+					var movedFn = (ref.self.type==='FunctionDeclaration')?
+							ref.remove():
+							ref.replace({type:'Identifier',name:symName}) ;
+					return movedFn ;
 				}) ;
 
+				var varDecls = [] ;
 				if (vars.length) {
 					var definitions = [] ;
 					vars.forEach(function(path){
@@ -1380,11 +1384,8 @@ myfn("ok") ;
 						}
 						if (values.length==0)
 							ref.remove() ;
-						else if (values.length==1) {
-							ref.replace(values[0]) ;
-						} else {
-							ref.replace({type:'BlockStatement',body:values}) ;
-						}
+						else 
+							ref.replace(values) ;
 					}) ;
 
 					if (definitions.length) {
@@ -1397,23 +1398,23 @@ myfn("ok") ;
 								}
 							}
 						}) ;
-						if (!prefixed[0] || prefixed[0].type !== 'VariableDeclaration') {
-							prefixed.unshift({
+						if (!varDecls[0] || varDecls[0].type !== 'VariableDeclaration') {
+							varDecls.unshift({
 								type:'VariableDeclaration',
 								kind:'var',
 								declarations:definitions}) ;
 						} else {
-							prefixed[0].declarations = prefixed[0].declarations.concat(definitions) ;
+							varDecls[0].declarations = varDecls[0].declarations.concat(definitions) ;
 						}
 					}
 				}
 
-				directives.forEach(function(path){
+				directives = directives.map(function(path){
 					var ref = path[0] ;
-					prefixed.unshift(ref.remove()) ;
+					return ref.remove() ;
 				}) ;
 
-				nodeBody.body = prefixed.concat(nodeBody.body) ;
+				nodeBody.body = directives.concat(functions).concat(varDecls).concat(nodeBody.body) ;
 			}
 			return true ;
 		}) ;
