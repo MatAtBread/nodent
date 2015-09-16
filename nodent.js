@@ -9,6 +9,7 @@
 //var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var acorn = require("acorn");
+var acornParse = acorn.parse ; //require("acorn/dist/acorn_loose").parse_dammit ;//acorn.parse.bind(acorn) ;
 var acornWalk = require("acorn/dist/walk");
 var acornBase = acornWalk.make({
 	SwitchStatement: function (node, st, c) {
@@ -31,6 +32,16 @@ var acornBase = acornWalk.make({
 	CatchClause: function (node, st, c) {
 		c(node.param, st, "Pattern");
 		c(node.body, st, "ScopeBody");
+	},
+	Class: function (node, st, c) {
+	  if (node.id) c(node.id, st, "Pattern");
+	  if (node.superClass) c(node.superClass, st, "Expression");
+	  c(node.body, st);
+	}, 
+	ClassBody: function(node, st, c){
+	  for (var i = 0; i < node.body.length; i++) {
+		  c(node.body[i], st);
+	  }
 	}
 }) ;
 
@@ -57,6 +68,17 @@ acorn.plugins.nodent = function(parser){
 		return function(str){
 			return tokens.hasOwnProperty(str) || base.apply(this,arguments);
 		}
+	}) ;
+	
+	parser.extend("parsePropertyName",function(base){
+		return function (prop) {
+			var key = base.apply(this,arguments) ;
+			if (key.type === "Identifier" && key.name === "async") {
+				prop.async = true ;
+				key = base.apply(this,arguments) ;
+			}
+			return key;
+		};
 	}) ;
 }
 
@@ -448,7 +470,8 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 
 		// Convert async functions and their contained returns & throws
 		pr.ast = asyncDefine(pr.ast) ;
-
+		pr.ast = asyncDefineMethod(pr.ast) ;
+		
 		// Loops are asynchronized in an odd way - the loop is turned into a function that is
 		// invoked through tail recursion OR callback. They are like the inner functions of
 		// async functions to allow for completion and throwing
@@ -1118,6 +1141,57 @@ myfn("ok") ;
 	 *
 	 */
 
+	function asyncDefineMethod(ast) {
+		return treeWalker(ast,function(node,descend,path){
+			descend();
+			if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
+				debugger ;
+				node.async = false ;
+				// node.value is a FunctionExpression, which we need to asynchronize
+				var fn = cloneNode(node.value) ;
+				var funcback = {
+						type:'FunctionExpression',
+						params:[{
+							type:'Identifier',
+							name:config.$return
+						},{
+							type:'Identifier',
+							name:config.$error
+						}],
+						body:node.value.body,
+						$wasAsync:true
+					} ;
+				setCatch(funcback,config.$error) ;
+				
+				funcback = {
+					type:'CallExpression',
+					arguments:[{type:'ThisExpression'}],
+					callee:{
+						type:'MemberExpression',
+						object:funcback,
+						property:{type:'Identifier',name:initOpts.bindAsync},
+						computed:false
+					}
+				} ;
+				if (opts.promises) {
+					node.value.body = {type:'BlockStatement',body:[{
+						type:'ReturnStatement',
+						argument:{
+							type:'NewExpression',
+							callee:{type:'Identifier',name:'Promise'},
+							arguments:[funcback]
+						}
+					}]} ;
+				} else {
+					node.value.body = {type:'BlockStatement',body:[{
+						type:'ReturnStatement',
+						argument:funcback
+					}]};
+				}
+			}
+		});		
+	}
+	
 	function asyncDefine(ast) {
 		treeWalker(ast,function(node, descend, path){
 			if (examine(node).isAsync && examine(node.argument).isFunction) {
@@ -1710,7 +1784,7 @@ function initialize(initOpts){
 				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			try {
-				r.ast = acorn.parse(r.origCode,{
+				r.ast = acornParse(r.origCode,{
 					plugins:{nodent:true},
 					ecmaVersion:6, // TODO: Set from option/config
 					allowHashBang:true,
