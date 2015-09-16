@@ -287,6 +287,7 @@ function getCatch(path,nesting,parent) {
 
 function setCatch(n,sym) {
 	n.$catcher = sym ;
+	return n ;
 }
 
 function containsAwait(ast) {
@@ -1145,34 +1146,30 @@ myfn("ok") ;
 		return treeWalker(ast,function(node,descend,path){
 			descend();
 			if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
-				debugger ;
 				node.async = false ;
-				// node.value is a FunctionExpression, which we need to asynchronize
 				var fn = cloneNode(node.value) ;
 				var funcback = {
-						type:'FunctionExpression',
-						params:[{
-							type:'Identifier',
-							name:config.$return
-						},{
-							type:'Identifier',
-							name:config.$error
-						}],
-						body:node.value.body,
-						$wasAsync:true
-					} ;
-				setCatch(funcback,config.$error) ;
-				
-				funcback = {
 					type:'CallExpression',
 					arguments:[{type:'ThisExpression'}],
 					callee:{
 						type:'MemberExpression',
-						object:funcback,
+						object:setCatch({
+							type:'FunctionExpression',
+							params:[{
+								type:'Identifier',
+								name:config.$return
+							},{
+								type:'Identifier',
+								name:config.$error
+							}],
+							body:asyncDefineMethod(mapReturns(node.value.body,path)),
+							$wasAsync:true
+						},config.$error),
 						property:{type:'Identifier',name:initOpts.bindAsync},
 						computed:false
 					}
 				} ;
+				
 				if (opts.promises) {
 					node.value.body = {type:'BlockStatement',body:[{
 						type:'ReturnStatement',
@@ -1218,61 +1215,29 @@ myfn("ok") ;
 					replace.expression = false ;
 				}
 
-				/* Removed as ES7 now has a (tiny) runtime: asyncbind. Prior to
-				 * using $asyncbind, each async function caught it's own exceptions
-				 * and was invoked via bind(), so no exception handler was passed.
-				 * $asyncbind passes the exception handler as a parameter, and the
-				 * invoked function doesn't require a try{} catch() {}
-				 */
-				/*if (!opts.promises) {
-					fnBody = [new U2.AST_Try({body:fnBody,bcatch: new U2.AST_Catch({
-						argname:new U2.AST_SymbolFunarg({name:initOpts.$except}),
-						body:[thisCall(getCatch(asyncWalk)[0],[new U2.AST_SymbolRef({name:initOpts.$except})])]})})] ;
-				}*/
-
 				var funcback = {
-					type:'FunctionExpression',
-					params:[{
-						type:'Identifier',
-						name:config.$return
-					},{
-						type:'Identifier',
-						name:config.$error
-					}],
-					body:fnBody,
-					$wasAsync:true
-				} ;
-
-				setCatch(funcback,config.$error) ;
-				
-				funcback = {
 					type:'CallExpression',
 					arguments:[{type:'ThisExpression'}],
 					callee:{
 						type:'MemberExpression',
-						object:funcback,
+						object:setCatch({
+							type:'FunctionExpression',
+							params:[{
+								type:'Identifier',
+								name:config.$return
+							},{
+								type:'Identifier',
+								name:config.$error
+							}],
+							body:fnBody,
+							$wasAsync:true
+						},config.$error),
 						property:{type:'Identifier',name:initOpts.bindAsync},
 						computed:false
 					}
 				} ;
 				
 				if (opts.promises) {
-					/*
-					 * Promises logically only need .bind() here, as
-					 * the surrounding TryCatch will handle any exceptions,
-					 * but for some V8 specific reason, .bind() is around
-					 * three times slower than using $asyncbind(), which
-					 * wraps the function in context and (unecessarily)
-					 * handles exceptions.
-					 *
-					funcback = new U2.AST_Call({
-						expression:new U2.AST_Dot({
-							expression: funcback,
-							property: "bind"
-						}),
-						args:[new U2.AST_This()]
-					}) ;
-					*/
 					replace.body = {type:'BlockStatement',body:[{
 						type:'ReturnStatement',
 						argument:{
