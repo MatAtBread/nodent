@@ -138,7 +138,7 @@ function treeWalker(n,walker,state){
 						parent:n,
 						field:k
 					}) ;
-				} // else - dude, where's my node??
+				}
 			}) ;
 		}) ;
 	} ;
@@ -409,8 +409,8 @@ function examine(node) {
 
 	return {
 		isScope:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='Program',
-		isFunction:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='ArrowFunction',
-		isBlockStatement:node.type==='Program' || node.type==='SwitchCase' || node.type==='BlockStatement',
+		isFunction:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='ArrowFunctionExpression',
+		isBlockStatement:node.type==='Program' || node.type==='BlockStatement',
 		isExpressionStatement:node.type==='ExpressionStatement',
 		isLiteral:node.type==='Literal',
 		isUnaryExpression:node.type==='UnaryExpression',
@@ -729,7 +729,6 @@ myfn("ok") ;
 				deferred = null ;
 			}
 			ref.parent[ref.field][ref.index] = synthBlock ;
-			//synthBlock.body[0].body.forEach(down) ;
 			down(synthBlock.body[0]) ;
 
 			// Now transform each case so that 'break' looks like return <deferred>
@@ -772,7 +771,6 @@ myfn("ok") ;
 			}
 
 			node.$mapped = true ;
-//			node.block.body = toArray(node.block) ;
 			if (continuation) {
 				node.block.body.push(cloneNode(continuation)) ;
 				node.handler.body.body.push(cloneNode(continuation)) ;
@@ -1130,9 +1128,21 @@ myfn("ok") ;
 				var replace = cloneNode(fn) ;
 				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
 				 * with a call to "$return" */
-				var fnBody = {type:'BlockStatement',body:fn.body.body.map(function(sub){
-					return asyncDefine(mapReturns(sub,path)) ;
-				})} ;
+				var fnBody ;
+				if (examine(fn.body).isBlockStatement) {
+					fnBody = {
+						type:'BlockStatement',
+						body:fn.body.body.map(function(sub){
+							return asyncDefine(mapReturns(sub,path)) ;
+						})
+					} ;
+				} else {
+					fnBody = {
+						type:'BlockStatement',
+						body:[asyncDefine(mapReturns({type:'ReturnStatement',argument:fn.body},path))]
+					} ;
+					replace.expression = false ;
+				}
 
 				/* Removed as ES7 now has a (tiny) runtime: asyncbind. Prior to
 				 * using $asyncbind, each async function caught it's own exceptions
@@ -1189,19 +1199,19 @@ myfn("ok") ;
 						args:[new U2.AST_This()]
 					}) ;
 					*/
-					replace.body.body = [{
+					replace.body = {type:'BlockStatement',body:[{
 						type:'ReturnStatement',
 						argument:{
 							type:'NewExpression',
 							callee:{type:'Identifier',name:'Promise'},
 							arguments:[funcback]
 						}
-					}] ;
+					}]} ;
 				} else {
-					replace.body.body = [{
+					replace.body = {type:'BlockStatement',body:[{
 						type:'ReturnStatement',
 						argument:funcback
-					}];
+					}]};
 				}
 
 				var parent = path[0].parent ;
@@ -1299,7 +1309,7 @@ myfn("ok") ;
 	function hoistDeclarations(ast) {
 		treeWalker(ast,function(node, descend,path){
 			descend() ;
-			if (examine(node).isScope) {
+			if (examine(node).isScope) { // TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 				// For this scope, find all the hoistable functions, vars and directives
 				var functions = scopedNodes(node,function hoistable(n,path) {
 					// YES: We're a named async function
@@ -1316,6 +1326,8 @@ myfn("ok") ;
 					// No, we're not a hoistable function
 					return false ;
 				}) ;
+
+				// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 				var vars = scopedNodes(node,function(n,path){
 					if (n.type==='VariableDeclaration') {
 					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
@@ -1448,10 +1460,12 @@ myfn("ok") ;
 
 	/* Remove un-necessary nested blocks and crunch down empty function implementations */
 	function cleanCode(ast) {
-		/* Inline continuations that are only referenced once *
+		/* Inline continuations that are only referenced once */
+		
+		// Find any continuations that have a single reference
 		treeWalker(ast,function(node, descend, path){
 			descend();
-			if (node.type==='Identifier' && continuations[node.name] && node.$thisCall) {
+			if (node.$thisCall && continuations[node.name]) {
 				if (continuations[node.name].ref) {
 					delete continuations[node.name] ;
 				} else {
@@ -1461,22 +1475,30 @@ myfn("ok") ;
 		}) ;
 
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
-		treeWalker(ast,function(node, descend, path){
-			descend();
-			if (calls.indexOf(node)>=0) {
-				var parent = path[0].parent ;
-				if (parent.type==='ReturnStatement') {
-					debugger ;
-					var sym = node.expression.expression.name ;
-					coerce(parent,{
-						type:'BlockStatement',
-						body:toArray(continuations[sym].def.body).concat({type:'ReturnStatement'}) 
-					}) ;
-					coerce(continuations[sym].def,cloneNode(deletedNode)) ;
+		if (calls.length) {
+			var defs = Object.keys(continuations).map(function(c){ return continuations[c].def }) ;
+			// Replace all the calls to the continuation with the body from the continuation followed by 'return;'
+			treeWalker(ast,function(node, descend, path){
+				descend();
+				if (calls.indexOf(node)>=0) {
+					if (path[1].self.type==='ReturnStatement') {
+						var sym = node.$thisCallName ;
+						var repl = cloneNodes(continuations[sym].def.body.body) ;
+						repl.push({type:'ReturnStatement'}) ;
+						path[1].replace(repl) ;
+					}
 				}
-			}
-		}) ;
-
+			}) ;
+/*
+			// Remove all the (now inline) declarations of the continuations
+			treeWalker(ast,function(node, descend, path){
+				descend();
+				if (defs.indexOf(node)>=0) {
+					path[0].remove() ;
+				}
+			}) ;
+*/
+		}
 /*
 		// Find declarations of functions of the form:
 		// 		function [sym]() { return _call_.call(this) }
@@ -1554,17 +1576,18 @@ myfn("ok") ;
 			return true ;
 		}) ;
 		ast.walk(asyncWalk) ;
-*
+*/
 		// Coalese BlockStatements
+		
+		// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 		treeWalker(ast,function(node, descend, path){
 			descend();
-			// If this node is a block with vanilla BlockStatements
-			// (not controlling entity), merge them
-			if (Array.isArray(node.body)) {
+			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
+			if (examine(node).isBlockStatement) {
 				// Remove any empty statements from within the block
-				for (var n=node.body.length-1; n>=0; n--) {
-					if (examine(node.body[n]).isBlockStatement) {
-						node.body.splice.apply(node.body,[n,1].concat(node.body[n].body))
+				for (var i=0; i<node.body.length; i++) {
+					if (examine(node.body[i]).isBlockStatement) {
+						[].splice.apply(node.body,[i,1].concat(node.body[i].body)) ;
 					}
 				}
 			}
@@ -1577,18 +1600,19 @@ myfn("ok") ;
 				var ref = path[0] ;
 				if ('index' in ref) {
 					var i = ref.index+1 ;
-					while (i<ref.parent[ref.field].length) {
+					var ctn = ref.parent[ref.field] ;
+					while (i<ctn.length) {
 						// Remove any statements EXCEPT for function/var definitions
-						if ((ref.parent[ref.field][i].type==='VariableDeclaration')
-							|| ((examine(ref.parent[ref.field][i]).isFunction)
-								&& ref.parent[ref.field][i].id))
+						if ((ctn[i].type==='VariableDeclaration')
+							|| ((examine(ctn[i]).isFunction)
+								&& ctn[i].id))
 							i += 1 ;
 						else
-							ref.parent[ref.field].splice(i,1) ;
+							ctn.splice(i,1) ;
 					}
 				}
 			}
-		}) ;*/
+		}) ;
 		return ast ;
 	}
 }
@@ -1705,8 +1729,6 @@ function initialize(initOpts){
 				allowHashBang:true,
 				allowReturnOutsideFunction:true
 			}) ;
-//				U2.parse(r.origCode, {strict:false,filename:r.filename}) ;
-//			r.ast.figure_out_scope();
 			return r ;
 		};
 		nodent.asynchronize = asynchronize ;
@@ -1814,7 +1836,6 @@ function initialize(initOpts){
 				}) ;
 			};
 		};
-//		nodent.AST = U2;
 
 		nodent.$asyncbind = function $asyncbind(self,catcher) {
 			var resolver = this ;
