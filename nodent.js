@@ -1273,53 +1273,60 @@ myfn("ok") ;
 		to
 			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); }
 	 */
+	function spawnBody(body) {
+		return {
+	      "type": "BlockStatement",
+	      "body": [{
+	          "type": "ReturnStatement",
+	          "argument": {
+	            "type": "CallExpression",
+	            "callee": {
+	              "type": "MemberExpression",
+	              "object": {
+	                "type": "FunctionExpression",
+	                "id": null,
+	                "generator": true,
+	                "expression": false,
+	                "params": [{type:'Identifier',name:'$return'},{type:'Identifier',name:'$error'}],
+	                "body": {
+	                	type:'BlockStatement',
+	                	body:body.concat({
+		                	type:'ReturnStatement',
+		                	argument:{type:'Identifier',name:'$return'}
+	                	})
+	                 }
+	              },
+	              "property": {
+	                "type": "Identifier",
+	                "name": "$asyncspawn"
+	              },
+	              "computed": false
+	            },
+	            "arguments": [{type:'Identifier',name:'Promise'}]
+	          }
+	        }]
+	    };
+	}
 	function asyncSpawn(ast) {
 		treeWalker(ast,function(node, descend, path){
 			descend() ;
+			var fn ;
 			if (examine(node).isAwait) {
 				// TODO: For precedence reasons, this should probably be parenthesized
 				node.operator = 'yield' ;
 //				path[0].replace({type:'UnaryExpression', operator:'+',argument:cloneNode(node)}) ;
 			} else if (examine(node).isAsync && examine(node.argument).isFunction) {
-				var fn = node.argument ;
-				fn.body = {
-			      "type": "BlockStatement",
-			      "body": [{
-			          "type": "ReturnStatement",
-			          "argument": {
-			            "type": "CallExpression",
-			            "callee": {
-			              "type": "MemberExpression",
-			              "object": {
-			                "type": "FunctionExpression",
-			                "id": null,
-			                "generator": true,
-			                "expression": false,
-			                "params": [{type:'Identifier',name:'$return'},{type:'Identifier',name:'$error'}],
-			                "body": {
-			                	type:'BlockStatement',
-			                	body:fn.body.body.concat({
-				                	type:'ReturnStatement',
-				                	argument:{type:'Identifier',name:'$return'}
-			                	})
-			                 }
-			              },
-			              "property": {
-			                "type": "Identifier",
-			                "name": "$asyncspawn"
-			              },
-			              "computed": false
-			            },
-			            "arguments": [{type:'Identifier',name:'Promise'}]
-			          }
-			        }]
-			    };
+				fn = node.argument ;
+				fn.body = spawnBody(fn.body.body)
 				if (path[0].parent.type==='ExpressionStatement') {
 					fn.type = 'FunctionDeclaration' ;
 					path[1].replace(fn) ;
 				} else {
 					path[0].replace(fn) ;
 				}
+			} else if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
+				node.async = false ;
+				node.value.body = spawnBody(node.value.body.body) ; 
 			}
 		});
 		return ast ;
@@ -1753,7 +1760,9 @@ function initialize(initOpts){
 					plugins:{nodent:true},
 					ecmaVersion:6, // TODO: Set from option/config
 					allowHashBang:true,
-					allowReturnOutsideFunction:true
+					allowReturnOutsideFunction:true,
+					sourceFile:origFilename,
+					locations:true
 				}) ;
 				return r ;
 			} catch (ex) {
