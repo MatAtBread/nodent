@@ -6,7 +6,7 @@
  * AST transforms and node loader extension
  */
 
-//var SourceMapConsumer = require('source-map').SourceMapConsumer;
+var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var acorn = require("acorn");
 var acornParse = acorn.parse ; //require("acorn/dist/acorn_loose").parse_dammit ;//acorn.parse.bind(acorn) ;
@@ -450,10 +450,10 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	var continuations = {} ;
 	sourceMapping = sourceMapping || config.sourceMapping ;
 
-	if (sourceMapping==2)
+	/*if (sourceMapping==2)
 		pr.filename = pr.filename.replace(/\.nodent$/,"") ;
 	if (sourceMapping==1)
-		pr.filename += ".nodent" ;
+		pr.filename += ".nodent" ;*/
 
 	var generatedSymbol = 1 ;
 	function generateSymbol(node) {
@@ -1273,6 +1273,38 @@ myfn("ok") ;
 		to
 			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); }
 	 */
+	// Like mapReturns, but ONLY for return/throw async
+	function mapAsyncReturns(ast) {
+		if (Array.isArray(ast)) {
+			return ast.map(mapAsyncReturns) ;
+		}
+		var lambdaNesting = 0 ;
+		return treeWalker(ast,function(node,descend,path) {
+			if ((node.type === 'ThrowStatement' || node.type==='ReturnStatement') && !node.$mapped) {
+				debugger ;
+				if (lambdaNesting > 0) {
+					if (examine(node.argument).isAsync) {
+						node.argument = {
+							"type": "CallExpression",
+							"callee": {
+								"type": "Identifier",
+								"name": "$return"
+							},
+							"arguments": [node.argument.argument]
+						};
+						return ;
+					}
+				}
+			} else if (examine(node).isFunction) {
+				lambdaNesting++ ;
+				descend(node);
+				lambdaNesting-- ;
+				return ;
+			}
+			descend(node);
+		});
+	}
+	
 	function spawnBody(body) {
 		return {
 	      "type": "BlockStatement",
@@ -1290,7 +1322,7 @@ myfn("ok") ;
 	                "params": [{type:'Identifier',name:'$return'},{type:'Identifier',name:'$error'}],
 	                "body": {
 	                	type:'BlockStatement',
-	                	body:body.concat({
+	                	body:mapAsyncReturns(body).concat({
 		                	type:'ReturnStatement',
 		                	argument:{type:'Identifier',name:'$return'}
 	                	})
@@ -1752,8 +1784,8 @@ function initialize(initOpts){
 		};
 		nodent.parse = function(code,origFilename,sourceMapping,opts) {
 			sourceMapping = sourceMapping || config.sourceMapping ;
-			if (sourceMapping==2)
-				origFilename = origFilename+".nodent" ;
+//			if (sourceMapping==2)
+//				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			try {
 				r.ast = acornParse(r.origCode,{
@@ -1761,7 +1793,7 @@ function initialize(initOpts){
 					ecmaVersion:6, // TODO: Set from option/config
 					allowHashBang:true,
 					allowReturnOutsideFunction:true,
-					sourceFile:origFilename,
+//					sourceFile:origFilename,
 					locations:true
 				}) ;
 				return r ;
@@ -1779,7 +1811,7 @@ function initialize(initOpts){
 		nodent.prettyPrint = function(pr,sourceMapping,opts) {
 			sourceMapping = sourceMapping || config.sourceMapping ;
 
-			var map ;
+			var map,mapUrl = "" ;
 //			if (sourceMapping==1 || sourceMapping==2)
 //				map = U2.SourceMap({
 //					file:pr.filename,
@@ -1787,19 +1819,25 @@ function initialize(initOpts){
 
 //			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
 //			pr.ast.print(str);
-			var str = require("escodegen").generate(pr.ast) ;
+			var output = require("escodegen").generate(pr.ast, {
+				  sourceMap: pr.filename, // Setting sourceFile in Acorn's options already gives us filenames.
+				  sourceMapWithCode: true, // Get both code and source map
+				  sourceContent: pr.origCode
+				});
 
+				var str = output.code; // Generated source code
+				var jsmap = output.map.toJSON();//.toString(); // Generated source map JSON
 //			if (map) {
 //				createMappingPadding(map.get()) ;
 //
 //				var jsmap = map.get().toJSON() ;
 //				jsmap.sourcesContent = [pr.origCode] ;
-//				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-//				var mapUrl = "\n"
-//					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-//					+"\n" ;
+				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+				mapUrl = "\n"
+					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+					+"\n" ;
 //			}
-			pr.code = str.toString()+(map?mapUrl:"") ;
+			pr.code = str.toString()+mapUrl ;
 		};
 		nodent.decorate = function(pr) {
 			pr.ast.walk(decorate) ;
@@ -1999,9 +2037,8 @@ function initialize(initOpts){
 						var desc = frame.toString() ;
 
 						var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
-						for (var i=0; i<s.length && s[i]==d[i]; i++) ;
+						for (var i=0; i<s.length-1 && s[i]==d[i]; i++) ;
 						desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
-
 						return '\n    at '+desc ;
 					}
 					return '\n    at '+frame;
