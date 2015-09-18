@@ -1585,7 +1585,6 @@ myfn("ok") ;
 				}
 			}) ;
 
-/*
 			var defs = Object.keys(continuations).map(function(c){ return continuations[c].$inlined && continuations[c].def }) ;
 			// Remove all the (now inline) declarations of the continuations
 			treeWalker(ast,function(node, descend, path){
@@ -1594,7 +1593,6 @@ myfn("ok") ;
 					path[0].remove() ;
 				}
 			}) ;
-*/
 		}
 /*
 		// Find declarations of functions of the form:
