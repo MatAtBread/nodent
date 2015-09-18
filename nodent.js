@@ -1555,6 +1555,43 @@ myfn("ok") ;
 
 	/* Remove un-necessary nested blocks and crunch down empty function implementations */
 	function cleanCode(ast) {
+		// Coalese BlockStatements
+		
+		// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
+		treeWalker(ast,function(node, descend, path){
+			descend();
+			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
+			if (examine(node).isBlockStatement) {
+				// Remove any empty statements from within the block
+				for (var i=0; i<node.body.length; i++) {
+					if (examine(node.body[i]).isBlockStatement) {
+						[].splice.apply(node.body,[i,1].concat(node.body[i].body)) ;
+					}
+				}
+			}
+		}) ;
+
+		// Truncate BlockStatements with a Jump (break;continue;return;throw) inside
+		treeWalker(ast,function(node, descend, path){
+			descend();
+			if (examine(node).isJump) {
+				var ref = path[0] ;
+				if ('index' in ref) {
+					var i = ref.index+1 ;
+					var ctn = ref.parent[ref.field] ;
+					while (i<ctn.length) {
+						// Remove any statements EXCEPT for function/var definitions
+						if ((ctn[i].type==='VariableDeclaration')
+							|| ((examine(ctn[i]).isFunction)
+								&& ctn[i].id))
+							i += 1 ;
+						else
+							ctn.splice(i,1) ;
+					}
+				}
+			}
+		}) ;
+		
 		/* Inline continuations that are only referenced once */
 		
 		// Find any continuations that have a single reference
@@ -1672,42 +1709,6 @@ myfn("ok") ;
 		}) ;
 		ast.walk(asyncWalk) ;
 */
-		// Coalese BlockStatements
-		
-		// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
-		treeWalker(ast,function(node, descend, path){
-			descend();
-			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
-			if (examine(node).isBlockStatement) {
-				// Remove any empty statements from within the block
-				for (var i=0; i<node.body.length; i++) {
-					if (examine(node.body[i]).isBlockStatement) {
-						[].splice.apply(node.body,[i,1].concat(node.body[i].body)) ;
-					}
-				}
-			}
-		}) ;
-
-		// Truncate BlockStatements with a Jump (break;continue;return;throw) inside
-		treeWalker(ast,function(node, descend, path){
-			descend();
-			if (examine(node).isJump) {
-				var ref = path[0] ;
-				if ('index' in ref) {
-					var i = ref.index+1 ;
-					var ctn = ref.parent[ref.field] ;
-					while (i<ctn.length) {
-						// Remove any statements EXCEPT for function/var definitions
-						if ((ctn[i].type==='VariableDeclaration')
-							|| ((examine(ctn[i]).isFunction)
-								&& ctn[i].id))
-							i += 1 ;
-						else
-							ctn.splice(i,1) ;
-					}
-				}
-			}
-		}) ;
 		return ast ;
 	}
 }
