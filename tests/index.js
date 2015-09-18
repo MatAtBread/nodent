@@ -104,12 +104,12 @@ async function runTests() {
 					es7:true,promises:!!promise.p,generators:g>0
 				}) ;
 				var m = {} ;
+				if (showOutput)
+					console.log(pr.code) ;
 				var fn = new Function("module","require","Promise","es7",pr.code) ;
 				failed = fn.toString() ;
-				if (showOutput)
-					console.log(failed) ;
 				if (showOutput && saveOutput) {
-					fs.writeFileSync(test+".out",failed) ;
+					fs.writeFileSync(test+".out",pr.code) ;
 				}
 
 				fn(m,require,promise.p || nodent.Thenable,!promise.p) ;

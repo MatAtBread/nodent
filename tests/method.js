@@ -9,6 +9,7 @@ AClass.prototype.total = async function(arg) {
 }
 
 AClass.prototype.barf = async function() {
+	debugger ;
 	await breathe() ;
 	var ex = new Error("total:"+this.field) ;
 	ex.source = this ;

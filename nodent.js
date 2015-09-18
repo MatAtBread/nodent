@@ -208,8 +208,8 @@ var config = {
 		use:[],
 		useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
 		useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
-		usePromisesDirective:/^\s*['"]use\s+nodent\-promise['"]\s*;/,
-		useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators['"]\s*;/,
+		usePromisesDirective:/^\s*['"]use\s+nodent\-promises?['"]\s*;/,
+		useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators?['"]\s*;/,
 		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
@@ -273,13 +273,13 @@ function coerce(node,replace) {
 	Object.keys(replace).forEach(function(k){ node[k] = replace[k]}) ;
 }
 
-function getCatch(path,nesting,parent) {
-	nesting = nesting || 0 ;
+function getCatch(path,parent) {
 	for (var n=0;n<path.length;n++) {
 		if (path[n].self.$catcher) {
-			if (!nesting)
-				return {type:'Identifier',name:path[n].self.$catcher} ;
-			nesting -= 1 ;
+			return {type:'Identifier',name:path[n].self.$catcher} ;
+		}
+		if (path[n].parent && path[n].parent.$catcher) {
+			return {type:'Identifier',name:path[n].parent.$catcher} ;
 		}
 	}
 	return parent || {type:'Identifier',name:config.$error} ;
@@ -449,11 +449,6 @@ function examine(node) {
 function asynchronize(pr,sourceMapping,opts,initOpts) {
 	var continuations = {} ;
 	sourceMapping = sourceMapping || config.sourceMapping ;
-
-	/*if (sourceMapping==2)
-		pr.filename = pr.filename.replace(/\.nodent$/,"") ;
-	if (sourceMapping==1)
-		pr.filename += ".nodent" ;*/
 
 	var generatedSymbol = 1 ;
 	function generateSymbol(node) {
@@ -856,10 +851,13 @@ myfn("ok") ;
 				}) ;
 
 				if (!inAsync) {
+					var errMsg = pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. " ;
 					if (opts.promises)
-						initOpts.log(pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. 'return' value Promise runtime-specific") ;
+						errMsg += "'return' value Promise runtime-specific" ;
 					else
-						initOpts.log(pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. 'return' value from await is synchronous") ;
+						errMsg += "'return' value from await is synchronous" ;
+					errMsg += " ("+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")" ;
+					initOpts.log(errMsg) ;
 				}
 
 				var parent = path[0].parent ;
@@ -898,7 +896,7 @@ myfn("ok") ;
 				
 				// Wrap the callback statement(s) in a Block and transform them
 				var cbBody = {type:'BlockStatement',body:cloneNodes(callBack)} ;
-				var catcher = getCatch(path,0,parentCatcher) ;
+				var catcher = getCatch(path,parentCatcher) ;
 				cbBody = asyncAwait(cbBody,inAsync,catcher) ;
 
 				var returner = {type:'FunctionExpression', params:[],body:{type:'BlockStatement',body:[]}} ;
@@ -1197,8 +1195,6 @@ myfn("ok") ;
 
 				var fn = node.argument ;
 				var replace = cloneNode(fn) ;
-				/* Replace any occurrences of "return" for the current function (i.e., not nested ones)
-				 * with a call to "$return" */
 				var fnBody ;
 				if (examine(fn.body).isBlockStatement) {
 					fnBody = {
@@ -1208,6 +1204,7 @@ myfn("ok") ;
 						})
 					} ;
 				} else {
+					// TODO: Why not just: fnBody = asyncDefine(mapReturns({type:'ReturnStatement',argument:fn.body},path))?
 					fnBody = {
 						type:'BlockStatement',
 						body:[asyncDefine(mapReturns({type:'ReturnStatement',argument:fn.body},path))]
@@ -1281,17 +1278,17 @@ myfn("ok") ;
 		var lambdaNesting = 0 ;
 		return treeWalker(ast,function(node,descend,path) {
 			if ((node.type === 'ThrowStatement' || node.type==='ReturnStatement') && !node.$mapped) {
-				debugger ;
 				if (lambdaNesting > 0) {
 					if (examine(node.argument).isAsync) {
 						node.argument = {
 							"type": "CallExpression",
 							"callee": {
 								"type": "Identifier",
-								"name": "$return"
+								"name": (node.type === 'ThrowStatement')?"$error":"$return"
 							},
 							"arguments": [node.argument.argument]
 						};
+						node.type = 'ReturnStatement' ;
 						return ;
 					}
 				}
@@ -1334,7 +1331,7 @@ myfn("ok") ;
 	              },
 	              "computed": false
 	            },
-	            "arguments": [{type:'Identifier',name:'Promise'}]
+	            "arguments": [{type:'Identifier',name:'Promise'},{type:'ThisExpression'}]
 	          }
 	        }]
 	    };
@@ -1344,9 +1341,16 @@ myfn("ok") ;
 			descend() ;
 			var fn ;
 			if (examine(node).isAwait) {
+				// Check we're in an async function
+				for (var i=0; i<path.length; i++) {
+					if (examine(path[i].self).isFunction && !examine(path[i].parent).isAsync)
+						throw new SyntaxError("'await' used inside non-async function ("
+								+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")") ;
+				}
 				// TODO: For precedence reasons, this should probably be parenthesized
-				node.operator = 'yield' ;
-//				path[0].replace({type:'UnaryExpression', operator:'+',argument:cloneNode(node)}) ;
+				delete node.operator ;
+				node.delegate = false ;
+				node.type = 'YieldExpression';
 			} else if (examine(node).isAsync && examine(node.argument).isFunction) {
 				fn = node.argument ;
 				fn.body = spawnBody(fn.body.body)
@@ -1365,6 +1369,7 @@ myfn("ok") ;
 	}
 
 	/* Find all nodes within this scope matching the specified function */
+	// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 	function scopedNodes(ast,matching) {
 		var matches = [] ;
 		treeWalker(ast,function(node, descend, path){
@@ -1387,8 +1392,14 @@ myfn("ok") ;
 	function hoistDeclarations(ast) {
 		treeWalker(ast,function(node, descend,path){
 			descend() ;
-			if (examine(node).isScope) { // TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
+			if (examine(node).isScope) { 
 				// For this scope, find all the hoistable functions, vars and directives
+				var classes = scopedNodes(node,function hoistable(n,path) {
+					if (n.type==='ClassDeclaration') 
+						return true ;
+					return false ;
+				}) ;
+
 				var functions = scopedNodes(node,function hoistable(n,path) {
 					// YES: We're a named async function
 					if (examine(n).isAsync 
@@ -1407,7 +1418,7 @@ myfn("ok") ;
 
 				// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 				var vars = scopedNodes(node,function(n,path){
-					if (n.type==='VariableDeclaration') {
+					if (n.type==='VariableDeclaration' && n.kind==='var') {
 					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
 					    if (path[0].field=="left" && path[0].parent.type==='ForInStatement') return false ;
 					    if (path[0].field=="left" && path[0].parent.type==='ForOfStatement') return false ;
@@ -1443,6 +1454,12 @@ myfn("ok") ;
 							ref.remove():
 							ref.replace({type:'Identifier',name:symName}) ;
 					return movedFn ;
+				}) ;
+
+
+				classes = classes.map(function(path){
+					var ref = path[0] ;
+					return ref.remove() ;
 				}) ;
 
 				var varDecls = [] ;
@@ -1504,7 +1521,7 @@ myfn("ok") ;
 					return ref.remove() ;
 				}) ;
 
-				nodeBody.body = directives.concat(functions).concat(varDecls).concat(nodeBody.body) ;
+				nodeBody.body = directives.concat(classes).concat(functions).concat(varDecls).concat(nodeBody.body) ;
 			}
 			return true ;
 		}) ;
@@ -1545,7 +1562,7 @@ myfn("ok") ;
 			descend();
 			if (node.$thisCall && continuations[node.name]) {
 				if (continuations[node.name].ref) {
-					delete continuations[node.name] ;
+					delete continuations[node.name] ;	// Multiple ref
 				} else {
 					continuations[node.name].ref = node.$thisCall ;
 				}
@@ -1554,7 +1571,6 @@ myfn("ok") ;
 
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
 		if (calls.length) {
-			var defs = Object.keys(continuations).map(function(c){ return continuations[c].def }) ;
 			// Replace all the calls to the continuation with the body from the continuation followed by 'return;'
 			treeWalker(ast,function(node, descend, path){
 				descend();
@@ -1562,12 +1578,15 @@ myfn("ok") ;
 					if (path[1].self.type==='ReturnStatement') {
 						var sym = node.$thisCallName ;
 						var repl = cloneNodes(continuations[sym].def.body.body) ;
+						continuations[sym].$inlined = true ;
 						repl.push({type:'ReturnStatement'}) ;
 						path[1].replace(repl) ;
 					}
 				}
 			}) ;
+
 /*
+			var defs = Object.keys(continuations).map(function(c){ return continuations[c].$inlined && continuations[c].def }) ;
 			// Remove all the (now inline) declarations of the continuations
 			treeWalker(ast,function(node, descend, path){
 				descend();
@@ -1757,6 +1776,13 @@ function asyncify(promiseProvider) {
 	}
 };
 
+function expandSourceMapping(node,descend,path) {
+	descend() ;
+	if (!node.loc) {
+//		console.log(printNode(path[0].self)) ;
+	}
+}
+
 function initialize(initOpts){
 	if (!initOpts)
 		initOpts = config ;
@@ -1784,8 +1810,6 @@ function initialize(initOpts){
 		};
 		nodent.parse = function(code,origFilename,sourceMapping,opts) {
 			sourceMapping = sourceMapping || config.sourceMapping ;
-//			if (sourceMapping==2)
-//				origFilename = origFilename+".nodent" ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			try {
 				r.ast = acornParse(r.origCode,{
@@ -1793,7 +1817,6 @@ function initialize(initOpts){
 					ecmaVersion:6, // TODO: Set from option/config
 					allowHashBang:true,
 					allowReturnOutsideFunction:true,
-//					sourceFile:origFilename,
 					locations:true
 				}) ;
 				return r ;
@@ -1812,31 +1835,32 @@ function initialize(initOpts){
 			sourceMapping = sourceMapping || config.sourceMapping ;
 
 			var map,mapUrl = "" ;
-//			if (sourceMapping==1 || sourceMapping==2)
-//				map = U2.SourceMap({
-//					file:pr.filename,
-//					orig: pr.origMap?pr.origMap.toString():null}) ;
-
-//			var str = U2.OutputStream({source_map:map,beautify:true,comments:true,bracketize:true, width:160, space_colon:true}) ;
-//			pr.ast.print(str);
+//			debugger ;
+			treeWalker(pr.ast,expandSourceMapping) ;
+			var filepath = pr.filename.split("/") ; 
+			var filename = filepath.pop() ;
 			var output = require("escodegen").generate(pr.ast, {
-				  sourceMap: pr.filename, // Setting sourceFile in Acorn's options already gives us filenames.
-				  sourceMapWithCode: true, // Get both code and source map
+				  sourceMap: filename, 
+				  sourceMapRoot: filepath.join("/"),
+				  sourceMapWithCode: true, 
 				  sourceContent: pr.origCode
 				});
 
-				var str = output.code; // Generated source code
-				var jsmap = output.map.toJSON();//.toString(); // Generated source map JSON
-//			if (map) {
-//				createMappingPadding(map.get()) ;
-//
-//				var jsmap = map.get().toJSON() ;
-//				jsmap.sourcesContent = [pr.origCode] ;
-				smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-				mapUrl = "\n"
-					+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-					+"\n" ;
-//			}
+			var str = output.code; // Generated source code
+			var jsmap = output.map.toJSON();
+
+/*			
+var sl = pr.origCode.split("\n") ;
+var gl = str.split("\n") ;
+output.map._mappings.unsortedForEach(function(x){
+	console.log((sl[x.originalLine-1]||"").substring(x.originalColumn),"\t",
+			(gl[x.generatedLine-1]||"").substring(x.generatedColumn)) ;
+}) ;			
+*/		
+			smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+			mapUrl = "\n"
+				+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+				+"\n" ;
 			pr.code = str.toString()+mapUrl ;
 		};
 		nodent.decorate = function(pr) {
