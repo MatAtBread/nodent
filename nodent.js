@@ -8,6 +8,9 @@
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
+var outputCode = require('./output') ;//require('astring') ;//require("escodegen").generate ;
+//var outputCode = require("escodegen").generate ;//require('astring') ;// ;
+
 var acorn = require("acorn");
 var acornParse = acorn.parse ; //require("acorn/dist/acorn_loose").parse_dammit ;//acorn.parse.bind(acorn) ;
 var acornWalk = require("acorn/dist/walk");
@@ -178,9 +181,9 @@ function info(node) {
 function printNode(n) {
 	if (Array.isArray(n)) return n.map(printNode).join("|\n") ;
 	try {
-		return require("escodegen").generate(n) ;
+		return outputCode(n) ;
 	} catch (ex) {
-		return ex.message+"\n"+JSON.stringify(n) ;
+		return ex.message+"\n"+n.type ;
 	}
 }
 
@@ -485,15 +488,6 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	}
 	return pr ;
 
-	function makeFn(name,body,argnames) {
-		return {
-			type:'FunctionDeclaration',
-			id:{type:'Identifier',name:name},
-			params:argnames||[],
-			body:{type:'BlockStatement',body:cloneNodes(body)}
-		}
-	}
-
 	function makeBoundFn(name,body,argnames) {
 		// :> var name = function(args}{body}.$asyncbind(this)
 		return {
@@ -532,9 +526,15 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 	/* Create a 'continuation' - a block of statements that have been hoisted
 	 * into a named function so they can be invoked conditionally or asynchronously */
 	function makeContinuation(name,body) {
-		var ctn = makeFn(name,body) ;
+		var ctn = {
+			$continuation: true,
+			type:'FunctionDeclaration',
+			id:{type:'Identifier',name:name},
+			params:[],
+			body:{type:'BlockStatement',body:cloneNodes(body)}
+		} ;
+
 		continuations[name] = {def:ctn} ;
-		ctn.$continuation = true ;
 		return ctn ;
 	}
 
@@ -611,7 +611,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 					 * values before operator. In the case where we REALLY want to return undefined to the callback, a simple
 					 * "return" or "return undefined" works. */
 					if (value.length>0 && examine(value[0]).isUnaryExpression && value[0].operator==="void") {
-						repl.argument = value[0].expression ;
+						repl.argument = value[0].argument ;
 					} else {
 						repl.argument = {
 							"type": "CallExpression",
@@ -851,12 +851,13 @@ myfn("ok") ;
 				}) ;
 
 				if (!inAsync) {
-					var errMsg = pr.filename+" - Warning: '"+printNode(node)+"' used inside non-async function. " ;
+					var errMsg = pr.filename+" - Warning: 'await' used inside non-async function. " ;
 					if (opts.promises)
 						errMsg += "'return' value Promise runtime-specific" ;
 					else
 						errMsg += "'return' value from await is synchronous" ;
-					errMsg += " ("+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")" ;
+					if (node.loc)
+						errMsg += " ("+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")" ;
 					initOpts.log(errMsg) ;
 				}
 
@@ -990,6 +991,7 @@ myfn("ok") ;
 					argument:{
 						type:'UnaryExpression',
 						operator:'void',
+						prefix:true,
 						argument:{
 							type:'CallExpression',
 							callee:{type:'Identifier',name:symExit},
@@ -1000,22 +1002,20 @@ myfn("ok") ;
 
 				// How to continue the loop
 				var symContinue = "$next_"+generateSymbol() ;
-				var defContinue = makeContinuation(symContinue,[
-				    {
-				    	type:'ReturnStatement',
-				    	argument:{
-				    		type:'CallExpression',
-				    		callee:cloneNode(loop),
-				    		arguments:[{
-				    			type:'Identifier',
-				    			name:symExit
-				    		},{
-				    			type:'Identifier',
-				    			name:config.$error
-				    		}]
-				    	}
-				    }
-				]) ;
+				var defContinue = makeContinuation(symContinue,[{
+			    	type:'ReturnStatement',
+			    	argument:{
+			    		type:'CallExpression',
+			    		callee:cloneNode(loop),
+			    		arguments:[{
+			    			type:'Identifier',
+			    			name:symExit
+			    		},{
+			    			type:'Identifier',
+			    			name:config.$error
+			    		}]
+			    	}
+			    }]) ;
 
 				if (step)
 					defContinue.body.body.unshift(step) ;
@@ -1025,6 +1025,7 @@ myfn("ok") ;
 					argument:{
 						type:'UnaryExpression',
 						operator:'void',
+						prefix:true,
 						argument:thisCall(symContinue)
 					}
 				} ;
@@ -1775,13 +1776,6 @@ function asyncify(promiseProvider) {
 	}
 };
 
-function expandSourceMapping(node,descend,path) {
-	descend() ;
-	if (!node.loc) {
-//		console.log(printNode(path[0].self)) ;
-	}
-}
-
 function initialize(initOpts){
 	if (!initOpts)
 		initOpts = config ;
@@ -1833,34 +1827,31 @@ function initialize(initOpts){
 		nodent.prettyPrint = function(pr,sourceMapping,opts) {
 			sourceMapping = sourceMapping || config.sourceMapping ;
 
-			var map,mapUrl = "" ;
-//			debugger ;
-			treeWalker(pr.ast,expandSourceMapping) ;
+			var map ;
 			var filepath = pr.filename.split("/") ; 
 			var filename = filepath.pop() ;
-			var output = require("escodegen").generate(pr.ast, {
-				  sourceMap: filename, 
-				  sourceMapRoot: filepath.join("/"),
-				  sourceMapWithCode: true, 
-				  sourceContent: pr.origCode
-				});
 
-			var str = output.code; // Generated source code
-			var jsmap = output.map.toJSON();
+			var out = outputCode(pr.ast/*,{map:{
+				file: filename, 
+				sourceMapRoot: filepath.join("/"),
+				sourceContent: pr.origCode
+			}}*/) ;
 
-/*			
-var sl = pr.origCode.split("\n") ;
-var gl = str.split("\n") ;
-output.map._mappings.unsortedForEach(function(x){
-	console.log((sl[x.originalLine-1]||"").substring(x.originalColumn),"\t",
-			(gl[x.generatedLine-1]||"").substring(x.generatedColumn)) ;
-}) ;			
-*/		
-			smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-			mapUrl = "\n"
-				+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-				+"\n" ;
-			pr.code = str.toString()+mapUrl ;
+			try {
+				var mapUrl = "" ;
+				var jsmap = out.map.toJSON();
+//				console.log(JSON.stringify(jsmap));
+				if (jsmap) {
+					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+					mapUrl = "\n"
+						+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
+						+"\n" ;
+				}
+				pr.code = out.code+mapUrl ;
+			} catch (ex) {
+				pr.code = out ;
+			}
+
 		};
 		nodent.decorate = function(pr) {
 			pr.ast.walk(decorate) ;
@@ -1947,7 +1938,8 @@ output.map._mappings.unsortedForEach(function(x){
 			if (catcher) {
 				function thenable(result,error){
 					try {
-						return nodent.isThenable(result) ? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
+						return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
+							? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
 					} catch (ex) {
 						return (error||catcher)(ex);
 					}
@@ -2027,6 +2019,7 @@ output.map._mappings.unsortedForEach(function(x){
 		}) ;
 
 		nodent.asyncify = asyncify ;
+		nodent.version = require("./package.json").version ;
 		if (initOpts.augmentObject) {
 			Object.defineProperties(Object.prototype,{
 				"asyncify":{
@@ -2167,7 +2160,7 @@ if (require.main===module && process.argv.length>=3) {
 	initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
-	if (process.argv[n]=="--out") {
+	if (process.argv[n]=="--out" || process.argv[n]=="--ast") {
 		// Compile & output, but don't require
 		n += 1 ;
 		var filename = path.resolve(process.argv[n]) ;
@@ -2180,8 +2173,12 @@ if (require.main===module && process.argv.length>=3) {
 
 		var pr = nodent.parse(content,filename,parseOpts);
 		nodent.asynchronize(pr,undefined,parseOpts,config) ;
-		nodent.prettyPrint(pr,undefined,parseOpts) ;
-		console.log(pr.code) ;
+		if (process.argv[n-1]=="--out") {
+			nodent.prettyPrint(pr,undefined,parseOpts) ;
+			console.log(pr.code) ;
+		} else {
+			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+		}
 	} else {
 		// Compile & require
 		var mod = path.resolve(process.argv[n]) ;

@@ -49,7 +49,7 @@ var idx = 3 ;
 for (idx=3; idx < process.argv.length; idx++) {
 	if (process.argv[idx]=='--generators') {
 		try {
-			eval("var temp = new Promise(function(){}) ; function *x(){ return }") ;
+			eval("var temp = new Promise(function(){}) ; function* x(){ return }") ;
 		} catch (ex) {
 			throw new Error("*** Installed platform does not support Promises or Generators") ;
 		}
@@ -90,8 +90,8 @@ async function runTests() {
 		msgs = [] ;
 		for (var g=0;g<(useGenerators?2:1);g++) {
 			var info = [pad(test)] ;
-			if (g>0)
-				info.push("x"+samples+"*") ;
+			if (g>0 && targetSamples!=1)
+				info.push("(using generators)") ;
 			for (var i=0; i<providers.length; i++) {
 				var promise = providers[i] ;
 				if (g>0 && !promise.p) {
@@ -158,7 +158,9 @@ async function runTests() {
 						info.push([promise.name,"?",result]) ;
 					} else {
 						failed = null ;
-						if (!reSample)
+						if (targetSamples==1)
+							info.push([promise.name]) ;
+						else if (!reSample)
 							info.push([promise.name,t+"ms"]) ;
 						else
 							info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
