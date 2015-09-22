@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "acorn": "^2.4.0",
-    "escodegen": "^1.7.0",
     "source-map": ">=0.1.33"
   },
   "repository": {
