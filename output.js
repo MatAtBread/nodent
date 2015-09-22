@@ -1,3 +1,16 @@
+// This module is derived from Astring by David Bonnet (see below), but heavily
+// modified to support source-maps.
+
+// Astring is a tiny and fast JavaScript code generator from an ESTree-compliant AST.
+//
+// Astring was written by David Bonnet and released under an MIT license.
+//
+// The Git repository for Astring is available at:
+// https://github.com/davidbonnet/astring.git
+//
+// Please use the GitHub bug tracker to report issues:
+// https://github.com/davidbonnet/astring/issues
+
 var SourceMapGenerator = require('source-map').SourceMapGenerator;
 
 function formatParameters(code, node, state, traveler) {
@@ -741,10 +754,6 @@ module.exports = function (node, options) {
             backBy = parts[parts.length-1].length ;
             for (var i = 0; i < parts.length; i++) {
                 if (map && node && node.loc && node.loc.start) {
-/*console.error(node.name || node.type,"start:",{
-	original: { line: node.loc.start.line, column: node.loc.start.column },
-	generated: { line: lines.length+1, column: buffer.length }
-}) ;*/                	
                 	map.addMapping({
                 		source: mapOptions.file,
                 		original: { line: node.loc.start.line, column: node.loc.start.column },
@@ -758,10 +767,6 @@ module.exports = function (node, options) {
                 	buffer += parts[i] ;
                 }
                 if (map && node && node.loc && node.loc.start) {
-/*console.error(node.name || node.type,"end:",{
-	original: { line: node.loc.start.line, column: node.loc.start.column+parts[i].length },
-	generated: { line: lines.length+1, column: buffer.length }
-}) ;*/
                 	map.addMapping({
                 		source: mapOptions.file,
                 		original: { line: node.loc.start.line, column: node.loc.start.column+parts[i].length },
@@ -791,7 +796,7 @@ module.exports = function (node, options) {
     };
     traveler[node.type](node, state);
     state.code.write(null,state.lineEnd) ;
-    var result = lines.join('\n');
+    var result = lines.join(state.lineEnf);
     if (options && options.map) {
     	return {code:result, map:map} ;
     }
