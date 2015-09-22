@@ -10,91 +10,6 @@ var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var outputCode = require('./output') ;
 var parser = require('./parser') ;
-var referencePrototypes = {
-	replace: function(newNode) {
-		var r = cloneNode(this.self) ;
-		if ('index' in this) {
-			if (Array.isArray(newNode)) {
-				[].splice.apply(this.parent[this.field],[this.index,1].concat(newNode)) ;
-			} else {
-				this.parent[this.field][this.index] = newNode ;
-			}
-		} else {
-			if (Array.isArray(newNode)) {
-				this.parent[this.field] = {type:'BlockStatement',body:newNode} ;
-			} else {
-				this.parent[this.field] = newNode ;
-			}
-		}
-		return r ;
-	},
-	index: function(){
-		return this.parent[this.field].indexOf(this.self) ;
-	},
-	removeElement: function() {
-		return this.parent[this.field].splice(this.index,1)[0] ;
-	},
-	removeNode: function() {
-		var r = this.parent[this.field] ;
-		delete this.parent[this.field] ;
-		return r ;
-	}
-};
-
-function treeWalker(n,walker,state){
-	if (!state) {
-		state = [{self:n}] ;
-		state.replace = function(pos,newNode) {
-			state[pos].replace(newNode) ;
-		}
-		state.parentBlock = function(pos) {
-			for (var i=pos || 0; i<state.length; i++) {
-				if (examine(state[i].parent).isBlockStatement)
-					return state[i] ;
-			}
-			return null ;
-		}
-	} 
-	
-	function descend() {
-		parser.base[n.type](n,state,function down(sub,_,derivedFrom){
-			if (sub===n)
-				return parser.base[derivedFrom || n.type](n,state,down) ;
-			
-			function goDown(ref) {
-				ref.replace = referencePrototypes.replace ;
-				if (ref.index) {
-					Object.defineProperties(ref, {index:{enumerable:true,get:referencePrototypes.index}}) ;
-					ref.remove = referencePrototypes.removeElement ;
-				} else {
-					ref.remove = referencePrototypes.removeNode ;
-				}
-				state.unshift(ref) ;
-				treeWalker(sub,walker,state) ;
-				state.shift() ;
-			}
-			
-			Object.keys(n).forEach(function(k){
-				if (Array.isArray(n[k]) && n[k].indexOf(sub)>=0) {
-					return goDown({
-						self:sub,
-						parent:n,
-						field:k,
-						index:true
-					}) ;
-				} else if (n[k] instanceof Object && sub===n[k]) {
-					return goDown({
-						self:sub,
-						parent:n,
-						field:k
-					}) ;
-				}
-			}) ;
-		}) ;
-	} ;
-	walker(n,descend,state) ;
-	return n ;
-}
 
 /** Helpers **/
 function info(node) {
@@ -230,7 +145,7 @@ function containsAwait(ast) {
 	}
 	var foundAwait = {} ;
 	try {
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			if (examine(node).isUnaryExpression && node.operator=="await") {
 				throw foundAwait ;
 			}
@@ -500,7 +415,7 @@ function asynchronize(pr,sourceMapping,opts,initOpts) {
 			return n.map(function(m){return mapReturns(m,path,containers)}) ;
 		}
 		var lambdaNesting = 0 ;
-		return treeWalker(n,function(node,descend,path) {
+		return parser.treeWalker(n,function(node,descend,path) {
 			var repl,value ;
 			if (node.type==='ReturnStatement' && !node.$mapped) {
 				if (lambdaNesting > 0) {
@@ -736,7 +651,7 @@ myfn("ok") ;
 			return walkDown(node,mapper) ;
 		}
 
-		return treeWalker(ast,function(node,descend,path){
+		return parser.treeWalker(ast,function(node,descend,path){
 			if (walked.indexOf(node)>=0)
 				return ;
 
@@ -758,7 +673,7 @@ myfn("ok") ;
 			throw new Error("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords, or use nodent <=1.2.x") ;
 		}
 
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend();
 			if (examine(node).isAwait) {
 				/* Warn if this await expression is not inside an async function, as the return
@@ -884,7 +799,7 @@ myfn("ok") ;
 	})() ;
 	 */
 	function asyncLoops(ast) {
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend() ;
 			if (examine(node).isLoop && containsAwait(node)) {
 				var ref = path[0] ;
@@ -949,7 +864,7 @@ myfn("ok") ;
 				} ;
 
 				for (var i=0; i<body.length;i++) {
-					treeWalker(body[i],function(n,descend){
+					parser.treeWalker(body[i],function(n,descend){
 						if (n.type==='BreakStatement') {
 							coerce(n,cloneNode(mapBreak)) ;
 						} else if (n.type==='ContinueStatement') {
@@ -1060,7 +975,7 @@ myfn("ok") ;
 	 */
 
 	function asyncDefineMethod(ast) {
-		return treeWalker(ast,function(node,descend,path){
+		return parser.treeWalker(ast,function(node,descend,path){
 			descend();
 			if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
 				node.async = false ;
@@ -1107,7 +1022,7 @@ myfn("ok") ;
 	}
 	
 	function asyncDefine(ast) {
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			if (examine(node).isAsync && examine(node.argument).isFunction) {
 				// "async" is unary operator that takes a function as it's operand, e.g.
 				// async function <name?>([args]?){ <body> }
@@ -1195,7 +1110,7 @@ myfn("ok") ;
 			return ast.map(mapAsyncReturns) ;
 		}
 		var lambdaNesting = 0 ;
-		return treeWalker(ast,function(node,descend,path) {
+		return parser.treeWalker(ast,function(node,descend,path) {
 			if ((node.type === 'ThrowStatement' || node.type==='ReturnStatement') && !node.$mapped) {
 				if (lambdaNesting > 0) {
 					if (examine(node.argument).isAsync) {
@@ -1256,7 +1171,7 @@ myfn("ok") ;
 	    };
 	}
 	function asyncSpawn(ast) {
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend() ;
 			var fn ;
 			if (examine(node).isAwait) {
@@ -1291,7 +1206,7 @@ myfn("ok") ;
 	// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
 	function scopedNodes(ast,matching) {
 		var matches = [] ;
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			if (node === ast)
 				return descend() ;
 			
@@ -1309,7 +1224,7 @@ myfn("ok") ;
 
 	/* Move directives, vars and named functions to the top of their scope */
 	function hoistDeclarations(ast) {
-		treeWalker(ast,function(node, descend,path){
+		parser.treeWalker(ast,function(node, descend,path){
 			descend() ;
 			if (examine(node).isScope) { 
 				// For this scope, find all the hoistable functions, vars and directives
@@ -1449,7 +1364,7 @@ myfn("ok") ;
 
 	/* Give unique names to TryCatch blocks */
 	function labelTryCatch(ast) {
-		treeWalker(ast,function(node, descend,path){
+		parser.treeWalker(ast,function(node, descend,path){
 			if (node.type==='TryStatement') {
 				// Every try-catch needs a name, so asyncDefine/asyncAwait knows who's handling errors
 				var parent = getCatch(path).name ;
@@ -1463,7 +1378,7 @@ myfn("ok") ;
 	}
 
 	function replaceSymbols(ast,from,to) {
-		treeWalker(ast,function(node,descend,path){
+		parser.treeWalker(ast,function(node,descend,path){
 			descend() ;
 			if (node.type=='Identifier' && node.name==from) {
 				node.name = to ;
@@ -1477,7 +1392,7 @@ myfn("ok") ;
 		// Coalese BlockStatements
 		
 		// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend();
 			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
 			if (examine(node).isBlockStatement) {
@@ -1491,7 +1406,7 @@ myfn("ok") ;
 		}) ;
 
 		// Truncate BlockStatements with a Jump (break;continue;return;throw) inside
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend();
 			if (examine(node).isJump) {
 				var ref = path[0] ;
@@ -1514,7 +1429,7 @@ myfn("ok") ;
 		/* Inline continuations that are only referenced once */
 		
 		// Find any continuations that have a single reference
-		treeWalker(ast,function(node, descend, path){
+		parser.treeWalker(ast,function(node, descend, path){
 			descend();
 			if (node.$thisCall && continuations[node.name]) {
 				if (continuations[node.name].ref) {
@@ -1528,7 +1443,7 @@ myfn("ok") ;
 		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
 		if (calls.length) {
 			// Replace all the calls to the continuation with the body from the continuation followed by 'return;'
-			treeWalker(ast,function(node, descend, path){
+			parser.treeWalker(ast,function(node, descend, path){
 				descend();
 				if (calls.indexOf(node)>=0) {
 					if (path[1].self.type==='ReturnStatement') {
@@ -1543,7 +1458,7 @@ myfn("ok") ;
 
 			var defs = Object.keys(continuations).map(function(c){ return continuations[c].$inlined && continuations[c].def }) ;
 			// Remove all the (now inline) declarations of the continuations
-			treeWalker(ast,function(node, descend, path){
+			parser.treeWalker(ast,function(node, descend, path){
 				descend();
 				if (defs.indexOf(node)>=0) {
 					path[0].remove() ;
@@ -1723,13 +1638,7 @@ function initialize(initOpts){
 			sourceMapping = sourceMapping || config.sourceMapping ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			try {
-				r.ast = parser.parse(r.origCode,{
-					plugins:{nodent:true},
-					ecmaVersion:6, // TODO: Set from option/config
-					allowHashBang:true,
-					allowReturnOutsideFunction:true,
-					locations:true
-				}) ;
+				r.ast = parser.parse(r.origCode) ;
 				return r ;
 			} catch (ex) {
 				if (ex instanceof SyntaxError) {
@@ -1750,7 +1659,7 @@ function initialize(initOpts){
 			var filename = filepath.pop() ;
 
 			var out = outputCode(pr.ast,{map:{
-				file: filename+"(nodent)", 
+				file: filename, //+"(original)", 
 				sourceMapRoot: filepath.join("/"),
 				sourceContent: pr.origCode
 			}}) ;
