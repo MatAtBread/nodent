@@ -55,29 +55,22 @@ function formatComments(code, comments, indent, lineEnd) {
     var comment;
     for (var i = 0, length = comments.length; i < length; i++) {
         comment = comments[i];
-        if (comment.type[0] === 'L') code.write(null, indent, '// ', comment.value.trim(), "\n"); else code.write(null, indent, '/*', lineEnd, reindent(comment.value, indent), lineEnd, indent, '*/', lineEnd);
+        if (comment.type[0] === 'L') 
+        	code.write(null, indent, '// ', comment.value.trim(), "\n"); 
+        else 
+        	code.write(null, indent, '/*', lineEnd, reindent(comment.value, indent), lineEnd, indent, '*/', lineEnd);
     }
 }
 var ForInStatement, FunctionDeclaration, RestElement, BinaryExpression, ArrayExpression, traveler;
-if (!String.prototype.repeat) {
-    String.prototype.repeat = function (count) {
-        var out;
-        if (count < 0) {
-            throw new RangeError('Repeat count must be non-negative');
-        } else if (count === Infinity) {
-            throw new RangeError('Repeat count must be less than infinity');
-        }
-        count = count | 0;
-        if (this.length * count >= 1 << 28) {
-            throw new RangeError('Repeat count must not overflow maximum string size');
-        }
-        out = [];
-        while (count--) {
-            out.push(this);
-        }
-        return out.join('');
-    };
+
+function repeat(str,count) {
+    var out = [];
+    while (count--) {
+        out.push(str);
+    }
+    return out.join('');
 }
+
 const OPERATORS_PRECEDENCE = {
     '||': 3,
     '&&': 4,
@@ -108,6 +101,7 @@ const PARENTHESIS_NEEDED = {
     Literal: 0,
     MemberExpression: 0,
     CallExpression: 0,
+    NewExpression: 0,
     Super: 0,
     ThisExpression: 0,
     UnaryExpression: 0,
@@ -117,7 +111,7 @@ const PARENTHESIS_NEEDED = {
 traveler = {
     Program: function (node, state) {
         var statements, statement;
-        const indent = state.indent.repeat(state.indentLevel);
+        const indent = repeat(state.indent,state.indentLevel);
         const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
         if (writeComments && node.comments != null) formatComments(code, node.comments, indent, lineEnd);
         statements = node.body;
@@ -132,7 +126,7 @@ traveler = {
     },
     BlockStatement: function (node, state) {
         var statements, statement;
-        const indent = state.indent.repeat(state.indentLevel++);
+        const indent = repeat(state.indent,state.indentLevel++);
         const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
         const statementIndent = indent + state.indent;
         code.write(node, '{');
@@ -158,7 +152,7 @@ traveler = {
             }
         }
         if (writeComments && node.trailingComments != null) formatComments(code, node.trailingComments, statementIndent, lineEnd);
-        code.write(null, '}');
+        code.write(/*node.loc?{loc:{start:node.loc.end}}:*/null, '}');
         state.indentLevel--;
     },
     EmptyStatement: function (node, state) {
@@ -174,18 +168,20 @@ traveler = {
         this[node.test.type](node.test, state);
         code.write(null, ') ');
         if (node.consequent.type !== 'BlockStatement')
-        	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+        	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
         this[node.consequent.type](node.consequent, state);
         if (node.alternate != null) {
+            if (node.consequent.type !== 'BlockStatement')
+            	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel)) ;
             code.write(null, ' else ');
-            if (node.alternate.type !== 'BlockStatement')
-            	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+            if (node.alternate.type !== 'BlockStatement' && node.alternate.type !== 'IfStatement')
+            	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
             this[node.alternate.type](node.alternate, state);
         }
     },
     LabeledStatement: function (node, state) {
         this[node.label.type](node.label, state);
-        state.code.write(null, ':', state.lineEnd);
+        state.code.write(null, ':', state.lineEnd, repeat(state.indent,state.indentLevel));
         this[node.body.type](node.body, state);
     },
     BreakStatement: function (node, state) {
@@ -215,7 +211,7 @@ traveler = {
     },
     SwitchStatement: function (node, state) {
         var occurence, consequent, statement;
-        const indent = state.indent.repeat(state.indentLevel++);
+        const indent = repeat(state.indent,state.indentLevel++);
         const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
         state.indentLevel++;
         const caseIndent = indent + state.indent;
@@ -284,14 +280,14 @@ traveler = {
         this[node.test.type](node.test, state);
         code.write(null, ') ');
         if (node.body.type !== 'BlockStatement')
-        	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+        	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
         this[node.body.type](node.body, state);
     },
     DoWhileStatement: function (node, state) {
         const code = state.code;
         code.write(node, 'do ');
         if (node.body.type !== 'BlockStatement')
-        	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+        	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
         this[node.body.type](node.body, state);
         code.write(null, ' while (');
         this[node.test.type](node.test, state);
@@ -313,7 +309,7 @@ traveler = {
         if (node.update) this[node.update.type](node.update, state);
         code.write(null, ') ');
         if (node.body.type !== 'BlockStatement')
-        	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+        	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
         this[node.body.type](node.body, state);
     },
     ForInStatement: ForInStatement = function (node, state) {
@@ -328,7 +324,7 @@ traveler = {
         this[node.right.type](node.right, state);
         code.write(null, ') ');
         if (node.body.type !== 'BlockStatement')
-        	code.write(null,state.lineEnd,state.indent.repeat(state.indentLevel+1)) ;
+        	code.write(null,state.lineEnd,repeat(state.indent,state.indentLevel+1)) ;
         this[node.body.type](node.body, state);
     },
     ForOfStatement: ForInStatement,
@@ -548,7 +544,7 @@ traveler = {
     ArrayPattern: ArrayExpression,
     ObjectExpression: function (node, state) {
         var property;
-        const indent = state.indent.repeat(state.indentLevel++);
+        const indent = repeat(state.indent,state.indentLevel++);
         const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
         const propertyIndent = indent + state.indent;
         code.write(node, '{');
@@ -728,56 +724,74 @@ traveler = {
     }
 };
 module.exports = function (node, options) {
-    var lines, mapOptions = options && options.map ;
-    lines = [];
+    var buffer = "", lines = [], mapOptions = options && options.map ;
+    
+    var map = mapOptions && new SourceMapGenerator(mapOptions) ;
+    var origLines ;
+    if (map && mapOptions.sourceContent) {
+    	map.setSourceContent(mapOptions.file, mapOptions.sourceContent) ;
+    	origLines = mapOptions.sourceContent.split("\n") ; 
+    }
+    
+    var backBy = 0 ;
+    var c = {
+    	write:function(node) {
+            var parts;
+            parts = [].slice.call(arguments, 1);
+            backBy = parts[parts.length-1].length ;
+            for (var i = 0; i < parts.length; i++) {
+                if (map && node && node.loc && node.loc.start) {
+/*console.error(node.name || node.type,"start:",{
+	original: { line: node.loc.start.line, column: node.loc.start.column },
+	generated: { line: lines.length+1, column: buffer.length }
+}) ;*/                	
+                	map.addMapping({
+                		source: mapOptions.file,
+                		original: { line: node.loc.start.line, column: node.loc.start.column },
+                		generated: { line: lines.length+1, column: buffer.length }
+                	}) ;
+                }
+                if (parts[i] == state.lineEnd) {
+                	lines.push(buffer);
+                	buffer = "" ;
+                } else {
+                	buffer += parts[i] ;
+                }
+                if (map && node && node.loc && node.loc.start) {
+/*console.error(node.name || node.type,"end:",{
+	original: { line: node.loc.start.line, column: node.loc.start.column+parts[i].length },
+	generated: { line: lines.length+1, column: buffer.length }
+}) ;*/
+                	map.addMapping({
+                		source: mapOptions.file,
+                		original: { line: node.loc.start.line, column: node.loc.start.column+parts[i].length },
+//                		original: { line: node.loc.end.line, column: node.loc.end.column },
+                		generated: { line: lines.length+1, column: buffer.length }
+                	}) ;
+                }
+            }
+        },
+        back: function () {
+        	buffer = buffer.substring(0,buffer.length-backBy) ;
+        }
+    };
+    
     const state = options == null ? {
-        code: [],
+        code: c,
         indent: "    ",
         lineEnd: "\n",
         indentLevel: 0,
         writeComments: false
     } : {
-        code: [],
+        code: c,
         indent: options.indent || "    ",
         lineEnd: options.lineEnd || "\n",
         indentLevel: options.startingIndentLevel || 0,
         writeComments: options.comments || false
     };
-    var map = mapOptions && new SourceMapGenerator(mapOptions) ;
-    var origLines ;
-    if (map && mapOptions.sourceContent) {
-    	map.setSourceContent(mapOptions.file, mapOptions.sourceContent) ;
-    	origLines = mapOptions.sourceContent.split(state.lineEnd) ; 
-    }
-    
-    var prev = -1 ;
-    state.code.write = function (node) {
-        var parts;
-        parts = [].slice.call(arguments, 1);
-    	var line = lines.length+1 ;
-    	var col = 0 ;
-    	for (var i = (lines[line-2] || 0)+1; i<state.code.length; i++)
-    		col += state.code[i].length ;
-        for (var i = 0; i < parts.length; i++) {
-            state.code.push(parts[i]);
-            if (parts[i] == state.lineEnd) {
-            	lines.push(state.code.length);
-            }
-        }
-        if (map && node && node.loc && node.loc.start) {
-        	map.addMapping({
-        		source: mapOptions.file,
-        		original: { line: node.loc.start.line, column: 0 },
-        		generated: { line: line, column: 0 }
-        	}) ;
-        }
-    };
-    state.code.back = function () {
-        this.pop();
-    };
     traveler[node.type](node, state);
-    
-    var result = state.code.join('');
+    state.code.write(null,state.lineEnd) ;
+    var result = lines.join('\n');
     if (options && options.map) {
     	return {code:result, map:map} ;
     }

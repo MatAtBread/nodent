@@ -421,13 +421,6 @@ function createMappingPadding(mapping) {
 		}) ;
 }
 */
-function reportParseException(ex,content,filename) {
-	var sample = content.substring(ex.pos-30,ex.pos-1)+
-		"^"+content.substring(ex.pos,ex.pos+1)+"^"+
-		content.substring(ex.pos+1,ex.pos+31) ;
-	sample = sample.replace(/[\r\n\t]+/g,"\t") ;
-	return ("NoDent JS: "+filename+" (line:"+ex.line+",col:"+ex.col+"): "+ex.message+"\n"+sample) ;
-}
 
 function examine(node) {
 	if (!node) 
@@ -882,7 +875,7 @@ myfn("ok") ;
 					}
 				}
 				if (!stmt)
-					throw new Error("Illegal await not contained in a statement") ;
+					throw new Error("Illegal await not contained in a statement "+pr.filename+JSON.stringify(node.loc && node.loc.start)) ;
 
 				var i = stmt.index ;
 				var callBack = stmt.parent[stmt.field].splice(i,stmt.parent[stmt.field].length-i).slice(1);
@@ -1421,8 +1414,8 @@ myfn("ok") ;
 				var vars = scopedNodes(node,function(n,path){
 					if (n.type==='VariableDeclaration' && n.kind==='var') {
 					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
-					    if (path[0].field=="left" && path[0].parent.type==='ForInStatement') return false ;
-					    if (path[0].field=="left" && path[0].parent.type==='ForOfStatement') return false ;
+					    if (path[0].field=="left" && (path[0].parent.type==='ForInStatement' || path[0].parent.type==='ForOfStatement')) 
+					    	return false ;
 					    return true ;
 					}
 				}) ;
@@ -1522,7 +1515,7 @@ myfn("ok") ;
 					return ref.remove() ;
 				}) ;
 
-				nodeBody.body = directives.concat(classes).concat(functions).concat(varDecls).concat(nodeBody.body) ;
+				nodeBody.body = directives.concat(varDecls).concat(classes).concat(functions).concat(nodeBody.body) ;
 			}
 			return true ;
 		}) ;
@@ -1831,21 +1824,19 @@ function initialize(initOpts){
 			var filepath = pr.filename.split("/") ; 
 			var filename = filepath.pop() ;
 
-			var out = outputCode(pr.ast/*,{map:{
-				file: filename, 
+			var out = outputCode(pr.ast,{map:{
+				file: filename+"(nodent)", 
 				sourceMapRoot: filepath.join("/"),
 				sourceContent: pr.origCode
-			}}*/) ;
+			}}) ;
 
 			try {
 				var mapUrl = "" ;
 				var jsmap = out.map.toJSON();
-//				console.log(JSON.stringify(jsmap));
+//				console.error(JSON.stringify(jsmap));
 				if (jsmap) {
 					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-					mapUrl = "\n"
-						+"\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))
-						+"\n" ;
+					mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))+"\n" ;
 				}
 				pr.code = out.code+mapUrl ;
 			} catch (ex) {
