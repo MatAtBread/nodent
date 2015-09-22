@@ -796,7 +796,7 @@ module.exports = function (node, options) {
     };
     traveler[node.type](node, state);
     state.code.write(null,state.lineEnd) ;
-    var result = lines.join(state.lineEnf);
+    var result = lines.join(state.lineEnd);
     if (options && options.map) {
     	return {code:result, map:map} ;
     }

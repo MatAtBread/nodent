@@ -8,83 +8,8 @@
 
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
-var outputCode = require('./output') ;//require('astring') ;//require("escodegen").generate ;
-//var outputCode = require("escodegen").generate ;//require('astring') ;// ;
-
-var acorn = require("acorn");
-var acornParse = acorn.parse ; //require("acorn/dist/acorn_loose").parse_dammit ;//acorn.parse.bind(acorn) ;
-var acornWalk = require("acorn/dist/walk");
-var acornBase = acornWalk.make({
-	SwitchStatement: function (node, st, c) {
-		c(node.discriminant, st, "Expression");
-		for (var i = 0; i < node.cases.length; ++i) {
-			c(node.cases[i],st/*,"SwitchCase"*/) ;
-		}
-	},
-	SwitchCase: function (node, st, c) {
-		if (node.test) c(node.test, st, "Expression");
-		for (var i = 0; i < node.consequent.length; ++i) {
-			c(node.consequent[i], st, "Statement");
-		}
-	},
-	TryStatement: function (node, st, c) {
-		c(node.block, st, "Statement");
-		if (node.handler) c(node.handler, st, "Statement");
-		if (node.finalizer) c(node.finalizer, st, "Statement");
-	},
-	CatchClause: function (node, st, c) {
-		c(node.param, st, "Pattern");
-		c(node.body, st, "ScopeBody");
-	},
-	Class: function (node, st, c) {
-	  if (node.id) c(node.id, st, "Pattern");
-	  if (node.superClass) c(node.superClass, st, "Expression");
-	  c(node.body, st);
-	}, 
-	ClassBody: function(node, st, c){
-	  for (var i = 0; i < node.body.length; i++) {
-		  c(node.body[i], st);
-	  }
-	}
-}) ;
-
-acorn.plugins.nodent = function(parser){
-	var tokens = {} ;
-	["async","await"].forEach(function(kw){
-		tokens[kw] = new acorn.TokenType(kw,{beforeExpr: true, prefix: true, startsExpr: true, keyword: kw}) ;
-	}) ;
-
-	parser.extend("finishToken",function(base){
-		return function(type,val){
-			type = type || (tokens.hasOwnProperty(val) && tokens[val]) ;
-			return base.call(this,type,val);
-		}
-	}) ;
-
-	parser.extend("isKeyword",function(base){
-		return function(str){
-			return tokens.hasOwnProperty(str) || base.apply(this,arguments);
-		}
-	}) ;
-
-	parser.extend("isReservedWord",function(base){
-		return function(str){
-			return tokens.hasOwnProperty(str) || base.apply(this,arguments);
-		}
-	}) ;
-	
-	parser.extend("parsePropertyName",function(base){
-		return function (prop) {
-			var key = base.apply(this,arguments) ;
-			if (key.type === "Identifier" && key.name === "async") {
-				prop.async = true ;
-				key = base.apply(this,arguments) ;
-			}
-			return key;
-		};
-	}) ;
-}
-
+var outputCode = require('./output') ;
+var parser = require('./parser') ;
 var referencePrototypes = {
 	replace: function(newNode) {
 		var r = cloneNode(this.self) ;
@@ -132,9 +57,9 @@ function treeWalker(n,walker,state){
 	} 
 	
 	function descend() {
-		acornBase[n.type](n,state,function down(sub,_,derivedFrom){
+		parser.base[n.type](n,state,function down(sub,_,derivedFrom){
 			if (sub===n)
-				return acornBase[derivedFrom || n.type](n,state,down) ;
+				return parser.base[derivedFrom || n.type](n,state,down) ;
 			
 			function goDown(ref) {
 				ref.replace = referencePrototypes.replace ;
@@ -1798,7 +1723,7 @@ function initialize(initOpts){
 			sourceMapping = sourceMapping || config.sourceMapping ;
 			var r = { origCode:code.toString(), filename:origFilename } ;
 			try {
-				r.ast = acornParse(r.origCode,{
+				r.ast = parser.parse(r.origCode,{
 					plugins:{nodent:true},
 					ecmaVersion:6, // TODO: Set from option/config
 					allowHashBang:true,
