@@ -35,11 +35,6 @@ var acornBase = acornWalk.make({
 	}
 }) ;
 
-var lastComments = [] ;
-var doesComments = {
-	BlockStatement:true,
-	Program:true
-} ;
 acorn.plugins.nodent = function(parser){
 	var tokens = {} ;
 	["async","await"].forEach(function(kw){
@@ -74,17 +69,6 @@ acorn.plugins.nodent = function(parser){
 			}
 			return key;
 		};
-	}) ;
-
-	parser.extend("finishNode",function(base){
-		return function(node,type) {
-			var node = base.apply(this,arguments) ;
-			if (doesComments[node.type] && lastComments.length) {
-				node.trailingComments = lastComments ;
-				lastComments = []  ;
-			}
-			return node ;
-		}
 	}) ;
 }
 
@@ -173,17 +157,27 @@ function treeWalker(n,walker,state){
 	return n ;
 }
 
+var comments ;
 function acornParse(code) {
-	return acorn.parse(code,{
+	comments = [] ;
+	var ast = acorn.parse(code,{
 		plugins:{nodent:true},
 		ecmaVersion:6, // TODO: Set from option/config
 		allowHashBang:true,
 		allowReturnOutsideFunction:true,
 		locations:true,
-		onComment:function(block,comment){
-			lastComments.push({type:block?"B":"L",value:comment}) ;
+		onComment:comments
+	}) ;
+	
+	// attach comments to the most tightly containing node
+	treeWalker(ast,function(node,descend,path){
+		descend() ;
+		while (comments.length && (node.start >= comments[0].start && node.end>=comments[0].end)) {
+			node.$comments = node.$comments||[] ;
+			node.$comments.push(comments.shift()) ;
 		}
-	})
+	}) ;
+	return ast ;
 }
 
 module.exports = {

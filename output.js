@@ -747,6 +747,7 @@ module.exports = function (node, options) {
     }
     
     var backBy = 0 ;
+    var nextComment = [] ;
     var c = {
     	write:function(node) {
             var parts;
@@ -763,8 +764,28 @@ module.exports = function (node, options) {
                 if (parts[i] == state.lineEnd) {
                 	lines.push(buffer);
                 	buffer = "" ;
+                	if (nextComment.length) {
+                		var preceeding = lines.pop() ;
+                		nextComment.forEach(function(c){
+                			if (c.type=='Block') {
+                				var indent = repeat(state.indent,c.indent) ;
+                				("/*"+c.value+"*/").split("\n").forEach(function(l){
+                    				lines.push(indent+l.replace(/^\s*/,"")) ;
+                				}) ;
+                			}
+                			else if (c.type=='Line')
+                				lines.push(repeat(state.indent,c.indent)+"//"+c.value) ;
+                		}) ;
+                		lines.push(preceeding) ;
+                		nextComment = [] ;
+                	}
                 } else {
                 	buffer += parts[i] ;
+                	while (node && node.$comments && node.$comments.length) {
+                		var c = node.$comments.shift() ;
+                		c.indent = state.indentLevel ;
+            			nextComment.push(c) ;
+                	}
                 }
                 if (map && node && node.loc && node.loc.start) {
                 	map.addMapping({
@@ -786,13 +807,13 @@ module.exports = function (node, options) {
         indent: "    ",
         lineEnd: "\n",
         indentLevel: 0,
-        writeComments: false
+        writeComments: true
     } : {
         code: c,
         indent: options.indent || "    ",
         lineEnd: options.lineEnd || "\n",
         indentLevel: options.startingIndentLevel || 0,
-        writeComments: options.comments || false
+        writeComments: options.comments || true
     };
     traveler[node.type](node, state);
     state.code.write(null,state.lineEnd) ;
