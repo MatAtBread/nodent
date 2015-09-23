@@ -564,13 +564,13 @@ traveler = {
         if (node.properties.length > 0) {
             code.write(null, lineEnd);
             if (writeComments && node.comments != null) formatComments(code, node.comments, propertyIndent, lineEnd);
-            const comma = ',' + lineEnd, properties = node.properties, length = properties.length;
+            const properties = node.properties, length = properties.length;
             for (var i = 0; ; ) {
                 property = properties[i];
                 if (writeComments && property.comments != null) formatComments(code, property.comments, propertyIndent, lineEnd);
                 code.write(null, propertyIndent);
                 this['Property'](property, state);
-                if ((++i) < length) code.write(node, comma); else break;
+                if ((++i) < length) code.write(node, ',', lineEnd); else break;
             }
             code.write(null, lineEnd);
             if (writeComments && node.trailingComments != null) formatComments(code, node.trailingComments, propertyIndent, lineEnd);
@@ -747,7 +747,8 @@ module.exports = function (node, options) {
     }
     
     var backBy = 0 ;
-    var nextComment = [] ;
+    var leadingComments = [] ;
+    var trailingComments = [] ;
     var c = {
     	write:function(node) {
             var parts;
@@ -762,29 +763,50 @@ module.exports = function (node, options) {
                 	}) ;
                 }
                 if (parts[i] == state.lineEnd) {
+                	if (trailingComments.length) {
+                		trailingComments.forEach(function(c){
+                			if (c.type==='Line')
+                        		buffer += " // "+c.value ;
+                			else {
+                				(" /*"+c.value+"*/").split("\n").forEach(function(v){
+                					buffer +=  v ;
+                                	lines.push(buffer);
+                                	buffer = "" ;
+                				}) ;
+                				buffer = lines.pop() ;
+                			}
+                		}) ;
+                		trailingComments = [] ;
+                	}
                 	lines.push(buffer);
                 	buffer = "" ;
-                	if (nextComment.length) {
+                	if (leadingComments.length) {
                 		var preceeding = lines.pop() ;
-                		nextComment.forEach(function(c){
-                			if (c.type=='Block') {
-                				var indent = repeat(state.indent,c.indent) ;
-                				("/*"+c.value+"*/").split("\n").forEach(function(l){
-                    				lines.push(indent+l.replace(/^\s*/,"")) ;
-                				}) ;
-                			}
-                			else if (c.type=='Line')
-                				lines.push(repeat(state.indent,c.indent)+"//"+c.value) ;
+                		leadingComments.forEach(function(c){
+                    		var indent = repeat(state.indent,c.indent) ;
+                			if (c.type=="Line")
+                				lines.push(indent+"//"+c.value) ;
+                			else
+	            				(indent+"/*"+c.value+"*/").split("\n").forEach(function(l){
+	                				lines.push(l) ;
+	            				}) ;
                 		}) ;
                 		lines.push(preceeding) ;
-                		nextComment = [] ;
+                		leadingComments = [] ;
                 	}
                 } else {
                 	buffer += parts[i] ;
-                	while (node && node.$comments && node.$comments.length) {
-                		var c = node.$comments.shift() ;
-                		c.indent = state.indentLevel ;
-            			nextComment.push(c) ;
+                	if (node && node.$comments) {
+                		node.$comments.forEach(function(c) {
+                			var trailing = node.loc.start.column < c.loc.start.column ;
+                			c.indent = state.indentLevel ; 
+                			if (trailing){
+                				trailingComments.push(c) ;
+                			} else {
+                    			leadingComments.push(c) ;
+                			}
+                		}) ;
+                		node.$comments = null ;
                 	}
                 }
                 if (map && node && node.loc && node.loc.start) {
@@ -816,7 +838,8 @@ module.exports = function (node, options) {
         writeComments: options.comments || true
     };
     traveler[node.type](node, state);
-    state.code.write(null,state.lineEnd) ;
+    trailingComments = node.$comments || [] ;
+    state.code.write(node,state.lineEnd) ;
     var result = lines.join(state.lineEnd);
     if (options && options.map) {
     	return {code:result, map:map} ;

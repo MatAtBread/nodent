@@ -172,7 +172,8 @@ function acornParse(code) {
 	// attach comments to the most tightly containing node
 	treeWalker(ast,function(node,descend,path){
 		descend() ;
-		while (comments.length && (node.start >= comments[0].start && node.end>=comments[0].end)) {
+		while (comments.length && 
+				(node.loc.start.line >= comments[0].loc.start.line && node.loc.end.line>=comments[0].loc.end.line)) {
 			node.$comments = node.$comments||[] ;
 			node.$comments.push(comments.shift()) ;
 		}
