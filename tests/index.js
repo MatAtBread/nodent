@@ -3,7 +3,6 @@
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
 var nodent = require('../nodent')({
-	use:["map"],
 	log:function(msg){ msgs.push(msg) }
 }) ;
 var Promise = nodent.Thenable ;

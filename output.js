@@ -42,38 +42,7 @@ function formatExpression(code, node, operator, state, traveler) {
     traveler[node.type](node, state);
     code.write(null, ')');
 }
-function reindent(text, indentation) {
-    var indents, secondLine, char;
-    text = text.trimRight();
-    indents = '\n';
-    secondLine = false;
-    const length = text.length;
-    for (var i = 0; i < length; i++) {
-        char = text[i];
-        if (secondLine) {
-            if (char === ' ' || char === '\t') {
-                indents += char;
-            } else {
-                return indentation + text.trimLeft().split(indents).join('\n' + indentation);
-            }
-        } else {
-            if (char === '\n') {
-                secondLine = true;
-            }
-        }
-    }
-    return indentation + text.trimLeft();
-}
-function formatComments(code, comments, indent, lineEnd) {
-    var comment;
-    for (var i = 0, length = comments.length; i < length; i++) {
-        comment = comments[i];
-        if (comment.type[0] === 'L') 
-        	code.write(null, indent, '// ', comment.value.trim(), "\n"); 
-        else 
-        	code.write(null, indent, '/*', lineEnd, reindent(comment.value, indent), lineEnd, indent, '*/', lineEnd);
-    }
-}
+
 var ForInStatement, FunctionDeclaration, RestElement, BinaryExpression, ArrayExpression, traveler;
 
 function repeat(str,count) {
@@ -125,46 +94,36 @@ traveler = {
     Program: function (node, state) {
         var statements, statement;
         const indent = repeat(state.indent,state.indentLevel);
-        const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
-        if (writeComments && node.comments != null) formatComments(code, node.comments, indent, lineEnd);
+        const lineEnd = state.lineEnd, code = state.code;
+        
         statements = node.body;
         for (var i = 0, length = statements.length; i < length; i++) {
             statement = statements[i];
-            if (writeComments && statement.comments != null) formatComments(code, statement.comments, indent, lineEnd);
+            
             code.write(null, indent);
             this[statement.type](statement, state);
             code.write(null, lineEnd);
         }
-        if (writeComments && node.trailingComments != null) formatComments(code, node.trailingComments, indent, lineEnd);
+        
     },
     BlockStatement: function (node, state) {
         var statements, statement;
         const indent = repeat(state.indent,state.indentLevel++);
-        const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
+        const lineEnd = state.lineEnd, code = state.code;
         const statementIndent = indent + state.indent;
         code.write(node, '{');
         statements = node.body;
         if (statements != null && statements.length > 0) {
             code.write(null, lineEnd);
-            if (writeComments && node.comments != null) {
-                formatComments(code, node.comments, statementIndent, lineEnd);
-            }
             for (var i = 0, length = statements.length; i < length; i++) {
                 statement = statements[i];
-                if (writeComments && statement.comments != null) formatComments(code, statement.comments, statementIndent, lineEnd);
+                
                 code.write(null, statementIndent);
                 this[statement.type](statement, state);
                 code.write(null, lineEnd);
             }
             code.write(null, indent);
-        } else {
-            if (writeComments && node.comments != null) {
-                code.write(null, lineEnd);
-                formatComments(code, node.comments, statementIndent, lineEnd);
-                code.write(null, indent);
-            }
         }
-        if (writeComments && node.trailingComments != null) formatComments(code, node.trailingComments, statementIndent, lineEnd);
         code.write(/*node.loc?{loc:{start:node.loc.end}}:*/null, '}');
         state.indentLevel--;
     },
@@ -225,7 +184,7 @@ traveler = {
     SwitchStatement: function (node, state) {
         var occurence, consequent, statement;
         const indent = repeat(state.indent,state.indentLevel++);
-        const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
+        const lineEnd = state.lineEnd, code = state.code;
         state.indentLevel++;
         const caseIndent = indent + state.indent;
         const statementIndent = caseIndent + state.indent;
@@ -235,7 +194,7 @@ traveler = {
         const occurences = node.cases;
         for (var i = 0; i < occurences.length; i++) {
             occurence = occurences[i];
-            if (writeComments && occurence.comments != null) formatComments(code, occurence.comments, caseIndent, lineEnd);
+            
             if (occurence.test) {
                 code.write(occurence, caseIndent, 'case ');
                 this[occurence.test.type](occurence.test, state);
@@ -246,7 +205,7 @@ traveler = {
             consequent = occurence.consequent;
             for (var j = 0; j < consequent.length; j++) {
                 statement = consequent[j];
-                if (writeComments && statement.comments != null) formatComments(code, statement.comments, statementIndent, lineEnd);
+                
                 code.write(null, statementIndent);
                 this[statement.type](statement, state);
                 code.write(null, lineEnd);
@@ -558,34 +517,23 @@ traveler = {
     ObjectExpression: function (node, state) {
         var property;
         const indent = repeat(state.indent,state.indentLevel++);
-        const lineEnd = state.lineEnd, code = state.code, writeComments = state.writeComments;
+        const lineEnd = state.lineEnd, code = state.code;
         const propertyIndent = indent + state.indent;
         code.write(node, '{');
         if (node.properties.length > 0) {
             code.write(null, lineEnd);
-            if (writeComments && node.comments != null) formatComments(code, node.comments, propertyIndent, lineEnd);
+            
             const properties = node.properties, length = properties.length;
             for (var i = 0; ; ) {
                 property = properties[i];
-                if (writeComments && property.comments != null) formatComments(code, property.comments, propertyIndent, lineEnd);
+                
                 code.write(null, propertyIndent);
                 this['Property'](property, state);
                 if ((++i) < length) code.write(node, ',', lineEnd); else break;
             }
             code.write(null, lineEnd);
-            if (writeComments && node.trailingComments != null) formatComments(code, node.trailingComments, propertyIndent, lineEnd);
+            
             code.write(null, indent, '}');
-        } else if (writeComments) {
-            if (node.comments != null) {
-                code.write(null, lineEnd);
-                formatComments(code, node.comments, propertyIndent, lineEnd);
-                if (node.trailingComments != null) formatComments(code, node.trailingComments, propertyIndent, lineEnd);
-                code.write(null, indent, '}');
-            } else if (node.trailingComments != null) {
-                code.write(null, lineEnd);
-                formatComments(code, node.trailingComments, propertyIndent, lineEnd);
-                code.write(null, indent, '}');
-            }
         } else {
             code.write(null, '}');
         }
@@ -737,18 +685,19 @@ traveler = {
     }
 };
 module.exports = function (node, options) {
-    var buffer = "", lines = [], mapOptions = options && options.map ;
-    
-    var map = mapOptions && new SourceMapGenerator(mapOptions) ;
-    var origLines ;
-    if (map && mapOptions.sourceContent) {
-    	map.setSourceContent(mapOptions.file, mapOptions.sourceContent) ;
-    	origLines = mapOptions.sourceContent.split("\n") ; 
+	options = options || {} ;
+    var origLines, buffer = "", lines = [] ;
+    var map = options.map && new SourceMapGenerator(options.map) ;
+
+    if (map && options.map.sourceContent) {
+    	map.setSourceContent(options.map.file, options.map.sourceContent) ;
+    	origLines = options.map.sourceContent.split("\n") ; 
     }
     
     var backBy = 0 ;
     var leadingComments = [] ;
     var trailingComments = [] ;
+    
     var c = {
     	write:function(node) {
             var parts;
@@ -757,7 +706,7 @@ module.exports = function (node, options) {
             for (var i = 0; i < parts.length; i++) {
                 if (map && node && node.loc && node.loc.start) {
                 	map.addMapping({
-                		source: mapOptions.file,
+                		source: options.map.file,
                 		original: { line: node.loc.start.line, column: node.loc.start.column },
                 		generated: { line: lines.length+1, column: buffer.length }
                 	}) ;
@@ -811,7 +760,7 @@ module.exports = function (node, options) {
                 }
                 if (map && node && node.loc && node.loc.start) {
                 	map.addMapping({
-                		source: mapOptions.file,
+                		source: options.map.file,
                 		original: { line: node.loc.start.line, column: node.loc.start.column+parts[i].length },
 //                		original: { line: node.loc.end.line, column: node.loc.end.column },
                 		generated: { line: lines.length+1, column: buffer.length }
@@ -824,19 +773,12 @@ module.exports = function (node, options) {
         }
     };
     
-    const state = options == null ? {
+    const state = {
         code: c,
         indent: "    ",
         lineEnd: "\n",
-        indentLevel: 0,
-        writeComments: true
-    } : {
-        code: c,
-        indent: options.indent || "    ",
-        lineEnd: options.lineEnd || "\n",
-        indentLevel: options.startingIndentLevel || 0,
-        writeComments: options.comments || true
-    };
+        indentLevel: 0
+    } ;
     traveler[node.type](node, state);
     trailingComments = node.$comments || [] ;
     state.code.write(node,state.lineEnd) ;

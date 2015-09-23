@@ -46,21 +46,21 @@ function toArray(ast) {
 }
 
 var config = {
+		log:function(msg){ console.warn("Nodent: "+msg) },
 		augmentObject:false,
-		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
+		extension:'.njs',
 		use:[],
+// To be deprecated
+		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
 		useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
 		useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
 		usePromisesDirective:/^\s*['"]use\s+nodent\-promises?['"]\s*;/,
 		useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators?['"]\s*;/,
-		extension:'.njs',
 		$return:"$return",
 		$error:"$error",
-		log:function(msg){ console.warn("Nodent: "+msg) },
 		bindAwait:"$asyncbind",
 		bindAsync:"$asyncbind",
 		bindLoop:"$asyncbind"
-//		$except:"$except"
 };
 
 /* Extract compiler options from code (either a string or AST) */
@@ -80,8 +80,7 @@ function parseCompilerOptions(code,initOpts) {
 		parseOpts = {
 				promises: !!code.match(initOpts.usePromisesDirective),
 				es7: !!code.match(initOpts.useES7Directive),
-				generators: !!code.match(initOpts.useGeneratorsDirective),
-				es5assign: !!code.match(initOpts.useDirective)
+				generators: !!code.match(initOpts.useGeneratorsDirective)
 		} ;
 		if (parseOpts.promises) parseOpts.es7 = true ;
 	} else {
@@ -93,13 +92,12 @@ function parseCompilerOptions(code,initOpts) {
 				parseOpts.promises = matches(test,initOpts.usePromisesDirective) ;
 				parseOpts.es7 = parseOpts.promises || matches(test,initOpts.useES7Directive) ;
 				parseOpts.generators = matches(test,initOpts.useGeneratorsDirective) ;
-				parseOpts.es5assign = matches(test,initOpts.useDirective) ;
 			}
 		}
 	}
 
-	if (parseOpts.promises || parseOpts.es7 || parseOpts.es5assign || parseOpts.generators) {
-		if ((parseOpts.promises || parseOpts.es7) && (parseOpts.es5assign || parseOpts.generators)) {
+	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
+		if ((parseOpts.promises || parseOpts.es7) && parseOpts.generators) {
 			initOpts.log("No valid 'use nodent*' directive, assumed -es7 mode") ;
 			parseOpts = {es7:true} ;
 		}
@@ -1667,7 +1665,6 @@ function initialize(initOpts){
 			try {
 				var mapUrl = "" ;
 				var jsmap = out.map.toJSON();
-//				console.error(JSON.stringify(jsmap));
 				if (jsmap) {
 					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
 					mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))+"\n" ;
@@ -1677,9 +1674,6 @@ function initialize(initOpts){
 				pr.code = out ;
 			}
 
-		};
-		nodent.decorate = function(pr) {
-			pr.ast.walk(decorate) ;
 		};
 		nodent.require = function(cover,opts) {
 			if (!nodent[cover]) {
@@ -1795,7 +1789,7 @@ function initialize(initOpts){
 			}
 		}) ;
 
-		nodent.spawnGenerator = function(promiseProvider,self) {
+		nodent.$asyncspawn = function(promiseProvider,self) {
 			var genF = this ;
 		    return new promiseProvider(function(resolve, reject) {
 		        var gen = genF.call(self, resolve, reject);
@@ -1837,7 +1831,7 @@ function initialize(initOpts){
 				configurable:true
 			},
 			"$asyncspawn":{
-				value:nodent.spawnGenerator,
+				value:nodent.$asyncspawn,
 				writeable:true,
 				configurable:true
 			}
@@ -1959,12 +1953,17 @@ function initialize(initOpts){
 		};
 	}
 
-	if (Array.isArray(initOpts.use))
-		initOpts.use.forEach(function(x){nodent.require(x)}) ;
-	else {
-		Object.keys(initOpts.use).forEach(function(x){nodent.require(x)}) ;
+	if (initOpts.use) {
+		if (Array.isArray(initOpts.use)) {
+			if (initOpts.use.length) {
+				initOpts.log("Warning: nodent({use:...}) is deprecated in favour of nodent.require(module,options)");
+				initOpts.use.forEach(function(x){nodent.require(x)}) ;
+			}
+		} else {
+			initOpts.log("Warning: nodent({use:...}) is deprecated in favour of nodent.require(module,options)");
+			Object.keys(initOpts.use).forEach(function(x){nodent.require(x)}) ;
+		}
 	}
-
 	for (var k in initOpts) {
 		if (!config.hasOwnProperty(k))
 			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(initOpts[k])) ;

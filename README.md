@@ -5,12 +5,14 @@ NoDent
 
 NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language.
 
-It works by (optionally) transforming JavaScript when it is loaded into Node. The excellent parser and code generator are courtesy of Uglify2 http://lisperator.net/uglifyjs/
+It works by (optionally) transforming JavaScript when it is loaded into Node. 
+
+This README assumes you're using Nodent v2.x.x - see the Changelog if your upgrading from an earlier version.
 
 Online demo
 ===========
 
-You can now see what Nodent does to your ES7 code with an online demo at [here](http://nodent.mailed.me.uk). Within the examples in this README, click on [_TRY-IT_](http://nodent.mailed.me.uk) to see the code live.
+You can now see what Nodent does to your JS code with an online demo at [here](http://nodent.mailed.me.uk). Within the examples in this README, click on [_TRY-IT_](http://nodent.mailed.me.uk) to see the code live.
 
 Basic Use and Syntax
 ====================
@@ -31,8 +33,7 @@ To use NoDent, you need to:
 
 	require('nodent')() ;
 
-This must take place early in your app, and need only happen once per app - there is no need to require('nodent') in more
-than one file, once it is loaded it will process any files ending in ".njs" or containing a
+This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a
 
 	'use nodent-es7';
 
@@ -56,14 +57,10 @@ Why Nodent?
   *  [http://jakearchibald.com/2014/es7-async-functions/](http://jakearchibald.com/2014/es7-async-functions/)
   *  [https://github.com/lukehoban/ecmascript-asyncawait](https://github.com/lukehoban/ecmascript-asyncawait)
 
-How (and why) it works
+Installation
 ======================
-NoDent carries out transformations on your JavaScript source as it is loaded into Node:
-one to declare functions and one to call them (called an "Async Invocation" here). In each
-case, normal, JavaScript functions are what are loaded into Node and executed. Node itself
-is not modified in anyway.
 
-NoDent is a not a "framework" - there is no runtime JavaScript to include in your project and it does not execute other than at load time to transform your NoDented files into standard JavaScript.
+	npm install --save nodent
 
 Command-Line usage
 ==================
@@ -75,10 +72,16 @@ You can also simply compile and display the output, without running it. This is 
 
 	nodent.js --out myNodentedFile.js
 
-There is no need to use the command line at all if you want to `require('nodent')()` and then require your own scripts as normal.
+If you are using nodent as part of a toolchain with another compiler, you can output the ES5 or ES6 AST is ESTree format:
+
+	nodent.js --ast myNodentedFile.js
+
+Use within your Node scripts
+============================
+There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they either have the extention ".njs", or a `use nodent-...` directive at the top.
 
 ES7 and Promises
-================
+----------------
 The ES7 proposal for async and await specified not only the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
 
 Nodent can operate either with of without Promises as this type. The pros and cons are:
@@ -96,13 +99,62 @@ as opposed to:
 
 Changing the directive will change the generated ES5 JavaScript code, but nothing else. If you use Promises, you must define the variable `Promise` in any files which declare `async` functions, or define a `global.Promise`. Nodent has a `Thenable` member that implements the bare minimum needed by Nodent. This implementation is NOT a full Promise-compliant type, but defines a constructor that creates a type with a Promise friendly `then()` method. 
 
-Versions of nodent since v1.1.0 also support using generators, in common with traceur, regenerator and the ES7 specification. This requires an ES6-compliant JS engine, and has not been tested in production (although it passes the test suite). Note that using generators is considerably slower that using Promises, which is itself slower than using Nodent Thenables or ES7 mode. (See Testing below). If you wish to experiement with generators, `use nodent-generators`.
+Versions of nodent since v1.1.0 also support using generators, in common with traceur, regenerator and the ES7 specification. This requires an ES6-compliant JS engine. Note that using generators is considerably slower that using Promises, which is itself slower than using Nodent Thenables or ES7 mode. (See Testing below). If you wish to use generators,
+
+	"use nodent-generators";
+
+at the top of your file.
+
+Use within a browser
+====================
+
+You can use `async` and `await` within a browser by auto-parsing your scripts when Nodejs serves them to your clients.
+
+The exported function `generateRequestHandler(path, matchRegex, options)` creates a node/connect/express compatible function for handling requests for nodent-syntax files that are then parsed and served for use within a stanadrd browser environment, complete with a source map for easy debugging.
+
+For example, with connect:
+
+	var nodent = require('nodent')() ;
+	...
+	var app = connect() ;
+	...
+	app.use(nodent.generateRequestHandler(
+		"./static-files/web",	// Path to where the files are located
+		/\.njs$/,				// Only parse & compiles ending in ".njs"
+		{}						// Options (see below)
+	)) ;	
+
+The regex can be omitted, in which case it has the value above.
+
+The currently supported options are:
+
+	enableCache: <boolean>		// Caches the compiled output in memory for speedy serving.
+	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
+	runtime: <boolean>			// Set to precede the compiled code with the runtime support required by Nodent
+	extensions: <string-array>	// A set of file extensions to append if the specified URL path does not exist.
+	htmlScriptRegex: <optional regex> // If present, Nodent will attempt to read and parse <script> tags within matching HTML files
+
+Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text 'script', or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
+
+The runtime routine that should be defined on the Function.prototype in the execution environment provides compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`, or for use with generators (probably not a good idea in a browser as support is limited and slow), `nodent.$asyncspawn.toString()`.
+
+If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example 
+
+	// Called when an async function throws an exception during asynchronous operations
+	// and the calling synchronous function has returned.
+	window.$error = function(exception) { 
+		/* Maybe log the error somewhere */ 
+		throw ex ; 
+	};
+
+Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2
+
+Async/Await syntax
+==================
 
 Declaring Async Functions
-=========================
-
-To declare an asynchronous function, put "async" in front of the definition. "async" is an ES7 keyword. You shouldn't
-use it as a top level identifier (variable or function name) in ES7 code. This is how it looks:
+-------------------------
+To declare an asynchronous function, put `async` in front of the definition. `async` is an ES7 keyword. You shouldn't use it as a top level identifier (variable or function name) in ES7 code. This is how it looks:
 
 		async function myFunc(args) {
 			body ;
@@ -129,20 +181,10 @@ Like any function returning a Promise, you invoke the function and use the Promi
 		-- do something else 		// Bad! Handle the error
 	}) ;
 
-The reason for using this pattern is to make it easy to chain asynchronous callbacks together - myFunc can
-"return" whenever it likes, and can pass the handler functions onto another async function with too much nasty
-indenting. It certainly is easier to write than the more "usual" Node style of "function(error,result){...}"
-which gets pretty gnarly pretty quickly.
-
-However, as the sample above shows, it's still very "noisy" in code terms - lots of anonymous functions and
-functions returning functions. 
-
 Async invocation
-================
+----------------
 
-The other transformation is a shorter call sequence, through the ES7 keyword `await`. In Nodent
-it's implemented as a unary prefix operator (in the same kind of place you might find 'typeof' or
-'delete'). It is this transformation that stops all the crazy indenting that async callbacks generate.
+Thhe ES7 keyword `await` is implemented as a unary prefix operator (in the same kind of place you might find 'typeof' or 'delete', and also before object member definitions). It is this transformation that stops all the crazy indenting that async callbacks generate.
 
 	var result = await myFunc(args) ;
 	moreStuff(result) ;
@@ -156,9 +198,6 @@ This is transformed into the code:
 
 [_TRY-IT_](http://nodent.mailed.me.uk/#var%20result%20%3D%20await%20myFunc(args)%20%3B%0AmoreStuff(result)%20%3B%0A)
 
-Yes, it hides a return statement in your code. If you step line by line, you WON'T hit "moreStuff"
-immediately after executing the line, it will be called later, when myFunc invokes your "success" handler.
-
 Awaiting multiple times
 -----------------------
 
@@ -167,10 +206,8 @@ A statement or expression can combine multiple async results, for example:
 	console.log(await as1(1),await as2("hello")+await as1(3)) ;
 [_TRY-IT_](http://nodent.mailed.me.uk/#console.log(await%20as1(1)%2Cawait%20as2(%22hello%22)%2Bawait%20as1(3))%3B)
 
-This is both syntactically and semantically meaningful, but in the current implementation will
-call the async functions serially (note: the order in which they are invoked is note guaranteed).
-It might well be more efficient in this case to use the 'map' cover function (see below) to execute
-all the functions in parallel first, and use the results:
+This is both syntactically and semantically meaningful, but in the current implementation will call the async functions serially (note: the order in which they are invoked is note guaranteed).
+It might well be more efficient in this case to use the 'map' cover function (see below) to execute all the functions in parallel first, and use the results:
 
 	var nodent = require('nodent')() ;
 	var map = nodent.require('map') ;
@@ -179,29 +216,36 @@ all the functions in parallel first, and use the results:
 	// When they're done:
 	console.log(mapped[0],mapped[1]+mapped[2]) ;
 
-Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is  more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). As of nodent v1.2.1, any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
+Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). As of nodent v1.2.1, any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
 
-async, await and ES5
-====================
+async, await and ES5/6
+======================
 
-Invoking async functions from ES5
----------------------------------
+Invoking async functions from ES5/6
+-----------------------------------
 
-As described above, the return type from an async function is a Promise (or, to be accurate it's whatever type you assign the scoped variable `Promise` - if this is `nodent.Thenable`, then it has a `then()` member, and behaves enough like a Promise to work with Promises/A+-compliant libraries). So, to invoke the async function `readFile` you can use the code:
+As described above, the return type from an async function is a Promise (or, to be accurate it's whatever type you assign the scoped variable `Promise` - if this is `nodent.Thenable`, then it has a `then()` member, and behaves enough like a Promise to work with Promises/A+-compliant libraries). So, to invoke the async function `readFile` from a normal ES5 script you can use the code:
 
 	readFile(filename).then(function(data){
 	    ...
+	},function(err){
+		....
 	}) ;
 	
-Similarly, you can wait for any Promise with the Nodent code:
+Similarly, you can wait for any Promise with the `await`keyword - i.e. not just functions you defined yourself as `async`:
 
 	// The elasticsearch library returns a Promise if you don't supply a callback
-	var resultPromise = elasticsearch.index(query) ;
+	var resultPromise = elasticsearch.search(query) ;
 	console.log(await resultPromise) ;
 	
 or just:
 
-	console.log(await elasticsearch.index(query)) ;
+	console.log(await elasticsearch.search(query)) ;
+
+Gotchas & ES7 compatibility
+===========================
+
+Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
 
 Defining async functions from ES5
 ---------------------------------
@@ -211,7 +255,7 @@ Specifically in Nodent (not specified by ES7), you can interface an ES7 async fu
 	async function sleep(t) {
 	    setTimeout(function(){
 	    	// NB: "return async" and "throw async" are NOT ES7 standard syntax
-	    	return async t;
+	    	return async undefined;
 	    },t) ;
 	} 
 
@@ -220,43 +264,13 @@ This works because Nodent translates this into:
 	function sleep(t) {
 	    return new Promise(function($return, $error) {
 	        setTimeout(function(){
-	        		return $return(t) ;
+	        		return $return(undefined) ;
 	        },t);
 	    });
 	}
 [_TRY-IT_](http://nodent.mailed.me.uk/#%09async%20function%20sleep(t)%20%7B%0A%09%20%20%20%20setTimeout(%24return)%20%3B%0A%09%7D%20%0A)
 
-Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38).
-If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
-
-
-Thenable Unwrapping
--------------------
-As of version 1.2.x, Nodent's return resolution routine (called $asyncbind, unless you configure nodent differently) automatically resolves returns from async functions that are themselves Thenable. In simple terms this means that `test1`  and `test2` produce the identical results:
-
-	// A simple async function that always returns "abc"
-	async function abc() { return "abc" } 
-
-	// Call abc(), wait (resolve) the result (i.i. "abc"), and return it in a hidden Promise
-	async function test1() { return await abc() ; }
-	// Wait for the hidden Promise to resolve, and show it's result
-	console.log(await test1()) ; // "abc"
-
-	// Call abc() and return it
-	async function test2() { return abc() ; }
-	// Now await the result of test2(), which is the Promise of abc()
-	console.log(await test2()) ; 	// "abc"
-
-This is potentially a breaking change from versions prior to v1.2.0, if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself.
-
-This is the behaviour implied by the ES7 specification.
-
-If you are cross-compiling ES7 code using Nodent for use in another environment (e.g. a Browser), the return resolution routine can be exposed using the expression `nodent.$asyncbind.toString()`. See the section "Use in the Browser" for more details.
-
-Gotchas & ES7 compatibility
-===========================
-
-Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
+Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see [https://github.com/lukehoban/ecmascript-asyncawait/issues/38](https://github.com/lukehoban/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
 Implicit return
 ---------------
@@ -290,19 +304,24 @@ Intentionally omit the return as we want another function to do it later:
 				if (err) throw async err ;
 				return async data ;
 		}) ;
-		// NB: An implicit return here would cause $return() to be invoked twice
+		// NB: An implicit return here would cause two returns to be invoked
 		// so exit without doing anything
 	}
 
-Conditionals & missing returns
-------------------------------
-Nodent versions 1.0.11 and earlier required some thought when using conditionals such as switch and if - specifically the "early return" on an awaited expression meant conditional blocks did not "fall-through" into the surroudning block. This has been fixed in 1.0.12 and later. 
+Loops & Conditionals
+--------------------
+The `for (..in..)` and `for (..of..)`  constructs are NOT transformed by nodent - each iteration of the loop body is synchronized as expected, but individual iterations may be interleaved and the loop may complete before some or all of the individual keys are enumerated. This behaviour can be ameliorated using the "map" cover (see later).
 
-Nodent versions prior to 1.0.14 did not meet the ES7 standard for loops: using await in a loop made the loop
-block work as expected, but each iteration of the loop was started immediately. As of Nodent v1.0.14
-`while(){} do{}while for(;;){}` loops behave as per the ES7 standard (i.e. as if they were synchronous).
+Conditional execution operators (`||` `&&` and `?:`) in nodent always execute on the result of awaits, and do not evaluate them sequentially. Nodent generates a warning when it sees these expressions. The generator implementation (include the standard specification) evaluates in strict synchronous order, so the expressions
 
-The `for (..in..)` construct DOES NOT meet the ES7 standard and is NOT transformed by nodent - each iteration of the loop body is synchronized as expected, but individual iterations may be interleaved and the loop may complete before some or all of the individual keys are enumerated. This behaviour can be ameliorated using the "map" cover (see later).
+	await abc() && await def()
+	
+...will execute def() ONLY if abc() was true in the generator implementation, whereas the -es7/promise code will execute BOTH abc() and def(), and return the correct result.
+
+To remain compatible with all implementations, it would probably be wise to break these expressions into separate statements, e.g.:
+
+	var expr = await abc() ;			// Always wait for abc()
+	if (expr) expr = await def() ;	// Then if it is true, wait for def()
 
 Missing out await 
 -----------------
@@ -349,61 +368,44 @@ Diffrences from the ES7 specification
 
 * As of the current version, `finally { }` blocks are NOT transformed by Nodent
 
-* As of the current version, `for (...in...)` loops are NOT transformed by Nodent
+* As of the current version, `for (...in...)` and `for (...of...)` loops are NOT transformed by Nodent
 
-* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The return value from the aynchronous function is compilation mode dependent, but generally a Thenable protocol. 
-
-* Within async functions, `this` is correctly bound automatically. Promises specify that callbacks should be called from default-scope, and if necessary should be explicitly bound, or (preferentially, as I read it) use closures. Nodent binds to the enclosing `this` as expected.
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted (unless you're using `use nodent-generators`). The return value from the aynchronous function is compilation mode dependent, but generally a Thenable protocol. 
 
 * The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
 
-* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return or throw and exception. 
+* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `return async` or `throw async`. 
 
-* Versions prior to 1.2.x did NOT unwrap Thenable returns. The ES7 specification assumes that this is the case as Promises never resolve to a Promise (see Thenable Unwrapping).
+API
+===
+	var nodent = require('nodent')(options);
+	
+Options:
 
-Use in the Browser
-==================
+|Member| Type |  |
+|-------|-----|------------------------|
+|dontMapStackTraces|boolean|default: false
+|augmentObject|boolean|Adds asyncify(PromiseProvider) and isThenable() to Object.prototype, making expressions such as `var client = new DB().asyncify(Promise)` and `if (abc.isThenable()) await abc()` less verbose
+|extension|string|extension for files to be compiled (default: '.njs'). Note that this is unused if the file has a `use nodent-` directive.
+|log (msg)|function|Called when nodent has a warning of similar to show. By default they are passed to console.warn(). Set this member to, for example, suppress logging
 
-You can use async and await within a browser by auto-parsing your scripts when Nodejs serves them.
 
-The exported function generateRequestHandler(path, matchRegex, options) creates a node/connect/express compatible function for handling requests for nodent-syntax files that are then parsed and served for use within a stanadrd browser environment, complete with a source map for easy debugging.
+Return: a 'nodent' object with the following properties:
 
-For example, with connect:
+|Member| Type/Return |  |
+|-------|-----|------------------------|
+|version|string|The currently installed version|
+|asyncify (PromiseProvider)|function|Return a function to convert an object with callback members to one with Thenable members|
+|require (moduleName,options)|object|Import an async helper module|
+|generateRequestHandler (path, matchRegex, options)|function|Create a function use with Express or Connect that compiles files for a browser on demand - like a magic version of the 'static' middleware
+|Thenable (function)|function|Implements a minimal `.then()` member to interface with Promises
+|isThenable (object)|boolean|Return boolean if the supplied argument is Thenable (i.e. has an executable `then` member). All Promises and nodent.Thenable return true
+|$asyncbind|function|Required runtime in ES7/Promises mode
+|$asyncspawn|function|Required runtime in generator mode
 
-	var nodent = require('nodent')() ;
-	...
-	var app = connect() ;
-	...
-	app.use(nodent.generateRequestHandler(
-		// Path to where the files are located,
-		"./static-files/web",
-		// Only parse & compiles ending in ".njs" 	
-		/\.njs$/,
-		// Options (see below)	
-		{})) ;	
+Note the nodent object has other members used for implementation - these are subject to change and are not part of the API.
 
-The regex can be omitted, in which case it has the value above.
-
-The currently supported options are:
-
-	enableCache: <boolean>		// Caches the compiled output in memory for speedy serving.
-	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
-	runtime: <boolean>			// Set to preceed the compiled code with the runtime support required by Nodent v1.x (see below)
-	extensions: <string-array>	// A set of file extensions to append if the specified URL path does not exist.
-	htmlScriptRegex: <optional regex> // If present, Nodent will attempt to read and parse <script> tags within matching HTML files
-
-Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text 'script', or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
-
-NB: As of v1.0.x there is a runtime routine that should be defined on the Function.prototype in the execution environment. This was to provide compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`.
-
-If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example 
-
-	// Called when an async function throws an exception during asynchronous operations
-	// and the calling synchronous function has returned.
-	window.$error = function(exception) { /* Maybe log the error somewhere */ throw ex ; }
-
-Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2
-
+	
 Built-in conversions & helpers
 ==============================
 
@@ -559,9 +561,9 @@ to make them usuable with `await`. For example, to asyncify the standard Node mo
 	// Require 'fs'
 	var fs = require('fs') ;
 	// Get a reference to nodent.asyncify
-	var asyncify = require('../nodent').asyncify ;
+	var asyncify = require('nodent').asyncify ;
 	// Asyncify 'fs'
-	var afs = asyncify(fs) ;
+	var afs = asyncify(nodent.Thenable)(fs) ;
 	console.log((await afs.readFile("./test/a.js")).toString()) ;
 
 By default, asyncify creates an object that has it's ancestor as its prototype with functions members mapped to the await call signature.
@@ -589,35 +591,7 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	npm install
 	cd ..
 	./nodent.js tests
-	
-	await-usage.js  x2423       nodent-es7,100ms    nodent.Thenable,92%     native,307%     bluebird,187%       rsvp,140%       when,125%       
-	complex.js      x294        nodent-es7,100ms    nodent.Thenable,86%     native,186%     bluebird,144%       rsvp,136%       when,123%       
-	declarations.js x1908       nodent-es7,100ms    nodent.Thenable,96%     native,165%     bluebird,128%       rsvp,128%       when,124%       
-	dowhile.js      x2006       nodent-es7,100ms    nodent.Thenable,100%    native,330%     bluebird,133%       rsvp,122%       when,108%       
-	else-if.js      x2086       nodent-es7,100ms    nodent.Thenable,92%     native,380%     bluebird,128%       rsvp,143%       when,151%       
-	for-if.js       x2120       nodent-es7,100ms    nodent.Thenable,86%     native,400%     bluebird,164%       rsvp,154%       when,141%       
-	for.js          x1814       nodent-es7,100ms    nodent.Thenable,93%     native,273%     bluebird,117%       rsvp,108%       when,111%       
-	fs-sync.js      x19         nodent-es7,103ms    nodent.Thenable,92%     native,91%      bluebird,94%        rsvp,149%       when,100%       
-	fs.js           x1          nodent-es7,198ms    nodent.Thenable,93%     native,94%      bluebird,110%       rsvp,100%       when,96%    
-	if-stmt-map.js  x1101       nodent-es7,100ms    nodent.Thenable,99%     native,194%     bluebird,122%       rsvp,112%       when,113%       
-	if-stmt.js      x2136       nodent-es7,100ms    nodent.Thenable,91%     native,379%     bluebird,161%       rsvp,164%       when,138%       
-	if-try.js       x1197       nodent-es7,100ms    nodent.Thenable,96%     native,174%     bluebird,147%       rsvp,125%       when,126%       
-	inline.js       x2287       nodent-es7,100ms    nodent.Thenable,90%     native,370%     bluebird,163%       rsvp,161%       when,144%       
-	method.js       x621        nodent-es7,100ms    nodent.Thenable,107%    native,172%     bluebird,186%       rsvp,145%       when,149%       
-	nested-async.js x2788       nodent-es7,100ms    nodent.Thenable,94%     native,197%     bluebird,132%       rsvp,150%       when,147%       
-	nested-await.js x3008       nodent-es7,100ms    nodent.Thenable,93%     native,258%     bluebird,141%       rsvp,135%       when,123%       
-	optimized.js    x2786       nodent-es7,100ms    nodent.Thenable,80%     native,156%     bluebird,110%       rsvp,98%        when,104%       
-	perf-2.js       x1          nodent-es7,181ms    nodent.Thenable,100%    native,200%     bluebird,203%       rsvp,139%       when,140%       
-	perf.js         x17         nodent-es7,104ms    nodent.Thenable,137%    native,1361%    bluebird,276%       rsvp,205%       when,268%       
-	ret-fn.js       x1813       nodent-es7,101ms    nodent.Thenable,82%     native,193%     bluebird,106%       rsvp,114%       when,98%    
-	sleep.js        x1          nodent-es7,293ms    nodent.Thenable,100%    native,100%     bluebird,100%       rsvp,100%       when,100%       
-	switch-stmt.js  x2612       nodent-es7,100ms    nodent.Thenable,87%     native,276%     bluebird,137%       rsvp,136%       when,127%       
-	sync-await.js   x62         nodent-es7,101ms    nodent.Thenable,99%     native,96%      bluebird,151%       rsvp,72%        when,286%       
-	sync-ret.js     x1          nodent-es7,101ms    nodent.Thenable,?,n/a   native,?,n/a    bluebird,?,n/a      rsvp,?,n/a      when,?,n/a      
-	try-if.js       x1187       nodent-es7,100ms    nodent.Thenable,98%     native,151%     bluebird,121%       rsvp,116%       when,115%       
-	try.js          x521        nodent-es7,100ms    nodent.Thenable,92%     native,179%     bluebird,172%       rsvp,119%       when,117%       
-	while.js        x656        nodent-es7,100ms    nodent.Thenable,97%     native,176%     bluebird,160%       rsvp,143%       when,137%       
-	
+		
 The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
 If you wish to add a Promise implementation to test against, add it to the dependencies in tests/package.json and give it an entry in the tests/index.js test runner. 
@@ -636,111 +610,8 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
-04Aug15: Add the initailisation option 'augmentObject' to add asyncify() and isThenable() to Object.prototype
+23-Sep-15: Initial release of Nodent v2.x.x., which has moved from UglifyJS to the acorn parser and the ESTree AST representation, mainly for performance and to support ES6 targets such as Node v4.x.x
 
-31Jul15: Add the ability to parse and transcompile inline <script>...</script> in HTML, enabled with the htmlScriptRegex option in generateRequestHandler()
-
-13May15: Fix a nested exception case caused by transforming await via recursion (the recursive call lost any enclosing catch reference). Ensure correct binding of catch-functions without using .call(). Optimize calls to $asyncbind() that only bind and don't require a catch.
-
-08May15: Fix block-statement case (from v1.2.2) in a more general way so it also fixes the same issue in try/catch blocks. This is becuase AST_Block and AST_BlockStatement in Uglify2 do not implemented an inherited walker, but directly call `walk_body`
-
-06May15: Fix case where a for-loop in a block statement would cause the final
-statement in the block to not be transformed, as the containing body
-would grow, but the body.forEach(walker) samples the length before
-execution. Replacing the body walker with a traditional for-loop rather than
-forEach() ensures all of the parent is walked
-
-23Apr15: Implement un-wrapping in nodent.map, which has it's own async call implementation. Remove over-aggressive optimization of "f(x){return x()}" to "x", since x is not in the outer scope
-
-22Apr15: Implement un-wrapping in $asyncbind (see Thenable Unwrapping). This is potentially a breaking change (if you have functions that return a Thenable which you later await on - you will now get the result of the Thenable, not the Thenable itself).
-
-21Apr15: Fix issue https://github.com/MatAtBread/nodent/issues/4 reported by https://github.com/michal-grzejszczak, where functions hoisted out of try-catch block (for Firefox) lost their exception handlers. 
- 
-16Apr15: Fix case where try-for-throw nesting did not thread exception handling correctly and create test case.
-
-06Apr15: Hoist continuations as Firefox doesn't like forward references 
-06Apr15: Implement `return async` and `throw async` for callbacks nested within async functions to replace $return and $error
-
-04Apr15: Correct documentation for "use nodent-promise". In generator mode, bind the generator to the caller's `this` to enable constructs such as `myclass.prototype.fn = async function ... ;`. The ES7 specification is not clear as to whether as to how this construct is exectued (i.e. there is no mechanism for binding the generator to the calling object, but it is syntactically valid).
- 
-02Apr15: Fix an issue that caused 'if .. else .. ; more' to not continue to 'more' when nested inside a try{} block. Create new test cases to ensure compliance
-
-25Mar15: Fix an issue which caused a `return` within a loop to not exit the enclosing `async` function.
-25Mar15: Fix an issue which caused function inlining of non-functional calls to elide the body without updating the references (apparent as an incorrect "Undefined" exception at runtime).
-
-24Mar15: Update the test harness to normalize test times by targetting a completion time of at least 100ms.
-
-22Mar15: Implement transformation to Generator functions. NB: This is experimental and at present underperfoms the normal nodent transformations by about 3 times. Turn on by specifying the compiler option `generators:true`, or `--generators` from the test harness.   
-
-12Mar15: Fix issue in function hoisting that lost references where a named function was part in a statement that was also and expression, for example 'return function x(){}' was mapped to 'function x(){} return ;'. The original symbol is now in place so that it translates to 'function x(){} return x ;'
-
-11Mar15: Update command-line usage with --out option that compiles but doesn't require the specified file. Modify test-runner so that un-installed providers don't cause the test-runner to barf.
-
-10Mar15: Implement 'dumb function' ellision which folds call-sequences generated by nodent such as 'function $1() { return $2() }' into one, un-nested reference.
- 
-06Mar15: Fix logging (typo in log statement for syntax errors). Show source filename in error messages. Expand test coverage.
-
-05Mar15: A significant internal refractoring avoids some unusual syntax cases that weren't being transformed correctly - specifically some occurances of `if .... else if .... else if`. Additionally, scope was an issue in functions which declared variables/functions after an `await` but referred to them before the `await`. The actual declaration would be nested in a generated callback and the forward reference would then fail. As of v1.0.30, nodent re-orders all declarations before transpliation to ensure this is not possible. The order for all functions is directives,variables,functions,executable code within an individual scope, meaning executable code (including await) cannot refer forwards.
-
-02Mar15: Update covers (http,map,events) to use Thenable API for ES5-invocations
-
-01Mar15: Implement test suite. Update README, move detailed implementation notes to [HowItWorks.md](./HowItWorks.md)
-
-17Feb15: Optimize away any statements in a block after a `return` or `throw`
-
-16Feb15: Implement looping execution semantics (except `for(...in...)`)
-
-15Feb15: Implement online demo. Fix transformations of un-nested conditional blocks such as '...else if ...'
-
-14Feb15: Implement correct return sematics for if...else... and switch. Correctly compile nested `await` expressions of the form x = await f(await g()) ;
-
-11Feb15: Fix case where a throw inside a nested async function is mapped twice - first to "return $error(x)", then to "return $return($error(x))".
-
-09Feb15: Handle cases where nodent covers are used with code compiled for use with Promises. Implement thunking Promise class (nodent.Thenable) that provides the bare minimum Promise API (construction, .then) to be callable within the cover classes.
-
-06Feb15: Implement correct code-lifting for switch. Implement (optional) use of Promises. Fix sourceMap for Chrome 38+. Fix asyncify when an asyncified function is called with insufficient parameters.
-
-30Jan15: Update to support ES7 async and await syntax. The code and examples in this README are for nodent with ES7 extensions. To previous ES5-compatible syntax is described in [README-v0-1-38](./README-v0-1-38.md). This updated version of Nodent is backwards compatible with the earlier ES5 syntax which is enabled with the "use nodent" directive (not "-es7").
-
-06Jan15: Fix error when http is used with autoProtocol option
-
-17Jun14: Announcing ApiPublisher - Nodent for Networks. Call your Nodent async functions from anywhere! [https://www.npmjs.org/package/apipublisher]
-
-02Jun14: Previous release (in Github, not npmjs) was broken in covers/http. Now fixed.
-
-30May14: Extend the "use" option to accept an object whose keys define which covers to load, and pass the key's value when the cover is loaded as configuration options. See 'autoProtocol' below. The previous style for the use option (an array of values) is still accepted and is the same as providing an undefined configuration object to the cover. Covers can also now be specified through an absolute path so you can load your own.
-
-27May14: Show both mapped and unmapped files & positions in stack traces. Can be suppressed with option {dontMapStackTraces:true}
-
-22May14: Added a real world example. See Before and After below
-
-22May14: Update map() to accept an arbitrary set of async functions as an object or array but WITHOUT a callback. The map will execute every function in the array/object before asynchronously returning a mapped object or array.
-
-09Apr14: Update async.map() to accept a Number as the first argument. The async-callback is then called with integers from 0 to arg-1 rather than object keys or array elements.
-
-26Mar14: Catch parsing errors in generateRequestHandler() and return them as HTTP errors
-
-24Mar14: Add support for gzip,deflate in http.getBody
-
-18Mar14: Add nodent.generateRequestHandler(path,regex,options). This returns a node request handler that is connect/express compatible that automatically parses a file-based nodent-syntax file into a standard, JS file suitable for use in a browser, complete with a source-map for easy debugging.
-
-12Mar14: Add prototype to allow error handlers to be chained. See "Chaining errors" below.
-
-10Feb14: Add convenience method http[s].getBody(url) - open, read and return a UTF-8 encoded response as a fully buffered string.
-
-02Feb14: Make compile() log friendly error messages and throw an object of type Error if there is a problem parsing
-
-31Jan14: Enforce wrapping of $error() values in a native JS "Error" if they are not already done so. To return "non-error" values, use "return", not "throw"
-
-30Jan14: Add nodent.compile() to provide a one-step cross compilation. Expose optional "sourceMapping" parameter to allow for a server-side installation to cross-compile client-side JS on the fly
-
-04Jan14: Addition of "async" cover providing async object/array mapping facilities.
-
-29Nov13: Handle the case where we want to chain async functions. See "Return Mapping" below.
-
-27Nov13: Change from delegation to prototype inheritance to expose un-nodented http/http functions. Add warning about duplicate augmentation of EventEmitter.wait()
-
-25Nov13: Added support for Source Maps to allow for NoDentJS debugging. At present, it seems impossible to enable it for both Node and Web use (although for web use, it would be much more efficient to pre-compile the files) so it it named for Node. In the node-inspector debug session, each processed file will appear twice: under it's usual name as NoDent source, and also under "xxx.js.nodent" which is the compiled output. Take care stepping as the node-inspector "step over" does not skip to the next line in the file, but the next executable statement, which is not the same thing in a nodent source file.
-
-21Nov13: NoDent is currently actively developing and in use in a commercial project. The API & Syntax are stable, but not entirely frozen. If you wish to build it is recommended you build against a specific major.minor version.
-
+Upgrading
+---------
+If you're moving from Nodent <2.0.0, note that the old (<v1.0.38) ES5 assignment operator "<<=" and "async-function" syntax is no longer supported.
