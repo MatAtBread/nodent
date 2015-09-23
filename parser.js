@@ -108,13 +108,6 @@ function treeWalker(n,walker,state){
 		state.replace = function(pos,newNode) {
 			state[pos].replace(newNode) ;
 		}
-		state.parentBlock = function(pos) {
-			for (var i=pos || 0; i<state.length; i++) {
-				if (state[i].parent.type==='BlockStatement' || state[i].parent.type==='Program')
-					return state[i] ;
-			}
-			return null ;
-		}
 	} 
 
 	function descend() {
@@ -183,5 +176,6 @@ function acornParse(code) {
 
 module.exports = {
 		parse: acornParse,
-		treeWalker:treeWalker
+		treeWalker:treeWalker,
+		_acorn:acorn
 } ;

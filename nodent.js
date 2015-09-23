@@ -10,6 +10,9 @@ var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var outputCode = require('./output') ;
 var parser = require('./parser') ;
+parser._acorn.Node.prototype.valueOf = function() {
+	return printNode(this) ;
+}
 
 /** Helpers **/
 function info(node) {
@@ -267,7 +270,7 @@ function examine(node) {
 	return {
 		isScope:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='Program',
 		isFunction:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='ArrowFunctionExpression',
-		isBlockStatement:node.type==='Program' || node.type==='BlockStatement',
+		isBlockStatement:(node.type==='Program' || node.type==='BlockStatement')?node.body:(node.type==='SwitchCase'?node.consequent:false),
 		isExpressionStatement:node.type==='ExpressionStatement',
 		isLiteral:node.type==='Literal',
 		isUnaryExpression:node.type==='UnaryExpression',
@@ -561,40 +564,35 @@ myfn("ok") ;
 	}
 
 	function mapSwitch(switchStmt, path, down){
-		if (switchStmt.type==='SwitchStatement' && containsAwait(switchStmt.cases)){
-			var ref = path.parentBlock() ;
-
-			var j = ref.index+1 ;
-			var deferredCode = ref.parent[ref.field].splice(j,ref.parent[ref.field].length-j) ;
-			if (deferredCode[deferredCode.length-1].type === 'BreakStatement')
-				ref.parent[ref.field].push(deferredCode.pop()) ;
-			var symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
-			var deferred = thisCall(symName) ;
-			var synthBlock = {type:'BlockStatement',body:[switchStmt]} ;
-
-			if (deferredCode.length) {
-				synthBlock.body.unshift(makeContinuation(symName,deferredCode)) ;
-				synthBlock.body.push({type:'ExpressionStatement',expression:cloneNode(deferred)}) ;
-			} else {
-				deferred = null ;
+		if (!switchStmt.$switched && switchStmt.type==='SwitchStatement' && containsAwait(switchStmt.cases)){
+debugger ;
+			switchStmt.$switched = true ;
+			var symName,deferred,deferredCode,ref = path[0] ;
+			if ('index' in ref) {
+				var j = ref.index+1 ;
+				deferredCode = ref.parent[ref.field].splice(j,ref.parent[ref.field].length-j) ;
+				if (deferredCode.length && deferredCode[deferredCode.length-1].type === 'BreakStatement')
+					ref.parent[ref.field].push(deferredCode.pop()) ;
+				symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
+				deferred = thisCall(symName) ;
+				ref.parent[ref.field].unshift(makeContinuation(symName,deferredCode)) ;
+				ref.parent[ref.field].push({type:'ExpressionStatement',expression:cloneNode(deferred)}) ;
 			}
-			ref.parent[ref.field][ref.index] = synthBlock ;
-			down(synthBlock.body[0]) ;
 
 			// Now transform each case so that 'break' looks like return <deferred>
 			switchStmt.cases.forEach(function(caseStmt,idx){
 				if (!(caseStmt.type === 'SwitchCase')) {
 					throw new Error("switch contains non-case/default statement: "+caseStmt.type) ;
 				}
-				if (containsAwait(caseStmt)) {
+				if (containsAwait(caseStmt.consequent)) {
 					var end = caseStmt.consequent[caseStmt.consequent.length-1] ;
 					if (end.type === 'BreakStatement') {
-						caseStmt.consequent[caseStmt.consequent.length-1] = {type:'ReturnStatement',argument:cloneNode(deferred)} ;
+						caseStmt.consequent[caseStmt.consequent.length-1] = {type:'ReturnStatement',argument:deferred && cloneNode(deferred)} ;
 					} else if (end.type==='ReturnStatement' || end.type==='ThrowStatement') {
 						// Do nothing - block ends in return or throw
 					} else {
 						initOpts.log(pr.filename+" - switch-case fall-through not supported - added break") ;
-						caseStmt.consequent.push({type:'ReturnStatement',argument:cloneNode(deferred)}) ;
+						caseStmt.consequent.push({type:'ReturnStatement',argument:deferred && cloneNode(deferred)}) ;
 					}
 				}
 			}) ;
@@ -642,16 +640,17 @@ myfn("ok") ;
 		}
 	}
 
-	function walkDown(ast,mapper){
+	function walkDown(ast,mapper,state){
 		var walked = [] ;
-		function walkDownSubtree(node){
-			walked.push(node) ;
-			return walkDown(node,mapper) ;
-		}
 
 		return parser.treeWalker(ast,function(node,descend,path){
 			if (walked.indexOf(node)>=0)
 				return ;
+
+			function walkDownSubtree(node){
+				walked.push(node) ;
+				return walkDown(node,mapper,path) ;
+			}
 
 			if (Array.isArray(mapper)) {
 				var walk = this ;
@@ -663,7 +662,7 @@ myfn("ok") ;
 			}
 			descend() ;
 			return ;
-		}) ;
+		},state) ;
 	}
 
 	function asyncAwait(ast,inAsync,parentCatcher) {
@@ -705,9 +704,9 @@ myfn("ok") ;
 				coerce(node,result) ;
 
 				// Find the statement containing this await expression (and it's parent)
-				var stmt ;
+				var stmt,body ;
 				for (var n=1; n<path.length; n++) {
-					if (examine(path[n].self).isBlockStatement) {
+					if (body = examine(path[n].self).isBlockStatement) {
 						stmt = path[n-1] ;
 						break ;
 					}
@@ -716,7 +715,7 @@ myfn("ok") ;
 					throw new Error("Illegal await not contained in a statement "+pr.filename+JSON.stringify(node.loc && node.loc.start)) ;
 
 				var i = stmt.index ;
-				var callBack = stmt.parent[stmt.field].splice(i,stmt.parent[stmt.field].length-i).slice(1);
+				var callBack = body.splice(i,body.length-i).slice(1);
 				
 				// If stmt is only a reference to the result, suppress the result
 				// reference as it does nothing
@@ -762,7 +761,7 @@ myfn("ok") ;
 
 				var call = {type:'CallExpression',callee:expr,arguments:[returner,catcher]} ;
 
-				stmt.parent[stmt.field].push({type:'ReturnStatement',argument:call }) ;
+				body.push({type:'ReturnStatement',argument:call }) ;
 			}
 			return true ;
 		}) ;
@@ -1393,11 +1392,12 @@ myfn("ok") ;
 		parser.treeWalker(ast,function(node, descend, path){
 			descend();
 			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
-			if (examine(node).isBlockStatement) {
+			var block,child ;
+			if (block = examine(node).isBlockStatement) {
 				// Remove any empty statements from within the block
-				for (var i=0; i<node.body.length; i++) {
-					if (examine(node.body[i]).isBlockStatement) {
-						[].splice.apply(node.body,[i,1].concat(node.body[i].body)) ;
+				for (var i=0; i<block.length; i++) {
+					if (child = examine(block[i]).isBlockStatement) {
+						[].splice.apply(block,[i,1].concat(child)) ;
 					}
 				}
 			}
