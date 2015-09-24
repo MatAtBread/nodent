@@ -588,8 +588,8 @@ function initialize(initOpts){
 	// Finally, load any required covers
 	if (initOpts.use) {
 		if (Array.isArray(initOpts.use)) {
+			initOpts.log("Warning: nodent({use:[...]}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
 			if (initOpts.use.length) {
-				initOpts.log("Warning: nodent({use:[...]}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
 				initOpts.use.forEach(function(x){
 					nodent[x] = nodent.require(x) ;
 				}) ;
@@ -603,7 +603,6 @@ function initialize(initOpts){
 	}
 	return nodent ;
 } ;
-
 
 initEnvironment() ;
 
