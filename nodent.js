@@ -5,69 +5,40 @@
  *
  * AST transforms and node loader extension
  */
-
+var stdJSLoader ;
+var smCache = {} ;
 var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
-var outputCode = require('./output') ;
-var parser = require('./parser') ;
-parser._acorn.Node.prototype.valueOf = function() {
-	return printNode(this) ;
-}
+var outputCode = require('./lib/output') ;
+var parser = require('./lib/parser') ;
+var asynchronize = require('./lib/arboriculture').asynchronize ;
 
-/** Helpers **/
-function info(node) {
-	if (Array.isArray(node))
-		return node.map(info) ;
-	return node.type ;
-}
+var directives = {
+	useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
+	useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
+	usePromisesDirective:/^\s*['"]use\s+nodent\-promises?['"]\s*;/,
+	useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators?['"]\s*;/
+};
 
-function printNode(n) {
-	if (Array.isArray(n)) return n.map(printNode).join("|\n") ;
-	try {
-		return outputCode(n) ;
-	} catch (ex) {
-		return ex.message+"\n"+n.type ;
-	}
-}
-
-function cloneNode(n) {
-	var o = {} ;
-	Object.keys(n).forEach(function(k){ o[k] = n[k] }) ;
-	return o ;
-}
-function cloneNodes(nodes) {
-	return nodes.map(function(n){return cloneNode(n)}) ;
-}
-
-function toArray(ast) {
-	if (examine(ast).isBlockStatement)
-		ast = ast.body ;
-	if (!Array.isArray(ast))
-		ast = [ast] ;
-
-	return cloneNodes(ast) ;
-}
-
+// Config options, which relate to a specific instance of nodent and it's compiler/extension
+// These defaults are also used by the '.js' extension compiler when a "use nodent" directive is present
 var config = {
-		log:function(msg){ console.warn("Nodent: "+msg) },
-		augmentObject:false,
-		extension:'.njs',
-		use:[],
-// To be deprecated
-		sourceMapping:1,	/* 0: Use config value, 1: rename files for Node, 2: rename files for Web, 3: No source map */
-		useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
-		useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
-		usePromisesDirective:/^\s*['"]use\s+nodent\-promises?['"]\s*;/,
-		useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators?['"]\s*;/,
-		$return:"$return",
-		$error:"$error",
-		bindAwait:"$asyncbind",
-		bindAsync:"$asyncbind",
-		bindLoop:"$asyncbind"
+	log:function(msg){ console.warn("Nodent: "+msg) },		// Where to print errors and warnings. This can only be (re)set once
+	augmentObject:false,									// Only one has to say 'yes'
+	extension:'.njs',										// The 'default' extension
+	dontMapStackTraces:false								// Only one has to say 'no'
+} ;
+
+var defaultCodeGenOpts = {
+	$return:"$return",
+	$error:"$error",
+	bindAwait:"$asyncbind",
+	bindAsync:"$asyncbind",
+	bindLoop:"$asyncbind"
 };
 
 /* Extract compiler options from code (either a string or AST) */
-function parseCompilerOptions(code,initOpts) {
+function parseCompilerOptions(code,logger) {
 	function matches(str,match){
 		if (!match)
 			return false ;
@@ -81,84 +52,39 @@ function parseCompilerOptions(code,initOpts) {
 
 	if (typeof code=="string") {
 		parseOpts = {
-				promises: !!code.match(initOpts.usePromisesDirective),
-				es7: !!code.match(initOpts.useES7Directive),
-				generators: !!code.match(initOpts.useGeneratorsDirective)
+				promises: !!code.match(directives.usePromisesDirective),
+				es7: !!code.match(directives.useES7Directive),
+				generators: !!code.match(directives.useGeneratorsDirective)
 		} ;
-		if (parseOpts.promises) parseOpts.es7 = true ;
+		if (parseOpts.promises) 
+			parseOpts.es7 = true ;
 	} else {
 		// code is an AST
 		for (var i=0; i<pr.ast.body.length; i++) {
-			if (examine(code.body[i]).isExpressionStatement
-				&& examine(code.body[i].expression).isLiteral) {
+			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type==='Literal') {
 				var test = "'"+code.body[i].value+"'" ;
-				parseOpts.promises = matches(test,initOpts.usePromisesDirective) ;
-				parseOpts.es7 = parseOpts.promises || matches(test,initOpts.useES7Directive) ;
-				parseOpts.generators = matches(test,initOpts.useGeneratorsDirective) ;
+				parseOpts.promises = matches(test,directives.usePromisesDirective) ;
+				parseOpts.es7 = parseOpts.promises || matches(test,directives.useES7Directive) ;
+				parseOpts.generators = matches(test,directives.useGeneratorsDirective) ;
 			}
 		}
 	}
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
 		if ((parseOpts.promises || parseOpts.es7) && parseOpts.generators) {
-			initOpts.log("No valid 'use nodent*' directive, assumed -es7 mode") ;
+			logger("No valid 'use nodent*' directive, assumed -es7 mode") ;
 			parseOpts = {es7:true} ;
 		}
+
+		// Fill in any default codeGen options
+		for (var k in defaultCodeGenOpts) {
+			if (!(k in parseOpts))
+				parseOpts[k] = defaultCodeGenOpts[k] ;
+		}
+
 		return parseOpts ;
 	}
 	return null ; // No valid nodent options
-}
-
-/* Bit of a hack: without having to search for references to this
- * node, force it to be some replacement node */
-function coerce(node,replace) {
-	node.__proto__ = Object.getPrototypeOf(replace) ;
-	Object.keys(node).forEach(function(k){ delete node[k]}) ;
-	Object.keys(replace).forEach(function(k){ node[k] = replace[k]}) ;
-}
-
-function getCatch(path,parent) {
-	for (var n=0;n<path.length;n++) {
-		if (path[n].self.$catcher) {
-			return {type:'Identifier',name:path[n].self.$catcher} ;
-		}
-		if (path[n].parent && path[n].parent.$catcher) {
-			return {type:'Identifier',name:path[n].parent.$catcher} ;
-		}
-	}
-	return parent || {type:'Identifier',name:config.$error} ;
-}
-
-function setCatch(n,sym) {
-	n.$catcher = sym ;
-	return n ;
-}
-
-function containsAwait(ast) {
-	if (!ast)
-		return false ;
-	
-	if (Array.isArray(ast)) {
-		for (var i=0;i<ast.length;i++)
-			if (containsAwait(ast[i]))
-				return true ;
-		return false ;
-	}
-	var foundAwait = {} ;
-	try {
-		parser.treeWalker(ast,function(node, descend, path){
-			if (examine(node).isUnaryExpression && node.operator=="await") {
-				throw foundAwait ;
-			}
-			if (!examine(node).isFunction)
-				descend() ;
-		});
-	} catch (ex) {
-		if (ex===foundAwait)
-			return true ;
-		throw ex ;
-	}
-	return false ;
 }
 
 function stripBOM(content) {
@@ -186,1368 +112,96 @@ function btoa(str) {
 	return buffer.toString('base64');
 }
 
-/*Hack: go though and create "padding" mappings between lines
-//Without this, whole blocks of code resolve to call & return sequences.
-//This has dependency on the implementation of source-map  which is
-//not a healthy thing to have.
-function createMappingPadding(mapping) {
-	var m = mapping._mappings._array;
-
-	function sortMap(a,b){
-		if (a.generatedLine < b.generatedLine)
-			return -1 ;
-		if (a.generatedLine > b.generatedLine)
-			return 1 ;
-		if (a.generatedColumn < b.generatedColumn)
-			return -1 ;
-		if (a.generatedColumn > b.generatedColumn)
-			return 1 ;
-		return (a.name || "").length - (b.name || "").length ;
-	}
-	m.sort(sortMap) ;
-
-	var i = 0 ;
-	while (i<m.length-1) {
-		if (!m[i].name) {
-			m.splice(i,1) ;
-		} else {
-			i++ ;
-		}
-	}
-
-	i = 1 ;
-	while (i<m.length) {
-		if (m[i-1].generatedLine < m[i].generatedLine){
-			m.splice(i,0,{
-				generatedColumn: 0,
-				generatedLine: m[i-1].generatedLine+1,
-				originalColumn: 0,
-				originalLine: m[i-1].originalLine+1,
-				source: m[i-1].source
-			}) ;
-			m[i+1].generatedColumn = 0 ;
-			i += 1 ;
-		}
-		i += 1 ;
-	}
-
-	var lastOrigLine = -1 ;
-	for (i=0;i<m.length; i++) {
-		if (m[i].originalLine != lastOrigLine) {
-			m[i].originalColumn = 0 ;
-			lastOrigLine = m[i].originalLine ;
-		}
-	}
-
-	i = 0 ;
-	while (i<m.length-1) {
-		if (((m[i].originalLine == m[i+1].originalLine) &&
-				(m[i].originalColumn == m[i+1].originalColumn)) ||
-				((m[i].generatedLine == m[i+1].generatedLine) &&
-						(m[i].generatedColumn == m[i+1].generatedColumn))) {
-			m.splice(i,1) ;
-		} else {
-			i++ ;
-		}
-	}
-	m.sort(sortMap) ;
-
-	if (m.length)
-		m.push({
-			generatedColumn: 0,
-			generatedLine: m[m.length-1].generatedLine+1,
-			originalColumn: 0,
-			originalLine: m[m.length-1].originalLine+1,
-			source: m[m.length-1].source
+/* Initialize global things - unrelated to config options */
+function initEnvironment() {
+	// Initialize global/environment things
+	if (!initialize.configured) {
+		initialize.configured = true ;
+		Object.defineProperties(Function.prototype,{
+			"$asyncbind":{
+				value:$asyncbind,
+				writeable:true,
+				enumerable:false,
+				configurable:true
+			},
+			"$asyncspawn":{
+				value:$asyncspawn,
+				writeable:true,
+				enumerable:false,
+				configurable:true
+			},
+			"noDentify":{
+				value:noDentify,
+				configurable:true,
+				enumerable:false,
+				writable:true
+			}
 		}) ;
+	}
 }
-*/
 
-function examine(node) {
-	if (!node) 
-		return {} ;
-
-	return {
-		isScope:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='Program',
-		isFunction:node.type==='FunctionDeclaration' || node.type==='FunctionExpression' || node.type==='Function' || node.type==='ArrowFunctionExpression',
-		isBlockStatement:(node.type==='Program' || node.type==='BlockStatement')?node.body:(node.type==='SwitchCase'?node.consequent:false),
-		isExpressionStatement:node.type==='ExpressionStatement',
-		isLiteral:node.type==='Literal',
-		isUnaryExpression:node.type==='UnaryExpression',
-		isAwait:node.type==='UnaryExpression' && node.operator==='await',
-		isAsync:node.type==='UnaryExpression' && node.operator==='async',
-		isStatement:node.type==='VariableDeclaration' || node.type.match(/[a-zA-Z]+Statement/)!==null,
-		isExpression:node.type.match(/[a-zA-Z]+Expression/)!==null,
-		isLoop:node.type==='ForStatement' || node.type==='WhileStatement' || node.type==='DoWhileStatement', // Other loops?
-		isJump:node.type==='ReturnStatement' || node.type==='ThrowStatement' || node.type==='BreakStatement' || node.type==='ContinueStatement'
+/**
+ * NoDentify (make async) a general function.
+ * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
+ * for example:
+ * 		http.aGet = http.get.noDentify(1) ;	// The 1st argument (from zero) is the callback. errorIdx is undefined (no error)
+ *
+ * The function is transformed from:
+ * 		http.get(opts,function(result){}) ;
+ * to:
+ * 		http.aGet(opts)(function(result){}) ;
+ *
+ * @params
+ * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
+ * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
+ * resultIdx 	The argument index of the callback that holds the result. 'undefined' for the argument after the errorIdx (errorIdx != undefined)
+ * promiseProvider	For promises, set this to the module providing Promises.
+ */
+function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
+	promiseProvider = promiseProvider || Thenable ;
+	var fn = this ;
+	return function() {
+		var scope = this ;
+		var args = Array.prototype.slice.apply(arguments) ;
+		var resolver = function(ok,error) {
+			if (undefined==idx)	// No index specified - use the final (unspecified) parameter
+				idx = args.length ;
+			if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
+				args[idx] = ok ;
+			else {
+				args[idx] = function() {
+					var err = arguments[errorIdx] ;
+					var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
+					if (err)
+						return error(err) ;
+					return ok(result) ;
+				} ;
+			}
+			return fn.apply(scope,args) ;
+		}
+		return new promiseProvider(resolver) ;
 	};
 }
 
-function asynchronize(pr,sourceMapping,opts,initOpts) {
-	var continuations = {} ;
-	sourceMapping = sourceMapping || config.sourceMapping ;
-
-	var generatedSymbol = 1 ;
-	function generateSymbol(node) {
-		return (node?(node.name||(node.id?node.id.name:"_")||"_").replace(/[^a-zA-Z0-9_\.\$\[\]].*/g,"").replace(/[\.\[\]]/g,"_"):"")+"$"+generatedSymbol++ ;
+function compileNodentedFile(nodent,logger) {
+	return function(mod, filename, parseOpts) {
+		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+		var pr = nodent.parse(content,filename,parseOpts);
+		parseOpts = parseOpts || parseCompilerOptions(pr.ast,logger) ;
+		nodent.asynchronize(pr,undefined,parseOpts,logger) ;
+		nodent.prettyPrint(pr) ;
+		mod._compile(pr.code, pr.filename);
 	}
+};
 
-	if (opts.generators) {
-		pr.ast = asyncSpawn(pr.ast) ;
-	} else {
-		// Because we create functions (and scopes), we need all declarations before use
-		pr.ast = hoistDeclarations(pr.ast) ;
+// Things that DON'T depend on initOpts (or config, and therefore nodent)
+function Thenable(thenable) {
+	thenable.then = thenable ;
+	return thenable ;
+};	
 
-		// All TryCatch blocks need a name so we can (if necessary) find out what the enclosing catch routine is called
-		pr.ast = labelTryCatch(pr.ast) ;
-
-		// Convert async functions and their contained returns & throws
-		pr.ast = asyncDefine(pr.ast) ;
-		pr.ast = asyncDefineMethod(pr.ast) ;
-		
-		// Loops are asynchronized in an odd way - the loop is turned into a function that is
-		// invoked through tail recursion OR callback. They are like the inner functions of
-		// async functions to allow for completion and throwing
-		pr.ast = asyncLoops(pr.ast) ;
-
-		// Handle the various JS control flow keywords by splitting into continuations that could
-		// be invoked asynchronously
-		pr.ast = walkDown(pr.ast,[mapTryCatch,mapIfStmt,mapSwitch]) ;
-
-		// Map awaits by creating continuations and passing them into the async resolver
-		pr.ast = asyncAwait(pr.ast) ;
-
-		// Remove guff generated by transpiling
-		pr.ast = cleanCode(pr.ast) ;
-	}
-	return pr ;
-
-	function makeBoundFn(name,body,argnames) {
-		// :> var name = function(args}{body}.$asyncbind(this)
-		return {
-			type:'VariableDeclaration',
-			kind:'var',
-			declarations:[{
-				type:'VariableDeclarator',
-				id:{type:'Identifier',name:name},
-				init:{
-		            "type": "CallExpression",
-		            "callee": {
-		              "type": "MemberExpression",
-		              "object": {
-		                "type": "FunctionExpression",
-		                "id": null,
-		                "generator": false,
-		                "expression": false,
-		                "params": argnames||[],
-		                "body": {
-		                  "type": "BlockStatement",
-		                  "body": cloneNodes(body)
-		                }
-		              },
-		              "property": {
-		                "type": "Identifier",
-		                "name": "$asyncbind"
-		              },
-		              "computed": false
-		            },
-		            "arguments": [{"type": "ThisExpression"}]
-		          }
-			}]
-		};
-	}
-
-	/* Create a 'continuation' - a block of statements that have been hoisted
-	 * into a named function so they can be invoked conditionally or asynchronously */
-	function makeContinuation(name,body) {
-		var ctn = {
-			$continuation: true,
-			type:'FunctionDeclaration',
-			id:{type:'Identifier',name:name},
-			params:[],
-			body:{type:'BlockStatement',body:cloneNodes(body)}
-		} ;
-
-		continuations[name] = {def:ctn} ;
-		return ctn ;
-	}
-
-	/* Used to invoke a 'continuation' - a function that represents
-	 * a block of statements lifted out so they can be labelled (as
-	 * a function definition) to be invoked via multiple execution
-	 * paths - either conditional or asynchronous. Since 'this' existed
-	 * in the original scope of the statements, the continuation function
-	 * must also have the correct 'this'.*/
-	function thisCall(name,args){
-		if (typeof name==='string')
-			name = {type:'Identifier',name:name} ;
-
-		var n = {
-			"type": "CallExpression",
-			"callee": {
-				"type": "MemberExpression",
-				"object": name,
-				"property": {
-					"type": "Identifier",
-					"name": "call"
-				},
-				"computed": false
-			},
-			"arguments": [{"type": "ThisExpression"}].concat(args||[])
-		};
-	
-		name.$thisCall = n ;
-		n.$thisCallName = name.name ;
-		return n ;
-	}
-
-	/**
-	 * returnMapper is an Uglify2 transformer that is used to change statements such as:
-	 * 		return some-expression ;
-	 * into
-	 * 		return $return(some-expression) ;
-	 * for the current scope only -i.e. returns nested in inner functions are NOT modified.
-	 *
-	 * This allows us to capture a normal "return" statement and actually implement it
-	 * by calling the locally-scoped function $return()
-	 */
-	function mapReturns(n,path,containers){
-		if (Array.isArray(n)) {
-			return n.map(function(m){return mapReturns(m,path,containers)}) ;
-		}
-		var lambdaNesting = 0 ;
-		return parser.treeWalker(n,function(node,descend,path) {
-			var repl,value ;
-			if (node.type==='ReturnStatement' && !node.$mapped) {
-				if (lambdaNesting > 0) {
-					if (examine(node.argument).isAsync) {
-						value = [cloneNode(node.argument.argument)] ;
-						repl = node ; //cloneNode(node) ; //repl = new AST_Return({value:undefined}) ;
-					}
-				} else {
-					if (!containers) {
-						repl = node ; //cloneNode(node) ;
-						value = repl.argument?[cloneNode(repl.argument)]:[] ;
-					}
-				}
-				if (!value) {
-					descend(node);
-					return ;
-				} else {
-					/* NB: There is a special case where we do a REAL return to allow for chained async-calls and synchronous returns
-					 *
-					 * The selected syntax for this is:
-					 * 	return void (expr) ;
-					 * which is mapped to:
-					 * 	return (expr) ;
-					 *
-					 * Note that the parenthesis are necessary in the case of anything except a single symbol as "void" binds to
-					 * values before operator. In the case where we REALLY want to return undefined to the callback, a simple
-					 * "return" or "return undefined" works. */
-					if (value.length>0 && examine(value[0]).isUnaryExpression && value[0].operator==="void") {
-						repl.argument = value[0].argument ;
-					} else {
-						repl.argument = {
-							"type": "CallExpression",
-							"callee": {
-								"type": "Identifier",
-								"name": "$return"
-							},
-							"arguments": value
-						} ;
-					}
-					return ;
-				}
-			} else if (node.type === 'ThrowStatement') {
-				if (lambdaNesting>0) {
-					if (examine(node.argument).isAsync) {
-						value = cloneNode(node.argument.argument) ;
-					}
-				} else {
-					if (!containers) {
-						value = cloneNode(node.argument) ;
-					}
-				}
-
-				if (!value) {
-					descend(node);
-					return ;
-				} else {
-					repl = {
-					    type:'ReturnStatement',
-					    argument:{
-					    	type:'CallExpression',
-					    	callee:getCatch(path),
-					    	arguments:[value]
-					    }
-					} ;
-					repl.$mapped = true ;
-					coerce(node,repl) ;
-					return ;
-				}
-			} else if (examine(node).isFunction) {
-				lambdaNesting++ ;
-				descend(node);
-				lambdaNesting-- ;
-				return ;
-			}  else {
-				descend(node);
-				return ;
-			}
-		},path);
-	}
-
-	/**
-	 * ES7 await keyword - transform an AST like:
-myfn("start") ;
-myfn(await test(1)) ;
-myfn("ok") ;
-
-	 * to:
-myfn("start") ;
-return test(1)(function(_var){
-myfn(_var) ;
-myfn("ok") ;
-});
-	 */
-
-	/*
-	 * Translate:
-	if (x) { y; } more... ;
-	 * into
-	if (x) { y; return $more(); } function $more() { more... } $more() ;
-	 *
-	 * ...in case 'y' uses await, in which case we need to invoke $more() at the end of the
-	 * callback to continue execution after the case.
-	 */
-	function mapIfStmt(ifStmt, path, down){
-		if (ifStmt.type==='IfStatement' && containsAwait([ifStmt.consequent,ifStmt.alternate])) {
-			var symName = "$post_if_"+generateSymbol(ifStmt.test) ;
-			var synthBlock = {type:'BlockStatement',body:[ifStmt]} ;
-
-			var ref = path[0] ;
-			if ('index' in ref) {
-				var idx = ref.index ;
-				var deferredCode = ref.parent[ref.field].splice(idx+1,ref.parent[ref.field].length-(idx+1)) ;
-				ref.parent[ref.field][idx] = synthBlock ;
-				if (deferredCode.length) {
-					var call = {type:'ReturnStatement',argument:thisCall(symName)} ;
-					synthBlock.body.unshift(down(makeContinuation(symName,deferredCode))) ;
-					
-					[ifStmt.consequent,ifStmt.alternate].forEach(function(cond) {
-						if (!cond)
-							return ;
-						var blockEnd ;
-						if (!examine(cond).isBlockStatement)
-							blockEnd = cond ;
-						else
-							blockEnd = cond.body[cond.body.length-1] ;
-						if (!(blockEnd.type==='ReturnStatement')) {
-							if (!(cond.type==='BlockStatement')) {
-								coerce(cond,{type:'BlockStatement',body:[cloneNode(cond)]}) ;
-							}
-							cond.$deferred = true ;
-							cond.body.push(cloneNode(call)) ;
-						}
-						down(cond) ;
-					}) ;
-
-					// If both blocks are transformed, the trailing call to $post_if()
-					// can be omitted as it'll be unreachable via a synchronous path
-					if (!(ifStmt.consequent && ifStmt.alternate && ifStmt.consequent.$deferred && ifStmt.alternate.$deferred))
-						synthBlock.body.push(cloneNode(call)) ;
-				}
-			} else {
-				ref.parent[ref.field] = synthBlock ;
-			}
-		}
-	}
-
-	function mapSwitch(switchStmt, path, down){
-		if (!switchStmt.$switched && switchStmt.type==='SwitchStatement' && containsAwait(switchStmt.cases)){
-debugger ;
-			switchStmt.$switched = true ;
-			var symName,deferred,deferredCode,ref = path[0] ;
-			if ('index' in ref) {
-				var j = ref.index+1 ;
-				deferredCode = ref.parent[ref.field].splice(j,ref.parent[ref.field].length-j) ;
-				if (deferredCode.length && deferredCode[deferredCode.length-1].type === 'BreakStatement')
-					ref.parent[ref.field].push(deferredCode.pop()) ;
-				symName = "$post_switch_"+generateSymbol(switchStmt.expression) ;
-				deferred = thisCall(symName) ;
-				ref.parent[ref.field].unshift(makeContinuation(symName,deferredCode)) ;
-				ref.parent[ref.field].push({type:'ExpressionStatement',expression:cloneNode(deferred)}) ;
-			}
-
-			// Now transform each case so that 'break' looks like return <deferred>
-			switchStmt.cases.forEach(function(caseStmt,idx){
-				if (!(caseStmt.type === 'SwitchCase')) {
-					throw new Error("switch contains non-case/default statement: "+caseStmt.type) ;
-				}
-				if (containsAwait(caseStmt.consequent)) {
-					var end = caseStmt.consequent[caseStmt.consequent.length-1] ;
-					if (end.type === 'BreakStatement') {
-						caseStmt.consequent[caseStmt.consequent.length-1] = {type:'ReturnStatement',argument:deferred && cloneNode(deferred)} ;
-					} else if (end.type==='ReturnStatement' || end.type==='ThrowStatement') {
-						// Do nothing - block ends in return or throw
-					} else {
-						initOpts.log(pr.filename+" - switch-case fall-through not supported - added break") ;
-						caseStmt.consequent.push({type:'ReturnStatement',argument:deferred && cloneNode(deferred)}) ;
-					}
-				}
-			}) ;
-			return true ;
-		}
-	}
-
-	function mapTryCatch(node, path, down) {
-		if (node.type==='TryStatement' && containsAwait(node) && !node.$mapped) {
-			var continuation ;
-			var ref = path[0] ;
-			if ('index' in ref) {
-				var i = ref.index+1 ;
-				var afterTry = ref.parent[ref.field].splice(i,ref.parent[ref.field].length-i) ;
-				if (afterTry.length) {
-					var ctnName = "$post_try_"+generateSymbol() ;
-					var afterContinuation = makeContinuation(ctnName,afterTry) ;
-					afterContinuation = down(afterContinuation) ;
-					ref.parent[ref.field].unshift(afterContinuation) ;
-					continuation = thisCall(ctnName) ;
-				}
-			} else {
-				throw new Error(pr.filename+" - malformed try/catch blocks") ;
-			}
-
-			node.$mapped = true ;
-			if (continuation) {
-				node.block.body.push(cloneNode(continuation)) ;
-				node.handler.body.body.push(cloneNode(continuation)) ;
-			}
-			if (node.handler) {
-				var symCatch = getCatch(path) ; 
-				// catcher is not a continuation as it has arguments
-				var catcher = makeBoundFn(symCatch.name,node.handler.body.body,[cloneNode(node.handler.param)]) ;
-				node.handler.body.body = [{
-					type:'CallExpression',
-					callee:symCatch,
-					arguments:[cloneNode(node.handler.param)]
-				}] ;
-				ref.parent[ref.field].unshift(catcher) ;
-			}
-			if (node.finalizer) { /** TODO: Not yet working! **/
-				initOpts.log("Warning: try...finally does not implement finally correctly");
-			}
-		}
-	}
-
-	function walkDown(ast,mapper,state){
-		var walked = [] ;
-
-		return parser.treeWalker(ast,function(node,descend,path){
-			if (walked.indexOf(node)>=0)
-				return ;
-
-			function walkDownSubtree(node){
-				walked.push(node) ;
-				return walkDown(node,mapper,path) ;
-			}
-
-			if (Array.isArray(mapper)) {
-				var walk = this ;
-				mapper.forEach(function(m){
-					m(node,path,walkDownSubtree);
-				}) ;
-			} else {
-				mapper(node,path,walkDownSubtree) ;
-			}
-			descend() ;
-			return ;
-		},state) ;
-	}
-
-	function asyncAwait(ast,inAsync,parentCatcher) {
-		if (!opts.es7) {
-			throw new Error("Nodent ES5 Syntax is deprecated - replace with ES7 async and await keywords, or use nodent <=1.2.x") ;
-		}
-
-		parser.treeWalker(ast,function(node, descend, path){
-			descend();
-			if (examine(node).isAwait) {
-				/* Warn if this await expression is not inside an async function, as the return
-				 * will depend on the Thenable implementation, and references to $return might
-				 * not resolve to anything */
-				inAsync = inAsync || path.some(function(ancestor){
-					return ancestor.self && ancestor.self.$wasAsync ;
-				}) ;
-
-				if (!inAsync) {
-					var errMsg = pr.filename+" - Warning: 'await' used inside non-async function. " ;
-					if (opts.promises)
-						errMsg += "'return' value Promise runtime-specific" ;
-					else
-						errMsg += "'return' value from await is synchronous" ;
-					if (node.loc)
-						errMsg += " ("+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")" ;
-					initOpts.log(errMsg) ;
-				}
-
-				var parent = path[0].parent ;
-				if ((parent.type==='BinaryExpression') && (parent.operator=="||" || parent.operator=="&&") && parent.right===node) {
-					initOpts.log(pr.filename+" - Warning: '"+printNode(parent)+"' on right of "+parent.operator+" will always evaluate '"+printNode(node)+"'") ;
-				}
-				if ((parent.type==='ConditionalExpression') && parent.condition!==node) {
-					initOpts.log(pr.filename+" - Warning: '"+printNode(parent)+"' will always evaluate '"+printNode(node)+"'") ;
-				}
-
-				var result = {type:'Identifier',name:"$await_"+generateSymbol(node.argument)} ;
-				var expr = cloneNode(node.argument) ;
-				coerce(node,result) ;
-
-				// Find the statement containing this await expression (and it's parent)
-				var stmt,body ;
-				for (var n=1; n<path.length; n++) {
-					if (body = examine(path[n].self).isBlockStatement) {
-						stmt = path[n-1] ;
-						break ;
-					}
-				}
-				if (!stmt)
-					throw new Error("Illegal await not contained in a statement "+pr.filename+JSON.stringify(node.loc && node.loc.start)) ;
-
-				var i = stmt.index ;
-				var callBack = body.splice(i,body.length-i).slice(1);
-				
-				// If stmt is only a reference to the result, suppress the result
-				// reference as it does nothing
-				if (!((stmt.self.type==='Identifier' || stmt.self.name===result.name) || 
-						(stmt.self.type==='ExpressionStatement' && 
-								stmt.self.expression.type==='Identifier' && 
-								stmt.self.expression.name===result.name)))
-					callBack.unshift(stmt.self);
-				
-				// Wrap the callback statement(s) in a Block and transform them
-				var cbBody = {type:'BlockStatement',body:cloneNodes(callBack)} ;
-				var catcher = getCatch(path,parentCatcher) ;
-				cbBody = asyncAwait(cbBody,inAsync,catcher) ;
-
-				var returner = {type:'FunctionExpression', params:[],body:{type:'BlockStatement',body:[]}} ;
-				if (cbBody.body.length) {
-					returner = {
-						type:'CallExpression',
-						callee:{
-							type:'MemberExpression',
-							object:{
-								type:'FunctionExpression', 
-								params:[cloneNode(result)],
-								body:{type:'BlockStatement',body:cbBody.body}
-							},
-							property:{
-								type:'Identifier',name:initOpts.bindAwait
-							},
-							computed:false
-						},
-						arguments:[{type:'ThisExpression'},catcher]
-					} ;
-				}
-
-				if (opts.promises) {
-					expr = {
-						type:'MemberExpression',
-						object:cloneNode(expr),
-						property:{type:'Identifier',name:'then'},
-						computed:false
-					} ;
-				}
-
-				var call = {type:'CallExpression',callee:expr,arguments:[returner,catcher]} ;
-
-				body.push({type:'ReturnStatement',argument:call }) ;
-			}
-			return true ;
-		}) ;
-		return ast ;
-	}
-
-	/* Map loops:
-
-	for (init;cond;step) body ;
-	 * to:
-	init;
-	await (async function $for_i_0_i_10_i$1() {
-	 if (cond) {
-	   body;
-	   step;
-	   return void $for_i_0_i_10_i$1()($return,$error) ;
-	 } else {
-	  $return();
-	 }
-	})() ;
-
-	 * Also:
- 	do { body } while (cond) ;
-	 * to:
- 	await (async function $for_i_0_i_10_i$1() {
-	  body;
-	  if (cond) {
-	   return void $for_i_0_i_10_i$1()($return,$error) ;
-	 } else {
-	  $return();
-	 }
-	})() ;
-	 */
-	function asyncLoops(ast) {
-		parser.treeWalker(ast,function(node, descend, path){
-			descend() ;
-			if (examine(node).isLoop && containsAwait(node)) {
-				var ref = path[0] ;
-
-				var init = node.init ;
-				var condition = node.test ;
-				var step = node.update ;
-				var body = node.body ;
-
-				if (init && (!examine(init).isStatement))
-					init = {type:'ExpressionStatement',expression:init} ;
-				step = step?{type:'ExpressionStatement',expression:step}:null ;
-				body = (examine(body).isBlockStatement) ? cloneNode(body).body:[cloneNode(body)] ;
-
-				var symName = "$"+node.type.toLowerCase()+"_"+generateSymbol(condition) ;
-				var symExit = "$exit_"+generateSymbol(condition) ;
-				var loop = {type:'Identifier',name:symName} ;
-
-				// How to exit the loop
-				var mapBreak = {
-					type:'ReturnStatement',
-					argument:{
-						type:'UnaryExpression',
-						operator:'void',
-						prefix:true,
-						argument:{
-							type:'CallExpression',
-							callee:{type:'Identifier',name:symExit},
-							arguments:[]
-						}
-					}
-				} ;
-
-				// How to continue the loop
-				var symContinue = "$next_"+generateSymbol() ;
-				var defContinue = makeContinuation(symContinue,[{
-			    	type:'ReturnStatement',
-			    	argument:{
-			    		type:'CallExpression',
-			    		callee:cloneNode(loop),
-			    		arguments:[{
-			    			type:'Identifier',
-			    			name:symExit
-			    		},{
-			    			type:'Identifier',
-			    			name:config.$error
-			    		}]
-			    	}
-			    }]) ;
-
-				if (step)
-					defContinue.body.body.unshift(step) ;
-
-				var mapContinue = {
-					type:'ReturnStatement',
-					argument:{
-						type:'UnaryExpression',
-						operator:'void',
-						prefix:true,
-						argument:thisCall(symContinue)
-					}
-				} ;
-
-				for (var i=0; i<body.length;i++) {
-					parser.treeWalker(body[i],function(n,descend){
-						if (n.type==='BreakStatement') {
-							coerce(n,cloneNode(mapBreak)) ;
-						} else if (n.type==='ContinueStatement') {
-							coerce(n,cloneNode(mapContinue)) ;
-						} else if (examine(n).isFunction) {
-							return true ;
-						}
-						descend() ;
-					}) ;
-				}
-
-				body.push(cloneNode(mapContinue));
-
-				var subCall = {
-					type:'FunctionDeclaration',
-					id:{type:'Identifier',name:symName/*cloneNode(loop)*/},
-					params:[{
-						type:'Identifier',
-						name:symExit
-					},{
-						type:'Identifier',
-						name:config.$error
-					}],
-					body:{type:'BlockStatement',body:[defContinue]}
-					
-				} ;
-
-				var nextTest ;
-				if (node.type==='DoWhileStatement') {
-					defContinue.body.body = [{
-						type:'IfStatement',
-						test:cloneNode(condition),
-						consequent:{type:'BlockStatement',body:cloneNodes(defContinue.body.body)},
-						alternate:{
-							type:'ReturnStatement',
-							argument:{
-								type:'CallExpression',
-								callee:{
-									type:'Identifier',
-									name:symExit
-								},
-								arguments:[]
-							}
-						}
-					}] ;
-					subCall.body.body = [defContinue].concat(body) ;
-				} else {
-					var nextTest = {
-						type:'IfStatement',
-						test:cloneNode(condition),
-						consequent:{
-							type:'BlockStatement',
-							body:body
-						},
-						alternate:cloneNode(mapBreak)
-					} ;
-
-					subCall.body.body.push(nextTest) ;
-				}
-
-				var replace = {
-					type:'ExpressionStatement',
-					expression:{
-						type:'UnaryExpression',
-						operator:'await',
-						argument:{
-							type:'CallExpression',
-							arguments:[{type:'ThisExpression'}],
-							callee:{
-								type:'MemberExpression',
-								object:subCall,
-								property:{type:'Identifier',name:initOpts.bindLoop},
-								computed:false
-							}
-						}
-					}
-				} ;
-
-				if (init)
-					ref.parent[ref.field].splice(ref.index,1,cloneNode(init),replace) ;
-				else
-					ref.parent[ref.field][ref.index] = replace ;
-			}
-			return true ;
-		});
-		return ast ;
-	}
-
-	/**
-	 * Uglify transormer: Transform
-	 *
-    async function test(x) {
- 		return x*2 ;
- 	};
-	 *
-	 * to
-	 *
-  function test(x) {
-    return function($return, $error) {
-        try {
-            return $return(x * 2);
-        } catch ($except) {
-            $error($except)
-        }
-    }.bind(this);
-}
-	 *
-	 */
-
-	function asyncDefineMethod(ast) {
-		return parser.treeWalker(ast,function(node,descend,path){
-			descend();
-			if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
-				node.async = false ;
-				var fn = cloneNode(node.value) ;
-				var funcback = {
-					type:'CallExpression',
-					arguments:[{type:'ThisExpression'}],
-					callee:{
-						type:'MemberExpression',
-						object:setCatch({
-							type:'FunctionExpression',
-							params:[{
-								type:'Identifier',
-								name:config.$return
-							},{
-								type:'Identifier',
-								name:config.$error
-							}],
-							body:asyncDefineMethod(mapReturns(node.value.body,path)),
-							$wasAsync:true
-						},config.$error),
-						property:{type:'Identifier',name:initOpts.bindAsync},
-						computed:false
-					}
-				} ;
-				
-				if (opts.promises) {
-					node.value.body = {type:'BlockStatement',body:[{
-						type:'ReturnStatement',
-						argument:{
-							type:'NewExpression',
-							callee:{type:'Identifier',name:'Promise'},
-							arguments:[funcback]
-						}
-					}]} ;
-				} else {
-					node.value.body = {type:'BlockStatement',body:[{
-						type:'ReturnStatement',
-						argument:funcback
-					}]};
-				}
-			}
-		});		
-	}
-	
-	function asyncDefine(ast) {
-		parser.treeWalker(ast,function(node, descend, path){
-			if (examine(node).isAsync && examine(node.argument).isFunction) {
-				// "async" is unary operator that takes a function as it's operand, e.g.
-				// async function <name?>([args]?){ <body> }
-
-				var fn = node.argument ;
-				var replace = cloneNode(fn) ;
-				var fnBody ;
-				if (examine(fn.body).isBlockStatement) {
-					fnBody = {
-						type:'BlockStatement',
-						body:fn.body.body.map(function(sub){
-							return asyncDefine(mapReturns(sub,path)) ;
-						})
-					} ;
-				} else {
-					// TODO: Why not just: fnBody = asyncDefine(mapReturns({type:'ReturnStatement',argument:fn.body},path))?
-					fnBody = {
-						type:'BlockStatement',
-						body:[asyncDefine(mapReturns({type:'ReturnStatement',argument:fn.body},path))]
-					} ;
-					replace.expression = false ;
-				}
-
-				var funcback = {
-					type:'CallExpression',
-					arguments:[{type:'ThisExpression'}],
-					callee:{
-						type:'MemberExpression',
-						object:setCatch({
-							type:'FunctionExpression',
-							params:[{
-								type:'Identifier',
-								name:config.$return
-							},{
-								type:'Identifier',
-								name:config.$error
-							}],
-							body:fnBody,
-							$wasAsync:true
-						},config.$error),
-						property:{type:'Identifier',name:initOpts.bindAsync},
-						computed:false
-					}
-				} ;
-				
-				if (opts.promises) {
-					replace.body = {type:'BlockStatement',body:[{
-						type:'ReturnStatement',
-						argument:{
-							type:'NewExpression',
-							callee:{type:'Identifier',name:'Promise'},
-							arguments:[funcback]
-						}
-					}]} ;
-				} else {
-					replace.body = {type:'BlockStatement',body:[{
-						type:'ReturnStatement',
-						argument:funcback
-					}]};
-				}
-
-				var parent = path[0].parent ;
-				if (examine(parent).isExpressionStatement) {
-					replace.type = 'FunctionDeclaration' ;
-					coerce(parent,replace) ;
-				} else {
-					coerce(node,replace) ;
-				}
-				return ;
-			} 
-			descend() ;
-		});
-		return ast ;
-	}
-
-	/*
-	 * Rewrite
-			async function <name>?<argumentlist><body>
-		to
-			function <name>?<argumentlist>{ return function*() {<body>}.$asyncspawn(); }
-	 */
-	// Like mapReturns, but ONLY for return/throw async
-	function mapAsyncReturns(ast) {
-		if (Array.isArray(ast)) {
-			return ast.map(mapAsyncReturns) ;
-		}
-		var lambdaNesting = 0 ;
-		return parser.treeWalker(ast,function(node,descend,path) {
-			if ((node.type === 'ThrowStatement' || node.type==='ReturnStatement') && !node.$mapped) {
-				if (lambdaNesting > 0) {
-					if (examine(node.argument).isAsync) {
-						node.argument = {
-							"type": "CallExpression",
-							"callee": {
-								"type": "Identifier",
-								"name": (node.type === 'ThrowStatement')?"$error":"$return"
-							},
-							"arguments": [node.argument.argument]
-						};
-						node.type = 'ReturnStatement' ;
-						return ;
-					}
-				}
-			} else if (examine(node).isFunction) {
-				lambdaNesting++ ;
-				descend(node);
-				lambdaNesting-- ;
-				return ;
-			}
-			descend(node);
-		});
-	}
-	
-	function spawnBody(body) {
-		return {
-	      "type": "BlockStatement",
-	      "body": [{
-	          "type": "ReturnStatement",
-	          "argument": {
-	            "type": "CallExpression",
-	            "callee": {
-	              "type": "MemberExpression",
-	              "object": {
-	                "type": "FunctionExpression",
-	                "id": null,
-	                "generator": true,
-	                "expression": false,
-	                "params": [{type:'Identifier',name:'$return'},{type:'Identifier',name:'$error'}],
-	                "body": {
-	                	type:'BlockStatement',
-	                	body:mapAsyncReturns(body).concat({
-		                	type:'ReturnStatement',
-		                	argument:{type:'Identifier',name:'$return'}
-	                	})
-	                 }
-	              },
-	              "property": {
-	                "type": "Identifier",
-	                "name": "$asyncspawn"
-	              },
-	              "computed": false
-	            },
-	            "arguments": [{type:'Identifier',name:'Promise'},{type:'ThisExpression'}]
-	          }
-	        }]
-	    };
-	}
-	function asyncSpawn(ast) {
-		parser.treeWalker(ast,function(node, descend, path){
-			descend() ;
-			var fn ;
-			if (examine(node).isAwait) {
-				// Check we're in an async function
-				for (var i=0; i<path.length; i++) {
-					if (examine(path[i].self).isFunction && !examine(path[i].parent).isAsync)
-						throw new SyntaxError("'await' used inside non-async function ("
-								+pr.filename+":"+node.loc.start.line+":"+node.loc.start.column+")") ;
-				}
-				// TODO: For precedence reasons, this should probably be parenthesized
-				delete node.operator ;
-				node.delegate = false ;
-				node.type = 'YieldExpression';
-			} else if (examine(node).isAsync && examine(node.argument).isFunction) {
-				fn = node.argument ;
-				fn.body = spawnBody(fn.body.body)
-				if (path[0].parent.type==='ExpressionStatement') {
-					fn.type = 'FunctionDeclaration' ;
-					path[1].replace(fn) ;
-				} else {
-					path[0].replace(fn) ;
-				}
-			} else if (node.type==='MethodDefinition' && node.async && examine(node.value).isFunction) {
-				node.async = false ;
-				node.value.body = spawnBody(node.value.body.body) ; 
-			}
-		});
-		return ast ;
-	}
-
-	/* Find all nodes within this scope matching the specified function */
-	// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
-	function scopedNodes(ast,matching) {
-		var matches = [] ;
-		parser.treeWalker(ast,function(node, descend, path){
-			if (node === ast)
-				return descend() ;
-			
-			if (matching(node,path)) {
-				matches.push([].concat(path)) ;
-				return ;
-			}
-			if (examine(node).isScope) {
-				return ;
-			}
-			descend() ;
-		}) ;
-		return matches ;
-	}
-
-	/* Move directives, vars and named functions to the top of their scope */
-	function hoistDeclarations(ast) {
-		parser.treeWalker(ast,function(node, descend,path){
-			descend() ;
-			if (examine(node).isScope) { 
-				// For this scope, find all the hoistable functions, vars and directives
-				var classes = scopedNodes(node,function hoistable(n,path) {
-					if (n.type==='ClassDeclaration') 
-						return true ;
-					return false ;
-				}) ;
-
-				var functions = scopedNodes(node,function hoistable(n,path) {
-					// YES: We're a named async function
-					if (examine(n).isAsync 
-							&& examine(n.argument).isFunction
-							&& n.argument.id)
-						return true ;
-
-					// YES: We're a named function, but not a continuation
-					if (examine(n).isFunction && n.id) {
-						return !n.$continuation ;
-					}
-
-					// No, we're not a hoistable function
-					return false ;
-				}) ;
-
-				// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
-				var vars = scopedNodes(node,function(n,path){
-					if (n.type==='VariableDeclaration' && n.kind==='var') {
-					    if (path[0].field=="init" && path[0].parent.type==='ForStatement') return false ;
-					    if (path[0].field=="left" && (path[0].parent.type==='ForInStatement' || path[0].parent.type==='ForOfStatement')) 
-					    	return false ;
-					    return true ;
-					}
-				}) ;
-				var directives = scopedNodes(node,function(n){
-					/* TODO: directives are not obvious in ESTREE format */ 
-					return (n.type==='ExpressionStatement' && n.expression.type==='Literal') ;
-				}) ;
-
-				var nodeBody = node.type==='Program'?node:node.body ;
-				functions = functions.map(function(path) {
-					var ref = path[0], symName ;
-					// What is the name of this function (could be async, so check the expression if necessary),
-					// and should we remove and hoist, or reference and hoist?
-					if (examine(ref.self).isAsync) {
-						symName = ref.self.argument.id.name ;
-						// If we're nested ExpressionStatement(UnaryExpression<async>), we're actually a top-level
-						// async FunctionDeclaration, otherwise we're an async FunctionExpression
-						if (examine(ref.parent).isExpressionStatement) {
-							ref.self.argument.type = 'FunctionDeclaration' ;
-							path[1].remove() ; 
-							return ref.self ;
-						}
-						// We're an async FunctionExpression
-						return ref.replace({type:'Identifier',name:symName}) ;
-					} 
-
-					// We're just a vanilla FunctionDeclaration or FunctionExpression
-					symName = ref.self.id.name ;
-					var movedFn = (ref.self.type==='FunctionDeclaration')?
-							ref.remove():
-							ref.replace({type:'Identifier',name:symName}) ;
-					return movedFn ;
-				}) ;
-
-
-				classes = classes.map(function(path){
-					var ref = path[0] ;
-					return ref.remove() ;
-				}) ;
-
-				var varDecls = [] ;
-				if (vars.length) {
-					var definitions = [] ;
-					vars.forEach(function(path){
-						var ref = path[0] ;
-						var self = ref.self ;
-						var values = [] ;
-						for (var i=0; i<self.declarations.length; i++) {
-							var name = self.declarations[i].id.name ;
-							if (definitions.indexOf(name)>=0) {
-								initOpts.log(pr.filename+" - Duplicate 'var "+name+"' in '"+(node.name?node.name.name:"anonymous")+"()'") ;
-							} else {
-								definitions.push(name) ;
-							}
-							if (self.declarations[i].init) {
-								var value = {
-									type:'AssignmentExpression',
-									left:{type:'Identifier',name:name},
-									operator:'=',
-									right:cloneNode(self.declarations[i].init)
-								} ;
-
-								if (!(ref.parent.type==='ForStatement'))
-									value = {type:'ExpressionStatement',expression:value} ;
-								values.push(value) ;
-							}
-						}
-						if (values.length==0)
-							ref.remove() ;
-						else 
-							ref.replace(values) ;
-					}) ;
-
-					if (definitions.length) {
-						definitions = definitions.map(function(name){ 
-							return {
-								type:'VariableDeclarator',
-								id:{
-									type:'Identifier',
-									name:name
-								}
-							}
-						}) ;
-						if (!varDecls[0] || varDecls[0].type !== 'VariableDeclaration') {
-							varDecls.unshift({
-								type:'VariableDeclaration',
-								kind:'var',
-								declarations:definitions}) ;
-						} else {
-							varDecls[0].declarations = varDecls[0].declarations.concat(definitions) ;
-						}
-					}
-				}
-
-				directives = directives.map(function(path){
-					var ref = path[0] ;
-					return ref.remove() ;
-				}) ;
-
-				nodeBody.body = directives.concat(varDecls).concat(classes).concat(functions).concat(nodeBody.body) ;
-			}
-			return true ;
-		}) ;
-		return ast ;
-	}
-
-	/* Give unique names to TryCatch blocks */
-	function labelTryCatch(ast) {
-		parser.treeWalker(ast,function(node, descend,path){
-			if (node.type==='TryStatement') {
-				// Every try-catch needs a name, so asyncDefine/asyncAwait knows who's handling errors
-				var parent = getCatch(path).name ;
-				setCatch(node,"$catch_"+generateSymbol(node.handler.param)) ;
-				node.handler && setCatch(node.handler,parent) ;
-				node.finalizer && setCatch(node.finalizer,parent) ;
-			}
-			descend() ;
-		}) ;
-		return ast ;
-	}
-
-	function replaceSymbols(ast,from,to) {
-		parser.treeWalker(ast,function(node,descend,path){
-			descend() ;
-			if (node.type=='Identifier' && node.name==from) {
-				node.name = to ;
-			}
-		}) ;
-		return ast ;
-	}
-
-	/* Remove un-necessary nested blocks and crunch down empty function implementations */
-	function cleanCode(ast) {
-		// Coalese BlockStatements
-		
-		// TODO: For ES6, this needs more care, as blocks containing 'let' have a scope of their own
-		parser.treeWalker(ast,function(node, descend, path){
-			descend();
-			// If this node is a block with vanilla BlockStatements (no controlling entity), merge them
-			var block,child ;
-			if (block = examine(node).isBlockStatement) {
-				// Remove any empty statements from within the block
-				for (var i=0; i<block.length; i++) {
-					if (child = examine(block[i]).isBlockStatement) {
-						[].splice.apply(block,[i,1].concat(child)) ;
-					}
-				}
-			}
-		}) ;
-
-		// Truncate BlockStatements with a Jump (break;continue;return;throw) inside
-		parser.treeWalker(ast,function(node, descend, path){
-			descend();
-			if (examine(node).isJump) {
-				var ref = path[0] ;
-				if ('index' in ref) {
-					var i = ref.index+1 ;
-					var ctn = ref.parent[ref.field] ;
-					while (i<ctn.length) {
-						// Remove any statements EXCEPT for function/var definitions
-						if ((ctn[i].type==='VariableDeclaration')
-							|| ((examine(ctn[i]).isFunction)
-								&& ctn[i].id))
-							i += 1 ;
-						else
-							ctn.splice(i,1) ;
-					}
-				}
-			}
-		}) ;
-		
-		/* Inline continuations that are only referenced once */
-		
-		// Find any continuations that have a single reference
-		parser.treeWalker(ast,function(node, descend, path){
-			descend();
-			if (node.$thisCall && continuations[node.name]) {
-				if (continuations[node.name].ref) {
-					delete continuations[node.name] ;	// Multiple ref
-				} else {
-					continuations[node.name].ref = node.$thisCall ;
-				}
-			}
-		}) ;
-
-		var calls = Object.keys(continuations).map(function(c){ return continuations[c].ref }) ;
-		if (calls.length) {
-			// Replace all the calls to the continuation with the body from the continuation followed by 'return;'
-			parser.treeWalker(ast,function(node, descend, path){
-				descend();
-				if (calls.indexOf(node)>=0) {
-					if (path[1].self.type==='ReturnStatement') {
-						var sym = node.$thisCallName ;
-						var repl = cloneNodes(continuations[sym].def.body.body) ;
-						continuations[sym].$inlined = true ;
-						repl.push({type:'ReturnStatement'}) ;
-						path[1].replace(repl) ;
-					}
-				}
-			}) ;
-
-			var defs = Object.keys(continuations).map(function(c){ return continuations[c].$inlined && continuations[c].def }) ;
-			// Remove all the (now inline) declarations of the continuations
-			parser.treeWalker(ast,function(node, descend, path){
-				descend();
-				if (defs.indexOf(node)>=0) {
-					path[0].remove() ;
-				}
-			}) ;
-		}
-/*
-		// Find declarations of functions of the form:
-		// 		function [sym]() { return _call_.call(this) }
-		// or
-		// 		function [sym]() { return _call_() }
-		// and replace with:
-		//		_call_
-		// If the [sym] exists and is referenced elsewhere, replace those too. This
-		// needs to be done recursively from the bottom of the tree upwards.
-		// NB: If _call_ is in the parameter list for the function, this is NOT a correct optimization
-
-		// For either of the call forms above, return the actually invoked symbol name 
-		function simpleCallName(node) {
-			if ((node.TYPE=="Call")
-					&& node.args.length==0
-					&& node.expression instanceof U2.AST_SymbolRef) {
-				return node.expression.name ;
-			}
-
-			if ((node.TYPE=="Call")
-					&& node.$thisCallName) {
-				return node.$thisCallName ;
-			}
-
-			return null ;
-		}
-
-		var replaced = {} ;
-		asyncWalk = new U2.TreeWalker(function(node, descend){
-			descend();
-
-			if (node instanceof U2.AST_Lambda) {
-				if ((node.body[0] instanceof U2.AST_Return) && node.body[0].value) {
-					var to = simpleCallName(node.body[0].value) ;
-					if (to && node.argnames.every(function(sym){ return sym.name != to })) {
-						if (replaced[to])
-							to = replaced[to] ;
-						var from = node.name && node.name.name ;
-						if (from) {
-					        var stack = asyncWalk.stack;
-					        for (var i = stack.length-1; --i >= 0;) {
-					            var scope = stack[i];
-					            if (scope instanceof U2.AST_Scope) {
-									replaced[from] = to ;
-									replaceSymbols(scope,from,to) ;
-					            }
-					        }
-							coerce(node,new U2.AST_DeletedNode()) ;
-						} else {
-							// This is an anonymous function, so can be replaced in-situ
-							coerce(node,new U2.AST_SymbolRef({name:to})) ;
-						}
-					}
-				}
-			}
-			return true ;
-		}) ;
-		ast.walk(asyncWalk) ;
-
-		// The symbol folding above might generate lines like:
-		//		$return.$asyncbind(this,$error)
-		// these can be simplified to:
-		//		$return
-		asyncWalk = new U2.TreeWalker(function(node, descend){
-			descend();
-
-			if (node instanceof U2.AST_Call
-					&& node.expression instanceof U2.AST_Dot
-					&& node.expression.property == "$asyncbind"
-					&& node.expression.expression instanceof U2.AST_SymbolRef
-					&& node.expression.expression.name == "$return"
-			) {
-				coerce(node,node.expression.expression) ;
-			}
-			return true ;
-		}) ;
-		ast.walk(asyncWalk) ;
-*/
-		return ast ;
-	}
-}
-
-var nodent ;
 function asyncify(promiseProvider) {
-	promiseProvider = promiseProvider || nodent.Thenable ;
+	promiseProvider = promiseProvider || Thenable ;
 	return function(obj,filter,suffix) {
 		if (Array.isArray(filter)) {
 			var names = filter ;
@@ -1607,398 +261,378 @@ function asyncify(promiseProvider) {
 	}
 };
 
-function initialize(initOpts){
-	if (!initOpts)
-		initOpts = config ;
+function prettyPrint(pr) {
+	var map ;
+	var filepath = pr.filename.split("/") ; 
+	var filename = filepath.pop() ;
 
-	if (!initialize.configured) {
-		// Fill in default config values
-		for (var k in config) {
-			if (!initOpts.hasOwnProperty(k))
-				initOpts[k] = config[k] ;
+	var out = outputCode(pr.ast,{map:{
+		file: filename, //+"(original)", 
+		sourceMapRoot: filepath.join("/"),
+		sourceContent: pr.origCode
+	}}) ;
+
+	try {
+		var mapUrl = "" ;
+		var jsmap = out.map.toJSON();
+		if (jsmap) {
+			smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+			mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"
+				+btoa(JSON.stringify(jsmap))+"\n" ;
+		}
+		pr.code = out.code+mapUrl ;
+	} catch (ex) {
+		pr.code = out ;
+	}
+}
+
+function parseCode(code,origFilename,__sourceMapping,opts) {
+	var r = { origCode:code.toString(), filename:origFilename } ;
+	try {
+		r.ast = parser.parse(r.origCode) ;
+		return r ;
+	} catch (ex) {
+		if (ex instanceof SyntaxError) {
+			var l = r.origCode.substr(ex.pos-ex.loc.column) ;
+			l = l.split("\n")[0] ;
+			ex.message += " (nodent)\n"+l+"\n"+l.replace(/[\S ]/g,"-").substring(0,ex.loc.column)+"^" ;
+			ex.stack = "" ;
+		}
+		throw ex ;
+	}
+}
+
+function $asyncbind(self,catcher) {
+	var resolver = this ;
+	if (catcher) {
+		function thenable(result,error){
+			try {
+				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
+					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
+			} catch (ex) {
+				return (error||catcher)(ex);
+			}
+		} ;
+		thenable.then = thenable ;
+		return thenable ;
+	} else {
+		var b = function() { 
+			return resolver.apply(self,arguments) ;
+		} ;
+		b.then = b ;
+		return b ;
+	}
+}
+
+function $asyncspawn(promiseProvider,self) {
+	var genF = this ;
+    return new promiseProvider(function(resolve, reject) {
+        var gen = genF.call(self, resolve, reject);
+        function step(fn,arg) {
+            var next;
+            try {
+                next = fn.call(gen,arg);
+	            if(next.done) {
+	            	if (next.value !== resolve) {
+		            	resolve && resolve(next.value);
+		            	resolve = null ;
+	            	}
+	                return;
+	            }
+
+	            if (next.value.then) {
+		            next.value.then(function(v) {
+		                step(gen.next,v);
+		            }, function(e) {
+		                step(gen.throw,e);
+		            });
+	            } else {
+	            	step(gen.next,next.value);
+	            }
+            } catch(e) {
+            	reject && reject(e);
+            	reject = null ;
+                return;
+            }
+        }
+        step(gen.next);
+    });
+}
+
+function isThenable(obj) {
+	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
+}
+
+/* NodentCompiler prototypes, that refer to 'this' */
+function requireCover(cover,opts) {
+	if (!this.covers[cover]) {
+		if (cover.indexOf("/")>=0)
+			this.covers[cover] = require(cover)(this,opts) ;
+		else
+			this.covers[cover] = require("./covers/"+cover)(this,opts) ;
+	}
+	return this.covers[cover] ;
+}
+
+function compile(code,origFilename,__sourceMapping,opts) {
+	opts = opts || {} ;
+	if (opts.promises)
+		opts.es7 = true ;
+
+	// Fill in any default codeGen options
+	for (var k in defaultCodeGenOpts) {
+		if (!(k in opts))
+			opts[k] = defaultCodeGenOpts[k] ;
+	}
+	
+	var pr = this.parse(code,origFilename,null,opts);
+	this.asynchronize(pr,null,opts,this.logger) ;
+	this.prettyPrint(pr) ;
+	return pr ;
+}
+
+function generateRequestHandler(path, matchRegex, options) {
+	var cache = {} ;
+	var compiler = this ;
+
+	if (!matchRegex)
+		matchRegex = /\.njs$/ ;
+	if (!options)
+		options = {} ;
+
+	return function (req, res, next) {
+		if (cache[req.url]) {
+			res.setHeader("Content-Type", cache[req.url].contentType);
+			options.setHeaders && options.setHeaders(res) ;
+			res.write(cache[req.url].output) ;
+			res.end();
+			return ;
 		}
 
-		var smCache = {} ;
-		nodent = {} ;
+		if (!req.url.match(matchRegex) && !(options.htmlScriptRegex && req.url.match(options.htmlScriptRegex))) {
+			return next && next() ;
+		}
 
-		nodent.compile = function(code,origFilename,sourceMapping,opts) {
-			opts = opts || {} ;
-			if (opts.promises)
-				opts.es7 = true ;
-			sourceMapping = sourceMapping || config.sourceMapping ;
+		function sendException(ex) {
+			res.statusCode = 500 ;
+			res.write(ex.toString()) ;
+			res.end() ;
+		}
 
-			var pr = nodent.parse(code,origFilename,sourceMapping,opts);
-			nodent.asynchronize(pr,sourceMapping,opts,initOpts) ;
-			nodent.prettyPrint(pr,sourceMapping,opts) ;
-			return pr ;
-		};
-		nodent.parse = function(code,origFilename,sourceMapping,opts) {
-			sourceMapping = sourceMapping || config.sourceMapping ;
-			var r = { origCode:code.toString(), filename:origFilename } ;
-			try {
-				r.ast = parser.parse(r.origCode) ;
-				return r ;
-			} catch (ex) {
-				if (ex instanceof SyntaxError) {
-					var l = r.origCode.substr(ex.pos-ex.loc.column) ;
-					l = l.split("\n")[0] ;
-					ex.message = ex.message+" (nodent)\n"+l+"\n"+l.replace(/[\S ]/g,"-").substring(0,ex.loc.column)+"^" ;
-					ex.stack = "" ;
+		var filename = path+req.url ;
+		if (options.extensions && !fs.existsSync(filename)) {
+			for (var i=0; i<options.extensions.length; i++) {
+				if (fs.existsSync(filename+"."+options.extensions[i])) {
+					filename = filename+"."+options.extensions[i] ;
+					break ;
 				}
-				throw ex ;
 			}
-		};
-		nodent.asynchronize = asynchronize ;
-		nodent.prettyPrint = function(pr,sourceMapping,opts) {
-			sourceMapping = sourceMapping || config.sourceMapping ;
-
-			var map ;
-			var filepath = pr.filename.split("/") ; 
-			var filename = filepath.pop() ;
-
-			var out = outputCode(pr.ast,{map:{
-				file: filename, //+"(original)", 
-				sourceMapRoot: filepath.join("/"),
-				sourceContent: pr.origCode
-			}}) ;
-
-			try {
-				var mapUrl = "" ;
-				var jsmap = out.map.toJSON();
-				if (jsmap) {
-					smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-					mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"+btoa(JSON.stringify(jsmap))+"\n" ;
-				}
-				pr.code = out.code+mapUrl ;
-			} catch (ex) {
-				pr.code = out ;
-			}
-
-		};
-		nodent.require = function(cover,opts) {
-			if (!nodent[cover]) {
-				if (!opts)
-					opts = initOpts.use[cover] ;
-
-				if (cover.indexOf("/")>=0)
-					nodent[cover] = require(cover)(nodent,opts) ;
-				else
-					nodent[cover] = require("./covers/"+cover)(nodent,opts) ;
-			}
-			return nodent[cover] ;
-		};
-		nodent.generateRequestHandler = function(path, matchRegex, options) {
-			var cache = {} ;
-
-			if (!matchRegex)
-				matchRegex = /\.njs$/ ;
-			if (!options)
-				options = {} ;
-
-			return function (req, res, next) {
-				if (cache[req.url]) {
-					res.setHeader("Content-Type", cache[req.url].contentType);
-					options.setHeaders && options.setHeaders(res) ;
-					res.write(cache[req.url].output) ;
-					res.end();
-					return ;
-				}
-
-				if (!req.url.match(matchRegex) && !(options.htmlScriptRegex && req.url.match(options.htmlScriptRegex))) {
-					return next && next() ;
-				}
-
-				function sendException(ex) {
-					res.statusCode = 500 ;
-					res.write(ex.toString()) ;
-					res.end() ;
-				}
-
-				var filename = path+req.url ;
-				if (options.extensions && !fs.existsSync(filename)) {
-					for (var i=0; i<options.extensions.length; i++) {
-						if (fs.existsSync(filename+"."+options.extensions[i])) {
-							filename = filename+"."+options.extensions[i] ;
-							break ;
-						}
-					}
-				}
-				fs.readFile(filename,function(err,content){
-					if (err) {
-						return sendException(err) ;
-					} else {
-						try {
-							var pr,contentType ;
-							if (options.htmlScriptRegex && req.url.match(options.htmlScriptRegex)) {
-								pr = require('./htmlScriptParser')(nodent,content.toString(),req.url,options) ;
-								contentType = "text/html" ;
-							} else {
-								pr = nodent.compile(content.toString(),req.url,2,options.compiler).code;
-								contentType = "application/javascript" ;
-								if (options.runtime)
-									pr = "Function.prototype.$asyncbind = "+nodent.$asyncbind.toString()+";\n"+pr ;
-							}
-							res.setHeader("Content-Type", contentType);
-							if (options.enableCache)
-								cache[req.url] = {output:pr,contentType:contentType} ; 
-							options.setHeaders && options.setHeaders(res) ;
-							res.write(pr) ;
-							res.end();
-						} catch (ex) {
-							return sendException(ex) ;
-						}
-					}
-				}) ;
-			};
-		};
-
-		nodent.$asyncbind = function $asyncbind(self,catcher) {
-			var resolver = this ;
-			if (catcher) {
-				function thenable(result,error){
-					try {
-						return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
-							? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
-					} catch (ex) {
-						return (error||catcher)(ex);
-					}
-				} ;
-				thenable.then = thenable ;
-				return thenable ;
+		}
+		fs.readFile(filename,function(err,content){
+			if (err) {
+				return sendException(err) ;
 			} else {
-				var b = function() { 
-					return resolver.apply(self,arguments) ;
-				} ;
-				b.then = b ;
-				return b ;
-			}
-		};
-
-		/* Give a funcback a thenable interface, so it can be assimilated by a Promise */
-		nodent.Thenable = function(thenable) {
-			thenable.then = thenable ;
-			return thenable ;
-		};
-		nodent.isThenable = function(obj) {
-			return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
-		};
-		Object.defineProperty(nodent,"Promise",{
-			get:function(){
-				initOpts.log("Warning: nodent.Promise is deprecated in favour of nodent.Thenable");
-				return nodent.Thenable;
-			}
-		}) ;
-
-		nodent.$asyncspawn = function(promiseProvider,self) {
-			var genF = this ;
-		    return new promiseProvider(function(resolve, reject) {
-		        var gen = genF.call(self, resolve, reject);
-		        function step(fn,arg) {
-		            var next;
-		            try {
-		                next = fn.call(gen,arg);
-			            if(next.done) {
-			            	if (next.value !== resolve) {
-				            	resolve && resolve(next.value);
-				            	resolve = null ;
-			            	}
-			                return;
-			            }
-
-			            if (next.value.then) {
-				            next.value.then(function(v) {
-				                step(gen.next,v);
-				            }, function(e) {
-				                step(gen.throw,e);
-				            });
-			            } else {
-			            	step(gen.next,next.value);
-			            }
-		            } catch(e) {
-		            	reject && reject(e);
-		            	reject = null ;
-		                return;
-		            }
-		        }
-		        step(gen.next);
-		    });
-		}
-
-		Object.defineProperties(Function.prototype,{
-			"$asyncbind":{
-				value:nodent.$asyncbind,
-				writeable:true,
-				configurable:true
-			},
-			"$asyncspawn":{
-				value:nodent.$asyncspawn,
-				writeable:true,
-				configurable:true
+				try {
+					var pr,contentType ;
+					if (options.htmlScriptRegex && req.url.match(options.htmlScriptRegex)) {
+						pr = require('./htmlScriptParser')(compiler,content.toString(),req.url,options) ;
+						contentType = "text/html" ;
+					} else {
+						pr = compiler.compile(content.toString(),req.url,2,options.compiler).code;
+						contentType = "application/javascript" ;
+						if (options.runtime)
+							pr = "Function.prototype.$asyncbind = "+$asyncbind.toString()+";\n"+pr ;
+					}
+					res.setHeader("Content-Type", contentType);
+					if (options.enableCache)
+						cache[req.url] = {output:pr,contentType:contentType} ; 
+					options.setHeaders && options.setHeaders(res) ;
+					res.write(pr) ;
+					res.end();
+				} catch (ex) {
+					return sendException(ex) ;
+				}
 			}
 		}) ;
+	};
+};
 
-		nodent.asyncify = asyncify ;
-		nodent.version = require("./package.json").version ;
-		if (initOpts.augmentObject) {
-			Object.defineProperties(Object.prototype,{
-				"asyncify":{
-					value:function(promiseProvider,filter,suffix){return nodent.asyncify(promiseProvider)(this,filter,suffix)},
-					writeable:true,
-					configurable:true
+function NodentCompiler(members) {
+	this.covers = {} ;
+	for (var k in members)
+		this[k] = members[k] ;
+}
+
+NodentCompiler.prototype.version =  require("./package.json").version ;
+NodentCompiler.prototype.Thenable =  Thenable ;
+NodentCompiler.prototype.isThenable =  isThenable ; 
+NodentCompiler.prototype.asyncify =  asyncify ;
+NodentCompiler.prototype.require =  requireCover ;
+NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
+// Exported so they can be transported to a client
+NodentCompiler.prototype.$asyncspawn =  $asyncspawn ;
+NodentCompiler.prototype.$asyncbind =  $asyncbind ;
+// Exported ; but not to be used lightly!
+NodentCompiler.prototype.parse =  parseCode ;
+NodentCompiler.prototype.compile =  compile ;
+NodentCompiler.prototype.asynchronize =  asynchronize ;
+NodentCompiler.prototype.prettyPrint =  prettyPrint ;
+Object.defineProperty(NodentCompiler.prototype,"Promise",{
+	get:function (){
+		initOpts.log("Warning: nodent.Promise is deprecated. Use nodent.Thenable");
+		return Thenable;
+	},
+	enumerable:false,
+	configurable:false
+}) ;
+
+/* Construct a 'nodent' object - combining logic and options */
+function initialize(initOpts){
+	// Validate the options
+/* initOpts:{
+ * 		log:function(msg),
+ * 		augmentObject:boolean,
+ * 		extension:string?
+ * 		dontMapStackTraces:boolean
+ */
+	if (!initOpts)
+		initOpts = {} ;
+	
+	// Fill in any missing options with their default values
+	Object.keys(config).forEach(function(k){
+		if (!(k in initOpts))
+			initOpts[k] = config[k] ;
+	}) ;
+	
+	// Throw an error for any options we don't know about
+	for (var k in initOpts) {
+		if (k==="use")
+			continue ; // deprecated
+		if (!config.hasOwnProperty(k))
+			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(initOpts[k])) ;
+	}
+
+	// "Global" options:
+	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
+	if (initOpts.augmentObject) {
+		Object.defineProperties(Object.prototype,{
+			"asyncify":{
+				value:function(promiseProvider,filter,suffix){
+					return asyncify(promiseProvider)(this,filter,suffix)
 				},
-				"isThenable":{
-					value:nodent.isThenable,
-					writeable:true,
-					configurable:true
-				}
-			}) ;
-		}
-		
-		/**
-		 * We need a global to handle funcbacks for which no error handler has ever been defined.
-		 */
-		global[config.$error] = function(err) {
-			throw err ;
-		};
-
-		if (!initOpts.dontMapStackTraces) {
-			// This function is part of the V8 stack trace API, for more info see:
-			// http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
-			Error.prepareStackTrace = function(error, stack) {
-				function mappedTrace(frame) {
-					var source = frame.getFileName();
-					if (source && smCache[source]) {
-						var position = smCache[source].smc.originalPositionFor({line: frame.getLineNumber(), column: frame.getColumnNumber()-1});
-						var desc = frame.toString() ;
-
-						var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
-						for (var i=0; i<s.length-1 && s[i]==d[i]; i++) ;
-						desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
-						return '\n    at '+desc ;
-					}
-					return '\n    at '+frame;
-				}
-
-				return error + stack.map(mappedTrace).join('');
-			}
-
-		}
-
-		/**
-		 * NoDentify (make async) a general function.
-		 * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
-		 * for example:
-		 * 		http.aGet = http.get.noDentify(1) ;	// The 1st argument (from zero) is the callback. errorIdx is undefined (no error)
-		 *
-		 * The function is transformed from:
-		 * 		http.get(opts,function(result){}) ;
-		 * to:
-		 * 		http.aGet(opts)(function(result){}) ;
-		 *
-		 * @params
-		 * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
-		 * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
-		 * resultIdx 	The argument index of the callback that holds the result. 'undefined' for the argument after the errorIdx (errorIdx != undefined)
-		 * promiseProvider	For promises, set this to the module providing Promises.
-		 */
-		Object.defineProperty(Function.prototype,"noDentify",{
-			value:function(idx,errorIdx,resultIdx,promiseProvider) {
-				promiseProvider = promiseProvider || nodent.Thenable ;
-				var fn = this ;
-				return function() {
-					var scope = this ;
-					var args = Array.prototype.slice.apply(arguments) ;
-					var resolver = function(ok,error) {
-						if (undefined==idx)	// No index specified - use the final (unspecified) parameter
-							idx = args.length ;
-						if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
-							args[idx] = ok ;
-						else {
-							args[idx] = function() {
-								var err = arguments[errorIdx] ;
-								var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
-								if (err)
-									return error(err) ;
-								return ok(result) ;
-							} ;
-						}
-						return fn.apply(scope,args) ;
-					}
-					return new promiseProvider(resolver) ;
-				};
+				writeable:true,
+				configurable:true
 			},
-			configurable:true,
-			enumerable:false,
-			writable:true
+			"isThenable":{
+				value:isThenable,
+				writeable:true,
+				configurable:true
+			}
 		}) ;
+	}
+	
+	// If anyone wants to mapStackTraces, do it. The augmentation does not depend on the config options
+	if (!initOpts.dontMapStackTraces) {
+		// This function is part of the V8 stack trace API, for more info see:
+		// http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+		Error.prepareStackTrace = function(error, stack) {
+			function mappedTrace(frame) {
+				var source = frame.getFileName();
+				if (source && smCache[source]) {
+					var position = smCache[source].smc.originalPositionFor({line: frame.getLineNumber(), column: frame.getColumnNumber()-1});
+					var desc = frame.toString() ;
 
-		var stdJSLoader = require.extensions['.js'] ;
-		if (initOpts.useDirective || initOpts.useES7Directive || initOpts.usePromisesDirective) {
-			require.extensions['.js'] = function(mod,filename) {
-				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var parseOpts = parseCompilerOptions(content,initOpts) ;
-				if (parseOpts)
-					return require.extensions[initOpts.extension](mod,filename,parseOpts) ;
-				return stdJSLoader(mod,filename) ;
-			} ;
+					var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
+					for (var i=0; i<s.length-1 && s[i]==d[i]; i++) ;
+					desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
+					return '\n    at '+desc ;
+				}
+				return '\n    at '+frame;
+			}
+			return error + stack.map(mappedTrace).join('');
 		}
-
-		require.extensions[initOpts.extension] = function(mod, filename, parseOpts) {
-			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var pr = nodent.parse(content,filename,parseOpts);
-			parseOpts = parseOpts || parseCompilerOptions(pr.ast,initOpts) ;
-			nodent.asynchronize(pr,undefined,parseOpts,initOpts) ;
-			nodent.prettyPrint(pr,undefined,parseOpts) ;
-			mod._compile(pr.code, pr.filename);
+	}
+	
+	// Create a new compiler
+	var nodent = new NodentCompiler({
+		logger: initOpts.log
+	}) ;
+	
+	/**
+	 * We need a global to handle funcbacks for which no error handler has ever been defined.
+	 */
+	if (!(defaultCodeGenOpts.$error in global)) {
+		global[defaultCodeGenOpts.$error] = function(err) {
+			throw err ;
 		};
 	}
 
+	/* If we've not done it before, create a compiler for '.js' scripts */
+	if (!stdJSLoader) {
+		stdJSLoader = require.extensions['.js'] ;
+		var stdCompiler = compileNodentedFile(new NodentCompiler({logger:initOpts.log}),initOpts.log) ;
+		require.extensions['.js'] = function(mod,filename) {
+			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+			var parseOpts = parseCompilerOptions(content,initOpts.log) ; 
+			if (parseOpts)
+				return stdCompiler(mod,filename,parseOpts) ;
+			return stdJSLoader(mod,filename) ;
+		} ;
+	}
+
+	/* If the initOpts specified a file extension, use this compiler for it */
+	if (initOpts.extension && !require.extensions[initOpts.extension]) {
+		require.extensions[initOpts.extension] = compileNodentedFile(nodent,initOpts.log) ;
+	}
+
+	// Finally, load any required covers
 	if (initOpts.use) {
 		if (Array.isArray(initOpts.use)) {
 			if (initOpts.use.length) {
-				initOpts.log("Warning: nodent({use:...}) is deprecated in favour of nodent.require(module,options)");
-				initOpts.use.forEach(function(x){nodent.require(x)}) ;
+				initOpts.log("Warning: nodent({use:[...]}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
+				initOpts.use.forEach(function(x){
+					nodent[x] = nodent.require(x) ;
+				}) ;
 			}
 		} else {
-			initOpts.log("Warning: nodent({use:...}) is deprecated in favour of nodent.require(module,options)");
-			Object.keys(initOpts.use).forEach(function(x){nodent.require(x)}) ;
+			initOpts.log("Warning: nodent({use:{...}}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
+			Object.keys(initOpts.use).forEach(function(x){
+				nodent[x] = nodent.require(x,initOpts.use[x])
+			}) ;
 		}
 	}
-	for (var k in initOpts) {
-		if (!config.hasOwnProperty(k))
-			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(initOpts[k])) ;
-		if (k!="use")
-			config[k] = initOpts[k] ;
-	}
-	initialize.configured = true ;
 	return nodent ;
 } ;
 
+
+initEnvironment() ;
+
 initialize.asyncify = asyncify ;
+/* Export these so that we have the opportunity to set the options for the default .js parser */
+initialize.defaultConfig = config ;
+
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
-	// Initialise nodent
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
-	initialize(initOpts) ;
+	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
 	if (process.argv[n]=="--out" || process.argv[n]=="--ast") {
 		// Compile & output, but don't require
-		n += 1 ;
-		var filename = path.resolve(process.argv[n]) ;
+		var filename = path.resolve(process.argv[n+1]) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-		var parseOpts = parseCompilerOptions(content,config) ;
+		var parseOpts = parseCompilerOptions(content,nodent.logger) ;
 		if (!parseOpts) {
 			parseOpts = {es7:true} ;
 			console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
 		}
 
 		var pr = nodent.parse(content,filename,parseOpts);
-		nodent.asynchronize(pr,undefined,parseOpts,config) ;
-		if (process.argv[n-1]=="--out") {
-			nodent.prettyPrint(pr,undefined,parseOpts) ;
+		nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+		if (process.argv[n]=="--out") {
+			nodent.prettyPrint(pr) ;
 			console.log(pr.code) ;
 		} else {
 			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
