@@ -33,13 +33,9 @@ class Three extends Two {
 		this.n.push("C") ;
 	}
 	async name(r) {
-		/*NB: Doesn't work with generators as yield must execute in the function body, not a nested function
 		setImmediate(function(){
 			return async (await super.name(r)*4) ; 
-		}.bind(this));*/
-		
-		/* Works with generators as well as -es7 & Promises */
-		return await super.name(r)*4 ;
+		}.bind(this));
 	}
 	sname(r) {
 		return super.sname(r)*4 ;
@@ -59,7 +55,11 @@ class Four extends Three {
 	}
 } ;
 
-module.exports = async function() {
+async function test() {
 	let x = new Four() ;
 	return x.sname(3)==await x.name(3) && x.sname(3)=="ABCD1204" ;
 }
+
+module.exports = test ;
+
+
