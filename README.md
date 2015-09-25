@@ -136,6 +136,7 @@ The currently supported options are:
 		es7:<boolean>,			// Compile in es7 mode (if no 'use nodent-' directive is present)
 		promises:<boolean>,		// Compile in Promises mode (if no 'use nodent-' directive is present)
 		generator:<boolean>,	// Compile in generator mode (if no 'use nodent-' directive is present)
+		sourcemap:<boolean>		// Create a sourcemap for the browser's debugger
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
@@ -247,14 +248,18 @@ or just:
 
 	console.log(await elasticsearch.search(query)) ;
 
+Defining async functions from ES5
+---------------------------------
+Use nodent! Any function returning a Promise (or Thenable) can be used with `await`.
+
 Gotchas & ES7 compatibility
 ===========================
 
 Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
 
-Defining async functions from ES5
----------------------------------
-   
+Returning async functions from callbacks
+----------------------------------------
+
 Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function, and in its callback use the form `return async <expression>` to not only return from the callback, but also the surrounding async function:
 
 	async function sleep(t) {
@@ -273,9 +278,9 @@ This works because Nodent translates this into:
 	        },t);
 	    });
 	}
-[_TRY-IT_](http://nodent.mailed.me.uk/#%09async%20function%20sleep(t)%20%7B%0A%09%20%20%20%20setTimeout(%24return)%20%3B%0A%09%7D%20%0A)
+[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20sleep(t)%20%7B%0A%20%20%20%20setTimeout(function()%7B%0A%20%20%20%20%20%20%20%20%2F%2F%20NB%3A%20%22return%20async%22%20and%20%22throw%20async%22%20are%20NOT%20ES7%20standard%20syntax%0A%20%20%20%20%20%20%20%20return%20async%20undefined%3B%0A%20%20%20%20%7D%2Ct)%20%3B%0A%7D%20)
 
-Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see [https://github.com/lukehoban/ecmascript-asyncawait/issues/38](https://github.com/lukehoban/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
+Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
 Implicit return
 ---------------
