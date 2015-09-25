@@ -620,7 +620,13 @@ if (require.main===module && process.argv.length>=3) {
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
-	if (process.argv[n]=="--out" || process.argv[n]=="--ast" || process.argv[n]=="--minast") {
+	
+	var opt = process.argv[n] ;
+	switch (opt) {
+	case "--out":
+	case "--ast":
+	case "--minast":
+	case "--parseast":
 		// Compile & output, but don't require
 		var filename = path.resolve(process.argv[n+1]) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
@@ -631,8 +637,9 @@ if (require.main===module && process.argv.length>=3) {
 		}
 
 		var pr = nodent.parse(content,filename,parseOpts);
-		nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
-		switch (process.argv[n]) {
+		if (opt!="--parseast")
+			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+		switch (opt) {
 		case "--out":
 			nodent.prettyPrint(pr) ;
 			console.log(pr.code) ;
@@ -641,12 +648,14 @@ if (require.main===module && process.argv.length>=3) {
 			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
 			break ;
 		case "--minast":
+		case "--parseast":
 			console.log(JSON.stringify(pr.ast,function(key,value){ 
 				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
 			},0)) ;
 			break ;
 		}
-	} else {
+		break;
+	default:
 		// Compile & require
 		var mod = path.resolve(process.argv[n]) ;
 		require(mod);

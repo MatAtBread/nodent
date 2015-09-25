@@ -70,7 +70,6 @@ context.test = async function(x,y) {
 async function run() {
 	var n = 0 ;
 
-	debugger ;
 	for (m=0; m<8; m++) {
 		var r = ""+await context.test("1","2")+await context.test("3","s")+await context.test("t","4")+await context.test("u","v") ;
 		if (r=="134xuv")
