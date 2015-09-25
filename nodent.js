@@ -32,6 +32,7 @@ var config = {
 var defaultCodeGenOpts = {
 	$return:"$return",
 	$error:"$error",
+	$arguments:"$args",
 	bindAwait:"$asyncbind",
 	bindAsync:"$asyncbind",
 	bindLoop:"$asyncbind"

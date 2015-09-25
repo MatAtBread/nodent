@@ -43,7 +43,7 @@ try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
 
 var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false ;
+var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false ;
 var idx = 3 ;
 
 for (idx=3; idx < process.argv.length; idx++) {
