@@ -428,7 +428,7 @@ Options:
 
 Return: a 'nodent' compiler object with the following properties:
 
-|Member| Type/Return |  |
+|Member| Type |  |
 |-------|-----|------------------------|
 |version|string|The currently installed version|
 |asyncify (PromiseProvider)|function|Return a function to convert an object with callback members to one with Thenable members. `asyncify` is also a meta-property (see below)
@@ -447,14 +447,13 @@ You can over-ride certain defaults and access values that are global to the proc
 
 	var nodent = require('nodent') ;
 
-
 The available meta-properties are:
-|Member| Type |  |
+
+| Member| Type |  |
 |-------|-----|------------------------|
 |Thenable|function|Default thenable protocol implementation|
 |asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables|
 |setDefaultCompileOptions (options)|function|Set the defaults for the compiler. This should be called before the first compiler is created.|
-
 
 	// Turn off sourcemap generation:
 	nodent.setDefaultCompileOptions({sourcemap:false}) 
