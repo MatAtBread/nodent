@@ -1,14 +1,14 @@
 {
   "name": "nodent",
-  "version": "1.2.9",
+  "version": "2.0.0",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
     "test": "./nodent tests"
   },
   "dependencies": {
-    "source-map": ">=0.1.33",
-    "uglify-js": "^2.4.24"
+    "acorn": "^2.4.0",
+    "source-map": ">=0.1.33"
   },
   "repository": {
     "type": "git",
@@ -24,6 +24,8 @@
     "extensions",
     "Node",
     "callback",
+    "generator",
+    "Promise",
     "asynchronous"
   ],
   "author": "Mat At Bread <nodent@mailed.me.uk>",

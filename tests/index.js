@@ -3,7 +3,6 @@
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
 var nodent = require('../nodent')({
-	use:["map"],
 	log:function(msg){ msgs.push(msg) }
 }) ;
 var Promise = nodent.Thenable ;
@@ -31,29 +30,41 @@ global.breathe = async function breathe() {
 
 var providers = [] ;
 
+providers.push({name:'sample',p:null});
 providers.push({name:'nodent-es7',p:null});
 providers.push({name:'nodent.Thenable',p:nodent.Thenable});
 if (global.Promise) {
 	providers.push({name:'native',p:global.Promise}) ;
 }
 
-try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { /* Not installed */ }
-try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { /* Not installed */ }
-try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { /* Not installed */ }
+try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { }
+try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
+try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
 
 var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false ;
+var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false ;
 var idx = 3 ;
 
+try {
+	eval("x=>0") ;
+} catch (ex) {
+	notES6 = true ;
+}
+
 for (idx=3; idx < process.argv.length; idx++) {
-	if (process.argv[idx]=='--generators') {
+	if (process.argv[idx]=='--generators' || process.argv[idx]=='--genonly') {
 		try {
-			eval("var temp = new Promise(function(){}) ; function *x(){ return }") ;
+			eval("var temp = new Promise(function(){}) ; function* x(){ return }") ;
 		} catch (ex) {
-			throw new Error("*** Installed platform does not support Promises or Generators") ;
+			ex = new Error("*** Installed platform does not support Promises or Generators") ;
+			ex.stack = "" ;
+			throw ex ;
 		}
 		useGenerators = true ;
+		useGenOnly = process.argv[idx]=='--genonly' ;
+		if (useGenOnly)
+			providers.splice(1,1) ;
 	} else if (process.argv[idx]=='--out') {
 		showOutput = true ;
 		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
@@ -75,6 +86,23 @@ function pad(s) {
 	return (s+"                        ").substring(0,24)
 }
 
+async function run(fn) {
+	var tid = setTimeout(function(){
+		var x = $error ;
+		$return = null ;
+		$error = null ;
+		return x(new Error("timeout")) ;
+	},5000) ;
+	
+	fn.then(function(r){
+		tid && clearTimeout(tid) ;
+		return $return && $return(r) ;
+	},function(ex){
+		tid && clearTimeout(tid) ;
+		return $error && $error(ex) ;
+	}) 
+}
+
 var tests = process.argv.length>idx ? 
 	process.argv.slice(idx):
 		fs.readdirSync('./tests').map(function(fn){ return './tests/'+fn}) ;
@@ -84,18 +112,22 @@ async function runTests() {
 		var test = tests[j] ;
 		if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
 			continue ;
+		if (notES6 && test.match(/es6-.*/)) {
+			console.log(pad(test)+" (skipped - ES6 platform not installed)") ;
+			continue ;
+		}
 		var samples = targetSamples ;
 		var timeBase = 0 ;
 		var failed = false ;
 		msgs = [] ;
-		for (var g=0;g<(useGenerators?2:1);g++) {
+		for (var g=(useGenOnly?1:0);g<(useGenerators?2:1);g++) {
 			var info = [pad(test)] ;
-			if (g>0)
-				info.push("x"+samples+"*") ;
+			if (g>0 && targetSamples!=1)
+				info.push("(using generators)") ;
 			for (var i=0; i<providers.length; i++) {
 				var promise = providers[i] ;
 				if (g>0 && !promise.p) {
-					info.push([promise.name]) ;
+					info.push(["(skip "+promise.name+")"]) ;
 					continue ;
 				}
 
@@ -104,45 +136,30 @@ async function runTests() {
 					es7:true,promises:!!promise.p,generators:g>0
 				}) ;
 				var m = {} ;
+				if (showOutput)
+					console.log(pr.code) ;
 				var fn = new Function("module","require","Promise","es7",pr.code) ;
 				failed = fn.toString() ;
-				if (showOutput)
-					console.log(failed) ;
 				if (showOutput && saveOutput) {
-					fs.writeFileSync(test+".out",failed) ;
+					fs.writeFileSync(test+".out",pr.code) ;
 				}
 
 				fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
-				await sleep(10);
+				await breathe();
 
-				async function run(fn) {
-					var tid = setTimeout(function(){
-						var x = $error ;
-						$return = null ;
-						$error = null ;
-						return x(new Error("timeout")) ;
-					},5000) ;
-					
-					fn.then(function(r){
-						tid && clearTimeout(tid) ;
-						return $return && $return(r) ;
-					},function(ex){
-						tid && clearTimeout(tid) ;
-						return $error && $error(ex) ;
-					}) 
-				}
-			
 				try {
 					var result,t = Date.now() ;
 					if (samples<0) {
 						samples = 0 ;
-						do {
+						while(1) {
 							result = await run(m.exports());
 							samples++ ;
-							if (!(samples&31))
+							if (!(samples&31)) {
 								t += await breathe() ;
+								if (Date.now()-t > 100 || samples>10000)
+									break ;
+							}
 						}
-						while (Date.now()-t < 100 && samples<5000) ;
 						timeBase = Date.now()-t ;
 						info.push("x"+samples) ;
 					} else {
@@ -158,7 +175,9 @@ async function runTests() {
 						info.push([promise.name,"?",result]) ;
 					} else {
 						failed = null ;
-						if (!reSample)
+						if (targetSamples==1)
+							info.push([promise.name]) ;
+						else if (!reSample)
 							info.push([promise.name,t+"ms"]) ;
 						else
 							info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;

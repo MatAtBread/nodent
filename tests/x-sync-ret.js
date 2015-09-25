@@ -1,5 +1,3 @@
-"use nodent-es7";
-
 var res ;
 async function getSlowRemote() {
 	// Do the async return after 1 seconds

@@ -1,3 +1,5 @@
+"use nodent-generators";
+
 async function test(error) {
 	var res = "" ;
 	async function progress(x) {
@@ -50,6 +52,6 @@ async function test(error) {
 } ;
 
 module.exports = async function() {
-	return (await test(false)=="x1p1x1p1x1p1x2p2x3p3x4p4") &&
-		(await test(true)=="x1p1x1p1x1p1x2p2x3p3x4p4*5") ;
+	return (await test(false))=="x1p1x1p1x1p1x2p2x3p3x4p4" &&
+		(await test(true))=="x1p1x1p1x1p1x2p2x3p3x4p4*5" ;
 }
