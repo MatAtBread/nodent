@@ -641,7 +641,7 @@ if (require.main===module && process.argv.length>=3) {
 			break ;
 		case "--minast":
 			console.log(JSON.stringify(pr.ast,function(key,value){ 
-				return key[0]==="$" || key.match(/start|enf|loc|type/)?undefined:value
+				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
 			},0)) ;
 			break ;
 		}
