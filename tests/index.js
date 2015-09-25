@@ -43,15 +43,23 @@ try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
 
 var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false ;
+var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false ;
 var idx = 3 ;
+
+try {
+	eval("x=>0") ;
+} catch (ex) {
+	notES6 = true ;
+}
 
 for (idx=3; idx < process.argv.length; idx++) {
 	if (process.argv[idx]=='--generators' || process.argv[idx]=='--genonly') {
 		try {
 			eval("var temp = new Promise(function(){}) ; function* x(){ return }") ;
 		} catch (ex) {
-			throw new Error("*** Installed platform does not support Promises or Generators") ;
+			ex = new Error("*** Installed platform does not support Promises or Generators") ;
+			ex.stack = "" ;
+			throw ex ;
 		}
 		useGenerators = true ;
 		useGenOnly = process.argv[idx]=='--genonly' ;
@@ -104,6 +112,10 @@ async function runTests() {
 		var test = tests[j] ;
 		if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
 			continue ;
+		if (notES6 && test.match(/es6-.*/)) {
+			console.log(pad(test)+" (skipped - ES6 platform not installed)") ;
+			continue ;
+		}
 		var samples = targetSamples ;
 		var timeBase = 0 ;
 		var failed = false ;
