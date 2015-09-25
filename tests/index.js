@@ -55,6 +55,8 @@ for (idx=3; idx < process.argv.length; idx++) {
 		}
 		useGenerators = true ;
 		useGenOnly = process.argv[idx]=='--genonly' ;
+		if (useGenOnly)
+			providers.splice(1,1) ;
 	} else if (process.argv[idx]=='--out') {
 		showOutput = true ;
 		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
@@ -113,7 +115,7 @@ async function runTests() {
 			for (var i=0; i<providers.length; i++) {
 				var promise = providers[i] ;
 				if (g>0 && !promise.p) {
-					info.push([promise.name]) ;
+					info.push(["(skip "+promise.name+")"]) ;
 					continue ;
 				}
 
