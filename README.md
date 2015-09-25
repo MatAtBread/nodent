@@ -446,13 +446,15 @@ Meta-API
 You can over-ride certain defaults and access values that are global to the process (as opposed to module by module) by instantiating nodent _without_ an argument:
 
 	var nodent = require('nodent') ;
-	
+
+
 The available meta-properties are:
 |Member| Type |  |
 |-------|-----|------------------------|
-|Thenable|function|Default thenable protocol implementation
-|asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables 
-|setDefaultCompileOptions (options)|function|Set the defaults for the compiler. This should be called before the first compiler is created.
+|Thenable|function|Default thenable protocol implementation|
+|asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables|
+|setDefaultCompileOptions (options)|function|Set the defaults for the compiler. This should be called before the first compiler is created.|
+
 
 	// Turn off sourcemap generation:
 	nodent.setDefaultCompileOptions({sourcemap:false}) 
