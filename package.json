@@ -24,6 +24,8 @@
     "extensions",
     "Node",
     "callback",
+    "generator",
+    "Promise",
     "asynchronous"
   ],
   "author": "Mat At Bread <nodent@mailed.me.uk>",

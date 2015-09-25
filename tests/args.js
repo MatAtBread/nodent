@@ -12,7 +12,7 @@ var c = {
 	a:async function() {
 		return arguments[2] ;
 	},
-	async b() {
+	b:async function() {
 		return arguments[3] ;
 	}
 } ;

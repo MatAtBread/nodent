@@ -30,6 +30,7 @@ var config = {
 } ;
 
 var defaultCodeGenOpts = {
+	sourcemap:true,
 	$return:"$return",
 	$error:"$error",
 	$arguments:"$args",
@@ -190,7 +191,7 @@ function compileNodentedFile(nodent,logger) {
 		var pr = nodent.parse(content,filename,parseOpts);
 		parseOpts = parseOpts || parseCompilerOptions(pr.ast,logger) ;
 		nodent.asynchronize(pr,undefined,parseOpts,logger) ;
-		nodent.prettyPrint(pr) ;
+		nodent.prettyPrint(pr,parseOpts) ;
 		mod._compile(pr.code, pr.filename);
 	}
 };
@@ -257,16 +258,17 @@ function asyncify(promiseProvider) {
 	}
 };
 
-function prettyPrint(pr) {
+function prettyPrint(pr,opts) {
 	var map ;
 	var filepath = pr.filename.split("/") ; 
 	var filename = filepath.pop() ;
 
-	var out = outputCode(pr.ast/*,{map:{
+// XXX: Need an option to switch sourcemaps on and off
+	var out = outputCode(pr.ast,(opts && opts.sourcemap)?{map:{
 		file: filename, //+"(original)", 
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
-	}}*/) ;
+	}}:null) ;
 
 	try {
 		var mapUrl = "" ;
@@ -389,7 +391,7 @@ function compile(code,origFilename,__sourceMapping,opts) {
 	
 	var pr = this.parse(code,origFilename,null,opts);
 	this.asynchronize(pr,null,opts,this.logger) ;
-	this.prettyPrint(pr) ;
+	this.prettyPrint(pr,opts) ;
 	return pr ;
 }
 
@@ -608,6 +610,13 @@ function initialize(initOpts){
 
 initEnvironment() ;
 
+initialize.setDefaultCompileOptions = function(o) {
+	Object.keys(o).forEach(function(k){
+		if (!(k in defaultCodeGenOpts))
+			throw new Error("NoDent: unknown option: "+k) ;
+		defaultCodeGenOpts[k] = o[k] ;
+	}) ;
+}
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
 /* Export these so that we have the opportunity to set the options for the default .js parser */
@@ -618,6 +627,7 @@ module.exports = initialize ;
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
+	initialize.setDefaultCompileOptions({sourcemap:false});
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
@@ -642,7 +652,7 @@ if (require.main===module && process.argv.length>=3) {
 			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
 		switch (opt) {
 		case "--out":
-			nodent.prettyPrint(pr) ;
+			nodent.prettyPrint(pr,parseOpts) ;
 			console.log(pr.code) ;
 			break ;
 		case "--ast":
