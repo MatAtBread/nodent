@@ -1,5 +1,7 @@
 "use nodent-promises";
 
+var Promise = global.Promise || require('../../nodent').Thenable ;
+
 module.exports = {
 		name: "promises",
 		call:async function() {
