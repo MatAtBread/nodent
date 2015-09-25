@@ -262,11 +262,11 @@ function prettyPrint(pr) {
 	var filepath = pr.filename.split("/") ; 
 	var filename = filepath.pop() ;
 
-	var out = outputCode(pr.ast,{map:{
+	var out = outputCode(pr.ast/*,{map:{
 		file: filename, //+"(original)", 
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
-	}}) ;
+	}}*/) ;
 
 	try {
 		var mapUrl = "" ;
@@ -609,6 +609,7 @@ function initialize(initOpts){
 initEnvironment() ;
 
 initialize.asyncify = asyncify ;
+initialize.Thenable = Thenable ;
 /* Export these so that we have the opportunity to set the options for the default .js parser */
 initialize.defaultConfig = config ;
 

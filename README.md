@@ -78,32 +78,32 @@ If you are using nodent as part of a toolchain with another compiler, you can ou
 
 Use within your Node scripts
 ============================
-There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they either have the extention ".njs", or a `use nodent-...` directive at the top.
+There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent-...` directive at the top, or have the extension ".njs".
 
 ES7 and Promises
 ----------------
-The ES7 proposal for async and await specified not only the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
+Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the one of directives:
 
-Nodent can operate either with of without Promises as this type. The pros and cons are:
-
-* Using promises makes it easy to, in particular, `await` on third-party code that returns a Promise, and create Promises by invoking an async function. The downside is your execution environment must somehow support Promises at run-time. Some browsers have Promises built in (later versions of Chrome and Firefox) as does Node v11. In other environments you must include a third-party implementation of Promises. Promises also make debugging a little more tricky as stepping in and out of async functions will go into your Promise implementation.
-* Not using Promises requires minimal run-time support, is easier to debug (pairs of callbacks are used to enter and exit async functions), but provides no compatibility between Promises and Nodent async functions, other than via ES5 constructs.
-
-To specify that you wish to use Promises, make the first directive in your file:
-
-	"use nodent-promise";
-
-as opposed to:
-
+	"use nodent-promises";
 	"use nodent-es7";
-
-Changing the directive will change the generated ES5 JavaScript code, but nothing else. If you use Promises, you must define the variable `Promise` in any files which declare `async` functions, or define a `global.Promise`. Nodent has a `Thenable` member that implements the bare minimum needed by Nodent. This implementation is NOT a full Promise-compliant type, but defines a constructor that creates a type with a Promise friendly `then()` method. 
-
-Versions of nodent since v1.1.0 also support using generators, in common with traceur, regenerator and the ES7 specification. This requires an ES6-compliant JS engine. Note that using generators is considerably slower that using Promises, which is itself slower than using Nodent Thenables or ES7 mode. (See Testing below). If you wish to use generators,
-
 	"use nodent-generators";
 
-at the top of your file.
+The ES7 proposal for async and await specified not only the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise.
+
+### Which one should you use?
+All the implementations work with each other - you can mix and match.
+
+#### Shipping a self-contained app to a browser or other unknown environment
+`use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, and works on a wide range of desktop and mobile browsers.
+
+#### Shipping a self-contained app within Node
+`use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, but can consume Promises returned by other modules (via `await`) and provide Thenables as well (via `async`). `use nodent-promises` is also a good choice, and if you don't want to import a full Promise implementation you can set `var Promise = require('nodent').Thenable` immediately after the directive. Node v0.12 and later have a native Promise implementation which works, but is a bit slow.
+
+#### Shipping a module within Node, npm or similar
+`use nodent-promises` provides the most compatibility between modules and apps. You should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API.
+
+#### Generators
+`use nodent-generators` provides code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x (which has compatibility issues with some popular libraries) and the performance and memory overhead of generators is poor - currently averaging 3 or 4 times slower.
 
 Use within a browser
 ====================
