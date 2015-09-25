@@ -195,11 +195,6 @@ function compileNodentedFile(nodent,logger) {
 };
 
 // Things that DON'T depend on initOpts (or config, and therefore nodent)
-function Thenable(thenable) {
-	thenable.then = thenable ;
-	return thenable ;
-};	
-
 function asyncify(promiseProvider) {
 	promiseProvider = promiseProvider || Thenable ;
 	return function(obj,filter,suffix) {
@@ -326,7 +321,7 @@ function $asyncbind(self,catcher) {
 
 function $asyncspawn(promiseProvider,self) {
 	var genF = this ;
-    return new promiseProvider(function(resolve, reject) {
+    return new promiseProvider(function enough(resolve, reject) {
         var gen = genF.call(self, resolve, reject);
         function step(fn,arg) {
             var next;
@@ -334,6 +329,8 @@ function $asyncspawn(promiseProvider,self) {
                 next = fn.call(gen,arg);
 	            if(next.done) {
 	            	if (next.value !== resolve) {
+	    	            if (next.value && next.value===next.value.then)
+	    	            	return next.value(resolve,reject) ;
 		            	resolve && resolve(next.value);
 		            	resolve = null ;
 	            	}
@@ -358,6 +355,10 @@ function $asyncspawn(promiseProvider,self) {
         step(gen.next);
     });
 }
+
+function Thenable(thenable) {
+	return thenable.then = thenable ; 
+};	
 
 function isThenable(obj) {
 	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";

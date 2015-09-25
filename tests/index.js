@@ -47,13 +47,14 @@ var showOutput = false, saveOutput = false, quiet = false, useGenerators = false
 var idx = 3 ;
 
 for (idx=3; idx < process.argv.length; idx++) {
-	if (process.argv[idx]=='--generators') {
+	if (process.argv[idx]=='--generators' || process.argv[idx]=='--genonly') {
 		try {
 			eval("var temp = new Promise(function(){}) ; function* x(){ return }") ;
 		} catch (ex) {
 			throw new Error("*** Installed platform does not support Promises or Generators") ;
 		}
 		useGenerators = true ;
+		useGenOnly = process.argv[idx]=='--genonly' ;
 	} else if (process.argv[idx]=='--out') {
 		showOutput = true ;
 		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
@@ -105,7 +106,7 @@ async function runTests() {
 		var timeBase = 0 ;
 		var failed = false ;
 		msgs = [] ;
-		for (var g=0;g<(useGenerators?2:1);g++) {
+		for (var g=(useGenOnly?1:0);g<(useGenerators?2:1);g++) {
 			var info = [pad(test)] ;
 			if (g>0 && targetSamples!=1)
 				info.push("(using generators)") ;
@@ -130,7 +131,7 @@ async function runTests() {
 				}
 
 				fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
-				await sleep(10);
+				await breathe();
 
 				try {
 					var result,t = Date.now() ;
