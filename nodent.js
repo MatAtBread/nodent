@@ -58,7 +58,7 @@ function parseCompilerOptions(code,logger) {
 				es7: !!code.match(directives.useES7Directive),
 				generators: !!code.match(directives.useGeneratorsDirective)
 		} ;
-		if (parseOpts.promises) 
+		if (parseOpts.promises)
 			parseOpts.es7 = true ;
 	} else {
 		// code is an AST
@@ -260,12 +260,12 @@ function asyncify(promiseProvider) {
 
 function prettyPrint(pr,opts) {
 	var map ;
-	var filepath = pr.filename.split("/") ; 
+	var filepath = pr.filename.split("/") ;
 	var filename = filepath.pop() ;
 
 // XXX: Need an option to switch sourcemaps on and off
 	var out = outputCode(pr.ast,(opts && opts.sourcemap)?{map:{
-		file: filename, //+"(original)", 
+		file: filename, //+"(original)",
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
 	}}:null) ;
@@ -274,6 +274,7 @@ function prettyPrint(pr,opts) {
 		var mapUrl = "" ;
 		var jsmap = out.map.toJSON();
 		if (jsmap) {
+			pr.sourcemap = jsmap ;
 			smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
 			mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"
 				+btoa(JSON.stringify(jsmap))+"\n" ;
@@ -314,7 +315,7 @@ function $asyncbind(self,catcher) {
 		thenable.then = thenable ;
 		return thenable ;
 	} else {
-		var b = function() { 
+		var b = function() {
 			return resolver.apply(self,arguments) ;
 		} ;
 		b.then = b ;
@@ -360,8 +361,8 @@ function $asyncspawn(promiseProvider,self) {
 }
 
 function Thenable(thenable) {
-	return thenable.then = thenable ; 
-};	
+	return thenable.then = thenable ;
+};
 
 function isThenable(obj) {
 	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
@@ -388,7 +389,7 @@ function compile(code,origFilename,__sourceMapping,opts) {
 		if (!(k in opts))
 			opts[k] = defaultCodeGenOpts[k] ;
 	}
-	
+
 	var pr = this.parse(code,origFilename,null,opts);
 	this.asynchronize(pr,null,opts,this.logger) ;
 	this.prettyPrint(pr,opts) ;
@@ -449,7 +450,7 @@ function generateRequestHandler(path, matchRegex, options) {
 					}
 					res.setHeader("Content-Type", contentType);
 					if (options.enableCache)
-						cache[req.url] = {output:pr,contentType:contentType} ; 
+						cache[req.url] = {output:pr,contentType:contentType} ;
 					options.setHeaders && options.setHeaders(res) ;
 					res.write(pr) ;
 					res.end();
@@ -469,7 +470,7 @@ function NodentCompiler(members) {
 
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
-NodentCompiler.prototype.isThenable =  isThenable ; 
+NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
 NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
@@ -501,13 +502,13 @@ function initialize(initOpts){
  */
 	if (!initOpts)
 		initOpts = {} ;
-	
+
 	// Fill in any missing options with their default values
 	Object.keys(config).forEach(function(k){
 		if (!(k in initOpts))
 			initOpts[k] = config[k] ;
 	}) ;
-	
+
 	// Throw an error for any options we don't know about
 	for (var k in initOpts) {
 		if (k==="use")
@@ -534,7 +535,7 @@ function initialize(initOpts){
 			}
 		}) ;
 	}
-	
+
 	// If anyone wants to mapStackTraces, do it. The augmentation does not depend on the config options
 	if (!initOpts.dontMapStackTraces) {
 		// This function is part of the V8 stack trace API, for more info see:
@@ -556,12 +557,12 @@ function initialize(initOpts){
 			return error + stack.map(mappedTrace).join('');
 		}
 	}
-	
+
 	// Create a new compiler
 	var nodent = new NodentCompiler({
 		logger: initOpts.log
 	}) ;
-	
+
 	/**
 	 * We need a global to handle funcbacks for which no error handler has ever been defined.
 	 */
@@ -577,7 +578,7 @@ function initialize(initOpts){
 		var stdCompiler = compileNodentedFile(new NodentCompiler({logger:initOpts.log}),initOpts.log) ;
 		require.extensions['.js'] = function(mod,filename) {
 			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var parseOpts = parseCompilerOptions(content,initOpts.log) ; 
+			var parseOpts = parseCompilerOptions(content,initOpts.log) ;
 			if (parseOpts)
 				return stdCompiler(mod,filename,parseOpts) ;
 			return stdJSLoader(mod,filename) ;
@@ -631,7 +632,7 @@ if (require.main===module && process.argv.length>=3) {
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
-	
+
 	var opt = process.argv[n] ;
 	switch (opt) {
 	case "--out":
@@ -660,7 +661,7 @@ if (require.main===module && process.argv.length>=3) {
 			break ;
 		case "--minast":
 		case "--parseast":
-			console.log(JSON.stringify(pr.ast,function(key,value){ 
+			console.log(JSON.stringify(pr.ast,function(key,value){
 				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
 			},0)) ;
 			break ;
