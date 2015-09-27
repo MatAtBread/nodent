@@ -671,13 +671,21 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+27-Sep-15: Fix case where `if (x) return await y ;` incorrectly evaluated the `await` before the test.
+
 23-Sep-15: Initial release of Nodent v2.x.x., which has moved from UglifyJS to the acorn parser and the ESTree AST representation, mainly for performance and to support ES6 targets such as Node v4.x.x
 
 Upgrading
 ---------
-If you're moving from Nodent <2.0.0, note that:
-* the old (<v1.0.38) ES5 assignment operator "<<=" and "async-function" syntax is no longer supported.
-* the compiler always uses the Thenable protocol, even in -es7 mode, to ensure interoperability
-* additional ES5/6 constructs are available such as object/class method definitions can be marked async
-* ES6 constructs like arrow functions (and async arrows) and the 'super' are supported
-* arguments are correctly mapped into async function bodies 
+Nodent v2 is a major update. There may be some breaking changes. Significant changes are:
+
+* Moved from Uglify2 to Acorn for input parsing, and re-written much of tree manipulation
+* Supports ES6 input syntax, so suitable for adding async & await to ES6 code in Node v4.x.x
+* Additional tests for interoperability between es7, Promises and Generator mode
+* Cleaner options for code generation and configuration.
+* The old (<v1.0.38) ES5 assignment operator "<<=" and "async-function" syntax is no longer supported.
+* The compiler always uses the Thenable protocol, even in -es7 mode, to ensure interoperability
+* Additional ES5/6 constructs are available such as object/class method definitions can be marked `async` (see gotacha about `async get fn()`)
+* ES6 constructs like arrow functions (and async arrows) and `super` are supported
+* `arguments` is correctly mapped into async function bodies and no longer refer to the $return and $error parameters 
+* Generator mode falls back to Promises mode to implement the non-ES7 standard extensions `return async expression`, `throw async expression` and `await` outside of an `async` function.
