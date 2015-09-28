@@ -47,7 +47,7 @@ module.exports = function(nodent,opts) {
 				function completeError(x) {
 					if (!hasError && opts.throwOnError) {
 						hasError = new Error() ;
-						hasError.results = results ;
+						hasError.results = result ;
 					}
 					if (!(x instanceof Error))
 						x = new Error(x) ;
