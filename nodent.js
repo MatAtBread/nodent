@@ -372,11 +372,11 @@ function isThenable(obj) {
 function requireCover(cover,opts) {
 	if (!this.covers[cover]) {
 		if (cover.indexOf("/")>=0)
-			this.covers[cover] = require(cover)(this,opts) ;
+			this.covers[cover] = require(cover) ;
 		else
-			this.covers[cover] = require("./covers/"+cover)(this,opts) ;
+			this.covers[cover] = require("./covers/"+cover);
 	}
-	return this.covers[cover] ;
+	return this.covers[cover](this,opts) ;
 }
 
 function compile(code,origFilename,__sourceMapping,opts) {

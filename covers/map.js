@@ -1,5 +1,6 @@
-module.exports = function(nodent) {
+module.exports = function(nodent,opts) {
 	return new nodent.Thenable(function map(what,result,asyncFn) {
+		var hasError = null ;
 		if (typeof what=="number") {
 			var period = [] ;
 			period.length = Math.floor(what) ;
@@ -36,7 +37,7 @@ module.exports = function(nodent) {
 					result[k] = r ;
 					len -= 1 ;
 					if (len==0)
-						return $return(result) ;
+						return hasError?$error(hasError):$return(result) ;
 					else if (len<0) {
 						context.message = "mapAsync: Excess $returns/errors"+k.toString() ;
 						$error(context) ;
@@ -44,10 +45,13 @@ module.exports = function(nodent) {
 					}
 				} ;
 				function completeError(x) {
-					if (x instanceof Error)
-						complete(x) ;
-					else
-						complete(new Error(x)) ;
+					if (!hasError && opts.throwOnError) {
+						hasError = new Error() ;
+						hasError.results = results ;
+					}
+					if (!(x instanceof Error))
+						x = new Error(x) ;
+					complete(x) ;
 				}
 				
 				if (asyncFn) {

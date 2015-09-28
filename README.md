@@ -537,10 +537,11 @@ The "http" cover (not https) can accept a single configuration option 'autoProto
 
 "map"
 -----
-The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map(). The map function takes three parameters: 
+The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map() or Promsie.all(). The map function takes three parameters: 
+
 * the entity to iterate over, 
 * optionally an object in which to place the results (they are returned from the async map in any case),
-* the async function to call on each iteration.
+* the async function to call on each iteration. 
 
 The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as returned asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
 
@@ -595,8 +596,6 @@ Example: execute arbitrary async functions in parallel and return when they are 
 	
 	/* All done - mapped is an new array containing the async-returns */
 
-	
-
 Example: execute arbitrary labelled async functions in parallel and return when they are all complete
 
 	// Use nodent.map
@@ -611,9 +610,16 @@ In the latter two cases, where there is only an single parameter, the async retu
 
 The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.  the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.
 
-In the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, and so they can be easily tested for in the mapped object after completion. 
+### Exceptions in mapped functions
+By default, in the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, and so they can be easily tested for in the mapped object after completion. 
 
 The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
+
+Alternatively, if instantiated with the option `throwOnError`, if any of the async invocations throw an exception, `map()` will throw an Error() when all the functions have completed, with a member called `results` containing the other results. To use this option:
+
+	var map = nodent.require('map',{throwOnError:true}) ;
+
+Instances of 'map' are independent of each other - you can require() both the throwing and non-throwing version in different modules, or the same module as different variables.
 
 nodent.asyncify
 ---------------
