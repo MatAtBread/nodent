@@ -7,7 +7,25 @@ NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards
 
 It works by (optionally) transforming JavaScript when it is loaded into Node. 
 
-This README assumes you're using Nodent v2.x.x - see the Changelog if your upgrading from an earlier version.
+This README assumes you're using Nodent v2.x.x - see the [Upgrading](#upgrading) if your upgrading from an earlier version.
+
+Contents
+--------
+  * [Online demo](#online-demo)
+  * [Basic Use and Syntax](#basic-use-and-syntax)
+  * [Why Nodent?](#why-nodent)
+  * [Installation](#installation)
+  * [Command\-Line usage](#command-line-usage)
+  * [Use within Node](#use-within-your-node-scripts)
+    * [ES7 and Promises](#es7-and-promises)
+  * [Use within a browser](#use-within-a-browser)
+  * [async/await syntax](#asyncawait-syntax)
+  * [async, await and ES5/6](#async-await-and-es56)
+  * [Gotchas &amp; ES7 compatibility](#gotchas--es7-compatibility)
+  * [API](#api)
+  * [Built\-in conversions &amp; helpers](#built-in-conversions--helpers)
+  * [Testing](#testing)
+  * [Changelog](#changelog)
 
 Online demo
 ===========
@@ -681,9 +699,19 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
-27-Sep-15: Fix case where `if (x) return await y ;` incorrectly evaluated the `await` before the test.
+29-Sep-15: v2.0.2
 
-23-Sep-15: Initial release of Nodent v2.x.x., which has moved from UglifyJS to the acorn parser and the ESTree AST representation, mainly for performance and to support ES6 targets such as Node v4.x.x
+- Add --sourcemap option to command line
+- Tidy up stack trace mapping
+- Add option throwOnError to covers/map (and test case)
+- Remove extraneous line end after "debugger;" statement
+- Only set EventEmitter.prototype.wait once (since covers can now be re-instantiated)
+
+27-Sep-15: v2.0.1
+
+- Fix case where `if (x) return await y ;` incorrectly evaluated the `await` before the test.
+
+23-Sep-15: v2.0.0. Initial release of Nodent v2.x.x., which has moved from UglifyJS to the acorn parser and the ESTree AST representation, mainly for performance and to support ES6 targets such as Node v4.x.x. See "upgrading" below.
 
 Upgrading
 ---------
