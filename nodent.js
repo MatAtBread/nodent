@@ -301,6 +301,7 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
+
 function $asyncbind(self,catcher) {
 	var resolver = this ;
 	if (catcher) {
@@ -315,11 +316,11 @@ function $asyncbind(self,catcher) {
 		thenable.then = thenable ;
 		return thenable ;
 	} else {
-		var b = function() {
-			return resolver.apply(self,arguments) ;
+		var then = function(result,error) {
+			return resolver.call(self,result,error) ;
 		} ;
-		b.then = b ;
-		return b ;
+		then.then = then ;
+		return then ;
 	}
 }
 
@@ -544,13 +545,17 @@ function initialize(initOpts){
 			function mappedTrace(frame) {
 				var source = frame.getFileName();
 				if (source && smCache[source]) {
-					var position = smCache[source].smc.originalPositionFor({line: frame.getLineNumber(), column: frame.getColumnNumber()-1});
-					var desc = frame.toString() ;
-
-					var s = source.split("/"), d = smCache[source].map.sources[0].split("/") ;
-					for (var i=0; i<s.length-1 && s[i]==d[i]; i++) ;
-					desc = desc.substring(0,desc.length-1)+" => \u2026"+d.slice(i).join("/")+":"+position.line+":"+position.column+")" ;
-					return '\n    at '+desc ;
+					var position = smCache[source].smc.originalPositionFor({
+						line: frame.getLineNumber(), 
+						column: frame.getColumnNumber()
+					});
+					if (position && position.line) {
+						var desc = frame.toString() ;
+						return '\n    at '
+							+ desc.substring(0,desc.length-1)
+							+ " => \u2026"+position.source+":"+position.line+":"+position.column
+							+ (frame.getFunctionName()?")":"");
+					}
 				}
 				return '\n    at '+frame;
 			}
@@ -628,48 +633,53 @@ module.exports = initialize ;
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
-	initialize.setDefaultCompileOptions({sourcemap:false});
+	initialize.setDefaultCompileOptions({sourcemap:process.argv.indexOf("--sourcemap")>=0});
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
 
-	var opt = process.argv[n] ;
-	switch (opt) {
-	case "--out":
-	case "--ast":
-	case "--minast":
-	case "--parseast":
-		// Compile & output, but don't require
-		var filename = path.resolve(process.argv[n+1]) ;
-		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-		var parseOpts = parseCompilerOptions(content,nodent.logger) ;
-		if (!parseOpts) {
-			parseOpts = {es7:true} ;
-			console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
-		}
-
-		var pr = nodent.parse(content,filename,parseOpts);
-		if (opt!="--parseast")
-			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+	while (n<process.argv.length) {
+		var opt = process.argv[n] ;
 		switch (opt) {
+		case "--sourcemap":
+			n += 1 ;
+			break ;
 		case "--out":
-			nodent.prettyPrint(pr,parseOpts) ;
-			console.log(pr.code) ;
-			break ;
 		case "--ast":
-			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-			break ;
 		case "--minast":
 		case "--parseast":
-			console.log(JSON.stringify(pr.ast,function(key,value){
-				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
-			},2,null)) ;
-			break ;
+			// Compile & output, but don't require
+			var filename = path.resolve(process.argv[n+1]) ;
+			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+			var parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			if (!parseOpts) {
+				parseOpts = {es7:true} ;
+				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+			}
+
+			var pr = nodent.parse(content,filename,parseOpts);
+			if (opt!="--parseast")
+				nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+			switch (opt) {
+			case "--out":
+				nodent.prettyPrint(pr,parseOpts) ;
+				console.log(pr.code) ;
+				return ;
+			case "--ast":
+				console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+				return ;
+			case "--minast":
+			case "--parseast":
+				console.log(JSON.stringify(pr.ast,function(key,value){
+					return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
+				},2,null)) ;
+				return ;
+			}
+			return;
+		default:
+			// Compile & require
+			var mod = path.resolve(process.argv[n]) ;
+			return require(mod);
 		}
-		break;
-	default:
-		// Compile & require
-		var mod = path.resolve(process.argv[n]) ;
-		require(mod);
 	}
 }
