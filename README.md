@@ -74,6 +74,10 @@ If you are using nodent as part of a toolchain with another compiler, you can ou
 
 	nodent.js --ast myNodentedFile.js
 	
+To generate a source-map from the command line, precede the output option (if you're using one) with `--sourcemap`. Note: the order of the command line options is significant.
+
+	nodent.js --sourcemap --out myNodentedFile.js
+
 The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively.
 
 Use within your Node scripts

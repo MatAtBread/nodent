@@ -1,4 +1,5 @@
 module.exports = function(nodent,opts) {
+	opts = opts || {} ;
 	return new nodent.Thenable(function map(what,result,asyncFn) {
 		var hasError = null ;
 		if (typeof what=="number") {
@@ -30,7 +31,7 @@ module.exports = function(nodent,opts) {
 					
 					var k = isArray?i:e ; 
 					if (k in result) {
-						context.message = "mapAsync: multiple $returns/errors"+k.toString ; 
+						context.message = "nodemt.map: multiple $returns/errors -"+k ; 
 						$error(context) ;
 						return ;
 					}
@@ -39,7 +40,7 @@ module.exports = function(nodent,opts) {
 					if (len==0)
 						return hasError?$error(hasError):$return(result) ;
 					else if (len<0) {
-						context.message = "mapAsync: Excess $returns/errors"+k.toString() ;
+						context.message = "nodemt.map: Excess $returns/errors -"+k ;
 						$error(context) ;
 						return ;
 					}
@@ -58,7 +59,7 @@ module.exports = function(nodent,opts) {
 					asyncFn.apply(this,arguments).then(complete,completeError);	
 				} else {
 					var f = isArray?e:what[e] ; 
-					if (f instanceof Object && typeof f.then==="function")
+					if (nodent.isThenable(f))
 						f.then(complete,completeError);
 					else 
 						complete(f) ;
