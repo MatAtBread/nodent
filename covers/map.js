@@ -31,7 +31,7 @@ module.exports = function(nodent,opts) {
 					
 					var k = isArray?i:e ; 
 					if (k in result) {
-						context.message = "nodemt.map: multiple $returns/errors -"+k ; 
+						context.message = "nodent.map: multiple $returns/errors -"+k ; 
 						$error(context) ;
 						return ;
 					}
@@ -40,7 +40,7 @@ module.exports = function(nodent,opts) {
 					if (len==0)
 						return hasError?$error(hasError):$return(result) ;
 					else if (len<0) {
-						context.message = "nodemt.map: Excess $returns/errors -"+k ;
+						context.message = "nodent.map: Excess $returns/errors -"+k ;
 						$error(context) ;
 						return ;
 					}

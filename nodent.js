@@ -309,7 +309,7 @@ function $asyncbind(self,catcher) {
 		var wrap = catcher ;
 		catcher = function(ex){
 			if (context) {
-				ex.stack += (context.stack.split("\n").slice(2).map((s)=>s.replace(/^(\s*)at /g,"\n$1at await ")).join("")) ;
+				ex.stack += (context.stack.split("\n").slice(2).map(function(s){return s.replace(/^(\s*)at /g,"\n$1at await ")}).join("")) ;
 //				ex.stack += context.stack.split("\n")[4].replace(/^(\s*)at /g,"\n$1at await ") ;
 				context = null ;
 			}
