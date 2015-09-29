@@ -304,7 +304,18 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 
 function $asyncbind(self,catcher) {
 	var resolver = this ;
+	var context = new Error() ;
 	if (catcher) {
+		var wrap = catcher ;
+		catcher = function(ex){
+			if (context) {
+				ex.stack += (context.stack.split("\n").slice(2).map((s)=>s.replace(/^(\s*)at /g,"\n$1at await ")).join("")) ;
+//				ex.stack += context.stack.split("\n")[4].replace(/^(\s*)at /g,"\n$1at await ") ;
+				context = null ;
+			}
+			wrap(ex) ;
+		} ;
+
 		function thenable(result,error){
 			try {
 				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
