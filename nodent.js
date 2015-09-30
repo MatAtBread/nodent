@@ -30,6 +30,7 @@ var config = {
 } ;
 
 var defaultCodeGenOpts = {
+	mapStartLine:0,
 	sourcemap:true,
 	$return:"$return",
 	$error:"$error",
@@ -265,7 +266,8 @@ function prettyPrint(pr,opts) {
 
 // XXX: Need an option to switch sourcemaps on and off
 	var out = outputCode(pr.ast,(opts && opts.sourcemap)?{map:{
-		file: filename, //+"(original)",
+		startLine: opts.mapStartLine || 0,
+		file: filename+"-original",
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
 	}}:null) ;
@@ -301,22 +303,13 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
-
 function $asyncbind(self,catcher) {
 	var resolver = this ;
-	var context = new Error() ;
 	if (catcher) {
-		var wrap = catcher ;
-		catcher = function(ex){
-			if (context) {
-				ex.stack += (context.stack.split("\n").slice(2).map(function(s){return s.replace(/^(\s*)at /g,"\n$1at await ")}).join("")) ;
-//				ex.stack += context.stack.split("\n")[4].replace(/^(\s*)at /g,"\n$1at await ") ;
-				context = null ;
-			}
-			wrap(ex) ;
-		} ;
-
+		if ($asyncbind.wrapAsyncStack)
+			catcher = $asyncbind.wrapAsyncStack(catcher) ;
 		function thenable(result,error){
+//			console.log("TT")
 			try {
 				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
 					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
@@ -333,6 +326,31 @@ function $asyncbind(self,catcher) {
 		then.then = then ;
 		return then ;
 	}
+}
+
+$asyncbind.wrapAsyncStack = function wrapAsyncStack(catcher) {
+	var context = {} ;
+	Error.captureStackTrace(context,$asyncbind) ;
+	var wrap = catcher ;
+	return function(ex){
+		if (context) {
+			ex.stack = //+= "\n\t...\n"+
+			ex.stack.split("\n").slice(1,3)
+			.filter(function(s){ 
+				return !s.match(/^\s*at.*nodent\.js/) ;
+			}).join("\n")+
+			ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
+			context.stack.split("\n").slice(2)
+			.filter(function(s){ 
+				return !s.match(/^\s*at.*nodent\.js/) ;
+			})
+			.map(function(s,idx){
+				return idx?"\n"+s:s.replace(/^(\s*)at /g,"\n$1await ")
+			}).join("") ;
+			context = null ;
+		}
+		wrap(ex) ;
+	} ;
 }
 
 function $asyncspawn(promiseProvider,self) {
@@ -415,7 +433,9 @@ function generateRequestHandler(path, matchRegex, options) {
 	if (!matchRegex)
 		matchRegex = /\.njs$/ ;
 	if (!options)
-		options = {} ;
+		options = {compiler:{}} ;
+	else if (!options.compiler)
+		options.compiler = {} ;
 
 	return function (req, res, next) {
 		if (cache[req.url]) {
@@ -455,10 +475,15 @@ function generateRequestHandler(path, matchRegex, options) {
 						pr = require('./htmlScriptParser')(compiler,content.toString(),req.url,options) ;
 						contentType = "text/html" ;
 					} else {
-						pr = compiler.compile(content.toString(),req.url,2,options.compiler).code;
+						if (options.runtime) {
+							pr = "Function.prototype.$asyncbind = "+$asyncbind.toString()+";" ;
+							options.compiler.mapStartLine = pr.split("\n").length ;
+							pr += "\n";
+						} else {
+							pr = "" ;
+						}
+						pr += compiler.compile(content.toString(),req.url,null,options.compiler).code;
 						contentType = "application/javascript" ;
-						if (options.runtime)
-							pr = "Function.prototype.$asyncbind = "+$asyncbind.toString()+";\n"+pr ;
 					}
 					res.setHeader("Content-Type", contentType);
 					if (options.enableCache)
@@ -689,6 +714,8 @@ if (require.main===module && process.argv.length>=3) {
 			return;
 		default:
 			// Compile & require
+			while (process.argv.length > n && process.argv[n].substring(0,2)=='--')
+				n++ ;
 			var mod = path.resolve(process.argv[n]) ;
 			return require(mod);
 		}
