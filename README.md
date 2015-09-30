@@ -504,7 +504,7 @@ Some covers can accept a configuation object, in this case specify the options i
 
 NB: As of v1.2.x, the previous nodent option `{use:["name"]}` option is deprecated (although still implemented), as it was dependent on module loading order in the case where you require a module that itself requires nodent with different options. To access a cover or helper, use the `nodent.require("name")` function.
 
-As of version v1.2.7, the nodent initialisation option `{augmentObject:true}` adds the following functions to Object.prototype. Although polluting a global prototype is considered by some poor design, it is useful in some cases. Specifically, being able to determine if an object is Thenable (i.e. has a member called `then` which is a function), or `asyncify`ing  an arbitary object so it can be awaited on very handy. For example:
+As of version v1.2.7, the nodent initialisation option `{augmentObject:true}` adds the following functions to Object.prototype. Although polluting a global prototype is considered by some poor design, it is useful in some cases. Specifically, being able to determine if an object is Thenable (i.e. has a member called `then` which is a function), or `asyncify`ing  an arbitrary object so it can be awaited on very handy. For example:
 
 /* Create a redis client from a library that can be used with await */
 var redis = require('redis').asyncify() ;
