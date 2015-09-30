@@ -264,10 +264,9 @@ function prettyPrint(pr,opts) {
 	var filepath = pr.filename.split("/") ;
 	var filename = filepath.pop() ;
 
-// XXX: Need an option to switch sourcemaps on and off
 	var out = outputCode(pr.ast,(opts && opts.sourcemap)?{map:{
 		startLine: opts.mapStartLine || 0,
-		file: filename+"-original",
+		file: filename+"(original)",
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
 	}}:null) ;
@@ -309,7 +308,6 @@ function $asyncbind(self,catcher) {
 		if ($asyncbind.wrapAsyncStack)
 			catcher = $asyncbind.wrapAsyncStack(catcher) ;
 		function thenable(result,error){
-//			console.log("TT")
 			try {
 				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
 					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
@@ -328,11 +326,10 @@ function $asyncbind(self,catcher) {
 	}
 }
 
-$asyncbind.wrapAsyncStack = function wrapAsyncStack(catcher) {
+function wrapAsyncStack(catcher) {
 	var context = {} ;
 	Error.captureStackTrace(context,$asyncbind) ;
-	var wrap = catcher ;
-	return function(ex){
+	return function wrappedCatch(ex){
 		if (context) {
 			ex.stack = //+= "\n\t...\n"+
 			ex.stack.split("\n").slice(1,3)
@@ -349,7 +346,7 @@ $asyncbind.wrapAsyncStack = function wrapAsyncStack(catcher) {
 			}).join("") ;
 			context = null ;
 		}
-		wrap(ex) ;
+		return catcher(ex) ;
 	} ;
 }
 
@@ -659,6 +656,11 @@ initialize.setDefaultCompileOptions = function(o) {
 		defaultCodeGenOpts[k] = o[k] ;
 	}) ;
 }
+
+initialize.setAsyncStackTrace = function() {
+	$asyncbind.wrapAsyncStack = wrapAsyncStack ; 
+}
+
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
 /* Export these so that we have the opportunity to set the options for the default .js parser */
@@ -670,6 +672,7 @@ module.exports = initialize ;
 if (require.main===module && process.argv.length>=3) {
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
 	initialize.setDefaultCompileOptions({sourcemap:process.argv.indexOf("--sourcemap")>=0});
+	initialize.setAsyncStackTrace() ;
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;

@@ -476,6 +476,7 @@ The available meta-properties are:
 |Thenable|function|Default thenable protocol implementation|
 |asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables|
 |setDefaultCompileOptions (options)|function|Set the defaults for the compiler. This should be called before the first compiler is created.|
+|setAsyncStackTrace (boolean)|function|Attempt to show stack traces including the awaiting caller|
 
 	// Turn off sourcemap generation:
 	nodent.setDefaultCompileOptions({sourcemap:false}) 
