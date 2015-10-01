@@ -444,6 +444,7 @@ Options:
 |Member| Type |  |
 |-------|-----|------------------------|
 |dontMapStackTraces|boolean|default: false
+|asyncStackTrace|boolean|default: false
 |augmentObject|boolean|Adds asyncify(PromiseProvider) and isThenable() to Object.prototype, making expressions such as `var client = new DB().asyncify(Promise)` and `if (abc.isThenable()) await abc()` less verbose
 |extension|string|extension for files to be compiled (default: '.njs'). Note that this is unused if the file has a `use nodent-` directive.
 |log (msg)|function|Called when nodent has a warning of similar to show. By default they are passed to console.warn(). Set this member to, for example, suppress logging
@@ -475,11 +476,10 @@ The available meta-properties are:
 |-------|-----|------------------------|
 |Thenable|function|Default thenable protocol implementation|
 |asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables|
-|setDefaultCompileOptions (options)|function|Set the defaults for the compiler. This should be called before the first compiler is created.|
-|setAsyncStackTrace (boolean)|function|Attempt to show stack traces including the awaiting caller|
+|setDefaultCompileOptions (compiler[,env])|function|Set the defaults for the compiler and environment. This should be called before the first compiler is created. The default environment options (`log augmentObject extension dontMapStackTraces asyncStackTrace`) will be used when the corresponding option is missing when the compiler is created. The environment options (`sourcemap` and default symbol names) must be set before the first compiler is created. The other compilation options (`es7 promises generators`) are set by the corresponding directive|
 
 	// Turn off sourcemap generation:
-	nodent.setDefaultCompileOptions({sourcemap:false}) 
+	nodent.setDefaultCompileOptions({sourcemap:false},{asyncStackTrace:true}) 
 	
 	// Access values that are global to all nodent compiler instances
 	var Promise = global.Promise || nodent.Thenable ;	// Set a Promise provider for this module

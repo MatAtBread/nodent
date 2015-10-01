@@ -26,7 +26,8 @@ var config = {
 	log:function(msg){ console.warn("Nodent: "+msg) },		// Where to print errors and warnings. This can only be (re)set once
 	augmentObject:false,									// Only one has to say 'yes'
 	extension:'.njs',										// The 'default' extension
-	dontMapStackTraces:false								// Only one has to say 'no'
+	dontMapStackTraces:false,								// Only one has to say 'no'
+	asyncStackTrace:false
 } ;
 
 var defaultCodeGenOpts = {
@@ -37,7 +38,8 @@ var defaultCodeGenOpts = {
 	$arguments:"$args",
 	bindAwait:"$asyncbind",
 	bindAsync:"$asyncbind",
-	bindLoop:"$asyncbind"
+	bindLoop:"$asyncbind",
+	generatedSymbolPrefix:"$"
 };
 
 /* Extract compiler options from code (either a string or AST) */
@@ -330,23 +332,27 @@ function wrapAsyncStack(catcher) {
 	var context = {} ;
 	Error.captureStackTrace(context,$asyncbind) ;
 	return function wrappedCatch(ex){
-		if (context) {
-			ex.stack = //+= "\n\t...\n"+
-			ex.stack.split("\n").slice(1,3)
-			.filter(function(s){ 
-				return !s.match(/^\s*at.*nodent\.js/) ;
-			}).join("\n")+
-			ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
-			context.stack.split("\n").slice(2)
-			.filter(function(s){ 
-				return !s.match(/^\s*at.*nodent\.js/) ;
-			})
-			.map(function(s,idx){
-				return idx?"\n"+s:s.replace(/^(\s*)at /g,"\n$1await ")
-			}).join("") ;
+		if (ex instanceof Error && context) {
+			try {
+				ex.stack = //+= "\n\t...\n"+
+					ex.stack.split("\n").slice(1,3)
+					.filter(function(s){ 
+						return !s.match(/^\s*at.*nodent\.js/) ;
+					}).join("\n")+
+					ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
+					context.stack.split("\n").slice(2)
+					.filter(function(s){ 
+						return !s.match(/^\s*at.*nodent\.js/) ;
+					})
+					.map(function(s,idx){
+						return idx?"\n"+s:s.replace(/^(\s*)at /g,"\n$1await ")
+					}).join("") ;
+			} catch (stackError) {
+				// Just fall through and don't modify the stack
+			}
 			context = null ;
 		}
-		return catcher(ex) ;
+		return catcher.call(this,ex) ;
 	} ;
 }
 
@@ -527,12 +533,15 @@ Object.defineProperty(NodentCompiler.prototype,"Promise",{
 
 /* Construct a 'nodent' object - combining logic and options */
 function initialize(initOpts){
+	initEnvironment() ;
+
 	// Validate the options
 /* initOpts:{
  * 		log:function(msg),
  * 		augmentObject:boolean,
  * 		extension:string?
  * 		dontMapStackTraces:boolean
+ * 		asyncStackTrace:boolean
  */
 	if (!initOpts)
 		initOpts = {} ;
@@ -569,6 +578,9 @@ function initialize(initOpts){
 			}
 		}) ;
 	}
+
+	if (initOpts.asyncStackTrace)
+		$asyncbind.wrapAsyncStack = wrapAsyncStack ;
 
 	// If anyone wants to mapStackTraces, do it. The augmentation does not depend on the config options
 	if (!initOpts.dontMapStackTraces) {
@@ -647,32 +659,29 @@ function initialize(initOpts){
 	return nodent ;
 } ;
 
-initEnvironment() ;
-
-initialize.setDefaultCompileOptions = function(o) {
-	Object.keys(o).forEach(function(k){
+/* Export these so that we have the opportunity to set the options for the default .js parser */
+initialize.setDefaultCompileOptions = function(compiler,env) {
+	compiler && Object.keys(compiler).forEach(function(k){
 		if (!(k in defaultCodeGenOpts))
-			throw new Error("NoDent: unknown option: "+k) ;
-		defaultCodeGenOpts[k] = o[k] ;
+			throw new Error("NoDent: unknown compiler option: "+k) ;
+		defaultCodeGenOpts[k] = compiler[k] ;
 	}) ;
-}
-
-initialize.setAsyncStackTrace = function() {
-	$asyncbind.wrapAsyncStack = wrapAsyncStack ; 
+	env && Object.keys(env).forEach(function(k){
+		if (!(k in env))
+			throw new Error("NoDent: unknown configuration option: "+k) ;
+		config[k] = env[k] ;
+	}) ;
 }
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
-/* Export these so that we have the opportunity to set the options for the default .js parser */
-initialize.defaultConfig = config ;
 
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
-	initialize.setDefaultCompileOptions({sourcemap:process.argv.indexOf("--sourcemap")>=0});
-	initialize.setAsyncStackTrace() ;
+	initialize.setDefaultCompileOptions({sourcemap:process.argv.indexOf("--sourcemap")>=0},{asyncStackTrace:true});
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
