@@ -172,18 +172,18 @@ async function runTests() {
 
 					t = Date.now()-t ;
 					if (result!==true) {
-						info.push([promise.name,result]) ;
+						info.push([promise.name+" \u2717",result]) ;
 					} else {
 						failed = null ;
 						if (targetSamples==1)
-							info.push([promise.name]) ;
+							info.push([promise.name+" \u2713"]) ;
 						else if (!reSample)
 							info.push([promise.name,t+"ms"]) ;
 						else
 							info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
 					}
 				} catch (ex) {
-					info.push([promise.name,"*error*"]) ;
+					info.push([promise.name+" \u2717","*error*"]) ;
 					msgs.push(promise.name+" EX:"+ex.toString()+"\n"+ex.stack) ;
 				}
 			}

@@ -304,6 +304,33 @@ This works because Nodent translates this into:
 
 Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
+Note: it is not possible to asynchronously return an normal function without assigning it to an intermediate identifier:
+
+	function async x() {
+		setTimeout(function(){
+			// This returns (synchronously to setTimeout's callback)
+			// an async function, it does NOT asynchronously return
+			// a synchronous function since 'async' binds to the 'function'
+			// on the right before the 'return' on the left
+			return async function inner() { ... } ;
+			
+			// Workaround:
+			function inner() { ... } ;
+			return async inner ;
+		}) ;
+	}
+
+You can, however return an async function asynchronously from within a synchronous callback (though if you have to, you're probably going to go insane):
+
+	function async x() {
+		setTimeout(function(){
+			// This returns an async function to the caller of await x()
+			return async async function inner() { ... } ;
+		}) ;
+	}
+
+
+
 Implicit return
 ---------------
 Async functions do NOT have an implicit return - i.e. not using the return keyword at the end of an async function means that the caller will never emerge from the `await`. This is intentional, without this behaviour, it would be difficult to have one async function call another (since the first would eventually return, as well as the second).
