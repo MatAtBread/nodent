@@ -154,12 +154,14 @@ function initEnvironment() {
  * The function is transformed from:
  * 		http.get(opts,function(result){}) ;
  * to:
- * 		http.aGet(opts)(function(result){}) ;
+ * 		http.aGet(opts).then(function(result){}) ;
  *
  * @params
  * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
  * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
- * resultIdx 	The argument index of the callback that holds the result. 'undefined' for the argument after the errorIdx (errorIdx != undefined)
+ * resultIdx 	The argument index of the callback that holds the result. 
+ * 				'undefined' for the argument after the errorIdx (errorIdx != undefined)
+ * 				[] returns all the arguments 
  * promiseProvider	For promises, set this to the module providing Promises.
  */
 function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
@@ -176,9 +178,11 @@ function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
 			else {
 				args[idx] = function() {
 					var err = arguments[errorIdx] ;
-					var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
 					if (err)
 						return error(err) ;
+					if (Array.isArray(resultIdx) && resultIdx.length===0)
+						return ok(arguments) ;
+					var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
 					return ok(result) ;
 				} ;
 			}
@@ -335,7 +339,7 @@ function wrapAsyncStack(catcher) {
 		if (ex instanceof Error && context) {
 			try {
 				ex.stack = //+= "\n\t...\n"+
-					ex.stack.split("\n").slice(1,3)
+					ex.stack.split("\n").slice(0,3)
 					.filter(function(s){ 
 						return !s.match(/^\s*at.*nodent\.js/) ;
 					}).join("\n")+
@@ -681,7 +685,12 @@ module.exports = initialize ;
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
-	initialize.setDefaultCompileOptions({sourcemap:process.argv.indexOf("--sourcemap")>=0},{asyncStackTrace:true});
+	initialize.setDefaultCompileOptions({
+		sourcemap:process.argv.indexOf("--sourcemap")>=0
+	},{
+		asyncStackTrace:true,
+		augmentObject:true
+	});
 	var nodent = initialize(initOpts) ;
 	var path = require('path') ;
 	var n = 2 ;
@@ -693,6 +702,7 @@ if (require.main===module && process.argv.length>=3) {
 			n += 1 ;
 			break ;
 		case "--out":
+		case "--pretty":
 		case "--ast":
 		case "--minast":
 		case "--parseast":
@@ -706,10 +716,11 @@ if (require.main===module && process.argv.length>=3) {
 			}
 
 			var pr = nodent.parse(content,filename,parseOpts);
-			if (opt!="--parseast")
+			if (opt!="--parseast" && opt!='--pretty')
 				nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
 			switch (opt) {
 			case "--out":
+			case "--pretty":
 				nodent.prettyPrint(pr,parseOpts) ;
 				console.log(pr.code) ;
 				return ;
@@ -726,10 +737,10 @@ if (require.main===module && process.argv.length>=3) {
 			return;
 		default:
 			// Compile & require
-			while (process.argv.length > n && process.argv[n].substring(0,2)=='--')
-				n++ ;
-			var mod = path.resolve(process.argv[n]) ;
-			return require(mod);
+			while (process.argv.length > n && process.argv[n].substring(0,2)!='--') {
+				var mod = path.resolve(process.argv[n]) ;
+				return require(mod);
+			}
 		}
 	}
 }
