@@ -44,7 +44,7 @@ try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
 var msgs = [] ;
 var targetSamples = -1 ;
 var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false ;
-var idx = 3 ;
+var idx ;
 
 try {
 	eval("x=>0") ;
