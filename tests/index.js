@@ -156,7 +156,7 @@ async function runTests() {
 							samples++ ;
 							if (!(samples&31)) {
 								t += await breathe() ;
-								if (Date.now()-t > 100 || samples>10000)
+								if (Date.now()-t > 50 || samples>10000)
 									break ;
 							}
 						}
@@ -172,7 +172,7 @@ async function runTests() {
 
 					t = Date.now()-t ;
 					if (result!==true) {
-						info.push([promise.name,"?",result]) ;
+						info.push([promise.name,result]) ;
 					} else {
 						failed = null ;
 						if (targetSamples==1)

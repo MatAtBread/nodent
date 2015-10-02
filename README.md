@@ -700,6 +700,13 @@ The test runner in tests/index.js accepts the following options:
 Changelog
 ==========
 
+02-Oct-15: v2.0.4
+
+- Add --pretty to cli (output input, no transformation) 
+- Add [] as a final option to .noDentify() to forward all arguments to the callback to the awaiting call (useful for very non-standard callbacks that split results across parameters)
+- Include the first line of the async stack trace (usually the message)
+- Add 'npm test' script Rationalise x-* tests Add asyncify test
+
 29-Sep-15: v2.0.2
 
 - Add --sourcemap option to command line

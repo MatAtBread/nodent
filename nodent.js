@@ -688,7 +688,7 @@ if (require.main===module && process.argv.length>=3) {
 	initialize.setDefaultCompileOptions({
 		sourcemap:process.argv.indexOf("--sourcemap")>=0
 	},{
-		asyncStackTrace:true,
+//		asyncStackTrace:true,
 		augmentObject:true
 	});
 	var nodent = initialize(initOpts) ;
@@ -711,7 +711,7 @@ if (require.main===module && process.argv.length>=3) {
 			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 			var parseOpts = parseCompilerOptions(content,nodent.logger) ;
 			if (!parseOpts) {
-				parseOpts = {es7:true} ;
+				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
 				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
 			}
 
