@@ -3,11 +3,11 @@
 NoDent
 ======
 
-NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language.
-
-It works by (optionally) transforming JavaScript when it is loaded into Node. 
+NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node. 
 
 This README assumes you're using Nodent v2.x.x - see the [Upgrading](#upgrading) if your upgrading from an earlier version.
+
+_NB: Nodent v2.1.x introduced a breaking change - see the [Upgrading](#upgrading)_
 
 Contents
 --------
@@ -63,6 +63,7 @@ Why Nodent?
 ===========
 
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
+* [Performance](#performance) - on current JS engines, Nodent is upto 8x faster than othe solutions.
 * No dependency on ES6, "harmony"
 * No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
 * No execution framework needed as with traceur or regenerator 
@@ -282,12 +283,12 @@ Async programming with Nodent (or ES7) is much easier and simpler to debug than 
 Returning async functions from callbacks
 ----------------------------------------
 
-Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function, and in its callback use the form `return async <expression>` to not only return from the callback, but also the surrounding async function:
+Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function, and in its callback use the form `async return <expression>` to not only return from the callback, but also the surrounding async function:
 
 	async function sleep(t) {
 	    setTimeout(function(){
-	    	// NB: "return async" and "throw async" are NOT ES7 standard syntax
-	    	return async undefined;
+	    	// NB: "async return" and "async throw" are NOT ES7 standard syntax
+	    	async return undefined;
 	    },t) ;
 	} 
 
@@ -302,34 +303,7 @@ This works because Nodent translates this into:
 	}
 [_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20sleep(t)%20%7B%0A%20%20%20%20setTimeout(function()%7B%0A%20%20%20%20%20%20%20%20%2F%2F%20NB%3A%20%22return%20async%22%20and%20%22throw%20async%22%20are%20NOT%20ES7%20standard%20syntax%0A%20%20%20%20%20%20%20%20return%20async%20undefined%3B%0A%20%20%20%20%7D%2Ct)%20%3B%0A%7D%20)
 
-Similarly, `throw async <expression>` causes the inner callback to make the container async function throw and exception. The `return async` and `throw async` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
-
-Note: it is not possible to asynchronously return an normal function without assigning it to an intermediate identifier:
-
-	function async x() {
-		setTimeout(function(){
-			// This returns (synchronously to setTimeout's callback)
-			// an async function, it does NOT asynchronously return
-			// a synchronous function since 'async' binds to the 'function'
-			// on the right before the 'return' on the left
-			return async function inner() { ... } ;
-			
-			// Workaround:
-			function inner() { ... } ;
-			return async inner ;
-		}) ;
-	}
-
-You can, however return an async function asynchronously from within a synchronous callback (though if you have to, you're probably going to go insane):
-
-	function async x() {
-		setTimeout(function(){
-			// This returns an async function to the caller of await x()
-			return async async function inner() { ... } ;
-		}) ;
-	}
-
-
+Similarly, `async throw <expression>` causes the inner callback to make the container async function throw and exception. The `async return` and `async throw` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
 Implicit return
 ---------------
@@ -360,8 +334,8 @@ Intentionally omit the return as we want another function to do it later:
 		fs.readFile("404.html",function(err,data){
 				// The callback is NOT mapped by Nodent - this function 
 				// is a standard callback, not an async function
-				if (err) throw async err ;
-				return async data ;
+				if (err) async throw err ;
+				async return data ;
 		}) ;
 		// NB: An implicit return here would cause two returns to be invoked
 		// so exit without doing anything
@@ -454,9 +428,9 @@ Diffrences from the ES7 specification
 
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression. 
 
-* The statements `return async <expression>` and `throw async <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
+* The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
 
-* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `return async` or `throw async`. 
+* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`. 
 
 * Object and class getters and setters cannot be declared 'async' and must be explicitly defined.
 
@@ -715,7 +689,7 @@ If you wish to add a Promise implementation to test against, add it to the depen
 
 The test runner in tests/index.js accepts the following options:
 
-	./nodent.js tests [--out --save --es7 --generators] tests [test-files]
+	./nodent.js tests [--out --quick --quiet --save --es7 --generators] tests [test-files]
 	
 	--out        Show the generated ES5 code for Promises
 	--es7        Show the generated ES5 code for ES7 mode
@@ -724,8 +698,22 @@ The test runner in tests/index.js accepts the following options:
 	--quick      Don't target a specific execute time, just run each test once
 	--generators Performance test syntax transformation, followed by generators
 
+Performance
+-----------
+
+Run the test script without the `--quick` option to see how nodent code performs in ES7 mode, Promises and generators on your platform. Additionally, a try the following links to test performance against Babel and Traceur...plus nodent's output is easier to read and debug!
+
+* [nodent - promises](http://nodent.mailed.me.uk/#function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert)%3B%0A) 632ms (and shave off another 100ms by selecting 'Pure ES5' mode)
+* [babel](https://babeljs.io/repl/#?experimental=true&evaluate=true&loose=false&spec=false&code=function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 1877ms - 3x slower
+* [traceur](https://google.github.io/traceur-compiler/demo/repl.html#%2F%2F%20Options%3A%20--annotations%20--array-comprehension%20--async-functions%20--async-generators%20--exponentiation%20--export-from-extended%20--for-on%20--generator-comprehension%20--member-variables%20--proper-tail-calls%20--require%20--symbols%20--types%20%0Afunction%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 2300ms - 4x slower
+
 Changelog
 ==========
+
+06-Oct-15: v2.1.0
+- BREAKING CHANGE: The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier. 
+- `async` is now only a keyword in the correct contexts, specifically before a function declaration, function expression, arrow function or member function. Elsewhere it is parsed as an idenfier (i.e. a variable, named function, etc.). This change has been made to be closer to the ES7 specification for 'async'
+- `await` is now only a keyword in the correct contexts, specifically inside an `async` function body (or arrow expression). This change has been made to be closer to the ES7 specification for 'await'. Additionally, outside of an `async` function body, nodent allows `await` where it cannot be an identifier. In practice this means almost everywhere, except when the argument to `await` is parenthesized, i.e. from a stnadrd function you can `await x` (as before, with a warning), but you cannot `await (x)` as it parses as a function call to a a function called 'await'.
 
 02-Oct-15: v2.0.4
 
@@ -750,6 +738,9 @@ Changelog
 
 Upgrading
 ---------
+v2.1.x BREAKING CHANGE
+The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier.  
+
 Nodent v2 is a major update. There may be some breaking changes. Significant changes are:
 
 * Moved from Uglify2 to Acorn for input parsing, and re-written much of tree manipulation
@@ -761,4 +752,4 @@ Nodent v2 is a major update. There may be some breaking changes. Significant cha
 * Additional ES5/6 constructs are available such as object/class method definitions can be marked `async` (see gotacha about `async get fn()`)
 * ES6 constructs like arrow functions (and async arrows) and `super` are supported
 * `arguments` is correctly mapped into async function bodies and no longer refer to the $return and $error parameters 
-* Generator mode falls back to Promises mode to implement the non-ES7 standard extensions `return async expression`, `throw async expression` and `await` outside of an `async` function.
+* Generator mode falls back to Promises mode to implement the non-ES7 standard extensions `async return expression`, `async throw expression` and `await` outside of an `async` function.
