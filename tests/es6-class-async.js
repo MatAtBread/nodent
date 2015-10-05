@@ -34,7 +34,7 @@ class Three extends Two {
 	}
 	async name(r) {
 		setImmediate(function(){
-			return async (await super.name(r)*4) ; 
+			async return (await super.name(r)*4) ; 
 		}.bind(this));
 	}
 	sname(r) {

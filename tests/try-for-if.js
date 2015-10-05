@@ -1,11 +1,9 @@
-"use nodent-generators";
-
 async function test(error) {
 	var res = "" ;
 	async function progress(x) {
 		res += "x"+x ;
 		res += "p"+phase ;
-		sleep(1) ;
+		await sleep(1) ;
 		return ;
 	}
 	

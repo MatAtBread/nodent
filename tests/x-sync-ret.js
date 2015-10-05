@@ -1,7 +1,7 @@
 var res ;
 async function getSlowRemote() {
 	// Do the async return after 1 seconds
-	var timer = setTimeout(function(){ return async 0 },100) ;
+	var timer = setTimeout(function(){ async return 0 },100) ;
 	// Return a synchronous value too:
 	return void function() {
 		res = "aborted" ;

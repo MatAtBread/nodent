@@ -10,9 +10,9 @@ var Promise = nodent.Thenable ;
 global.sleep = async function sleep(t) {
 	setTimeout(function(){
 		try {
-			return async undefined ;
+			async return undefined ;
 		} catch (ex) {
-			throw async ex ;
+			async throw ex ;
 		}
 	},t) ;
 }
@@ -21,9 +21,9 @@ global.breathe = async function breathe() {
 	var t = Date.now() ;
 	setImmediate(function(){
 		try {
-			return async (Date.now()-t) ;
+			async return (Date.now()-t) ;
 		} catch (ex) {
-			throw async (ex) ;
+			async throw (ex) ;
 		}
 	}) ;
 }
@@ -131,23 +131,23 @@ async function runTests() {
 					continue ;
 				}
 
-				var code = fs.readFileSync(test).toString() ;
-				var pr = nodent.compile(code,test,showOutput?2:3,{
-					es7:true,promises:!!promise.p,generators:g>0
-				}) ;
-				var m = {} ;
-				if (showOutput)
-					console.log(pr.code) ;
-				var fn = new Function("module","require","Promise","es7",pr.code) ;
-				failed = fn.toString() ;
-				if (showOutput && saveOutput) {
-					fs.writeFileSync(test+".out",pr.code) ;
-				}
-
-				fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
-				await breathe();
-
 				try {
+					var code = fs.readFileSync(test).toString() ;
+					var pr = nodent.compile(code,test,showOutput?2:3,{
+						es7:true,promises:!!promise.p,generators:g>0
+					}) ;
+					var m = {} ;
+					if (showOutput)
+						console.log(pr.code) ;
+					var fn = new Function("module","require","Promise","es7",pr.code) ;
+					failed = fn.toString() ;
+					if (showOutput && saveOutput) {
+						fs.writeFileSync(test+".out",pr.code) ;
+					}
+
+					fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
+					await breathe();
+
 					var result,t = Date.now() ;
 					if (samples<0) {
 						samples = 0 ;

@@ -20,6 +20,6 @@ module.exports = async function() {
 		// unmolested, whereas Promises (and therefore generators)
 		// return a Promise of the value of neg(y), since that's
 		// the first await in 'sync()'
-		return async (waited && r===syncReturnValue) ;
+		async return waited && r===syncReturnValue ;
 	},1) ;
 }
