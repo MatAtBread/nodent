@@ -302,7 +302,6 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 			var l = r.origCode.substr(ex.pos-ex.loc.column) ;
 			l = l.split("\n")[0] ;
 			ex.message += " (nodent)\n"+l+"\n"+l.replace(/[\S ]/g,"-").substring(0,ex.loc.column)+"^" ;
-			ex.stack = "" ;
 		}
 		throw ex ;
 	}
