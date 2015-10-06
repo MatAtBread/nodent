@@ -4,9 +4,9 @@ var m ;
 async function mode(m) {
 	function complete(){
 		try {
-			return async undefined ;
+			async return undefined ;
 		} catch (ex) {
-			throw async ex ;
+			async throw ex ;
 		}
 	}
 	

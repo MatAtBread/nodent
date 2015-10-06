@@ -1,6 +1,6 @@
 async function doStuff(x) {
     setTimeout(function() {
-        throw async new Error(x);
+        async throw new Error(x);
     }, 10);
 };
 
