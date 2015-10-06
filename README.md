@@ -5,9 +5,9 @@ NoDent
 
 NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node. 
 
-This README assumes you're using Nodent v2.x.x - see the [Upgrading](#upgrading) if your upgrading from an earlier version.
+This README assumes you're using Nodent v2.x.x - see [Upgrading](#upgrading) if your upgrading from an earlier version.
 
-_NB: Nodent v2.1.x introduced a breaking change - see the [Upgrading](#upgrading)_
+_NB: Nodent v2.1.x introduced a breaking change - see [Upgrading](#upgrading)_
 
 Contents
 --------
@@ -63,7 +63,7 @@ Why Nodent?
 ===========
 
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
-* [Performance](#performance) - on current JS engines, Nodent is upto 8x faster than othe solutions.
+* [Performance](#performance) - on current JS engines, Nodent is upto 4x faster than other solutions.
 * No dependency on ES6, "harmony"
 * No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
 * No execution framework needed as with traceur or regenerator 
@@ -97,7 +97,7 @@ To generate a source-map from the command line, precede the output option (if yo
 
 	nodent.js --sourcemap --out myNodentedFile.js
 
-The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively.
+The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation.
 
 Use within your Node scripts
 ============================
@@ -705,15 +705,19 @@ Run the test script without the `--quick` option to see how nodent code performs
 
 * [nodent - promises](http://nodent.mailed.me.uk/#function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert)%3B%0A) 632ms (and shave off another 100ms by selecting 'Pure ES5' mode)
 * [babel](https://babeljs.io/repl/#?experimental=true&evaluate=true&loose=false&spec=false&code=function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 1877ms - 3x slower
-* [traceur](https://google.github.io/traceur-compiler/demo/repl.html#%2F%2F%20Options%3A%20--annotations%20--array-comprehension%20--async-functions%20--async-generators%20--exponentiation%20--export-from-extended%20--for-on%20--generator-comprehension%20--member-variables%20--proper-tail-calls%20--require%20--symbols%20--types%20%0Afunction%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 2300ms - 4x slower
+* [traceur](https://google.github.io/traceur-compiler/demo/repl.html#%2F%2F%20Options%3A%20--annotations%20--array-comprehension%20--async-functions%20--async-generators%20--exponentiation%20--export-from-extended%20--for-on%20--generator-comprehension%20--member-variables%20--proper-tail-calls%20--require%20--symbols%20--types%20%0Afunction%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 2488ms - 4x slower
+
+The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actually operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
 
 Changelog
 ==========
 
 06-Oct-15: v2.1.0
-- BREAKING CHANGE: The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier. 
-- `async` is now only a keyword in the correct contexts, specifically before a function declaration, function expression, arrow function or member function. Elsewhere it is parsed as an idenfier (i.e. a variable, named function, etc.). This change has been made to be closer to the ES7 specification for 'async'
-- `await` is now only a keyword in the correct contexts, specifically inside an `async` function body (or arrow expression). This change has been made to be closer to the ES7 specification for 'await'. Additionally, outside of an `async` function body, nodent allows `await` where it cannot be an identifier. In practice this means almost everywhere, except when the argument to `await` is parenthesized, i.e. from a stnadrd function you can `await x` (as before, with a warning), but you cannot `await (x)` as it parses as a function call to a a function called 'await'.
+
+- BREAKING CHANGE: The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier, however it is typically a simple search-and-replace (it was in all our code).
+- `async` is now only a keyword in the correct contexts, specifically before a function declaration, function expression, arrow function or member function. Elsewhere it is parsed as an identifier (i.e. a variable, named function, etc.). This change has been made to be closer to the ES7 specification for 'async'.
+- `await` is now only a keyword in the correct contexts, specifically inside an `async` function body (or arrow expression). This change has been made to be closer to the ES7 specification for 'await'. Additionally, outside of an `async` function body, nodent allows `await` where it cannot be an identifier. In practice this means almost everywhere, except when the argument to `await` is parenthesized, i.e. from a standard function you can `await x` (as before, with a warning), but you cannot `await (x)` as it parses as a function call to a a function called 'await'. Nodent translates 'await' outside a function into a ".then(...)" call.
+- Added the `asyncStackTrace` environment option, which shows the current stack and the async caller (if available).
 
 02-Oct-15: v2.0.4
 
@@ -741,11 +745,11 @@ Upgrading
 v2.1.x BREAKING CHANGE
 The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier.  
 
-Nodent v2 is a major update. There may be some breaking changes. Significant changes are:
+Nodent v2.0.0 is a major update. There may be some breaking changes. Significant changes are:
 
 * Moved from Uglify2 to Acorn for input parsing, and re-written much of tree manipulation
 * Supports ES6 input syntax, so suitable for adding async & await to ES6 code in Node v4.x.x
-* Additional tests for interoperability between es7, Promises and Generator mode
+* Additional tests for interoperability between -es7, -promises and -generator mode
 * Cleaner options for code generation and configuration.
 * The old (<v1.0.38) ES5 assignment operator "<<=" and "async-function" syntax is no longer supported.
 * The compiler always uses the Thenable protocol, even in -es7 mode, to ensure interoperability
