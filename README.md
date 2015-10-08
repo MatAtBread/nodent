@@ -19,11 +19,11 @@ Contents
   * [Use within Node](#use-within-your-node-scripts)
     * [ES7 and Promises](#es7-and-promises)
   * [Use within a browser](#use-within-a-browser)
-  * [async/await syntax](#asyncawait-syntax)
-  * [async, await and ES5/6](#async-await-and-es56)
-  * [Gotchas &amp; ES7 compatibility](#gotchas--es7-compatibility)
+  * [async and await syntax](#async-and-await-syntax)
+  * [async, await and ES5, ES6](#async-await-and-es5-es6)
+  * [Gotchas and ES7 compatibility](#gotchas-and-es7-compatibility)
   * [API](#api)
-  * [Built\-in conversions &amp; helpers](#built-in-conversions--helpers)
+  * [Built\-in conversions and helpers](#built-in-conversions-and-helpers)
   * [Testing](#testing)
   * [Changelog](#changelog)
 
@@ -182,7 +182,7 @@ If you call an async function from a non-async function, you need to provide a g
 
 Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2
 
-Async/Await syntax
+Async and Await syntax
 ==================
 
 Declaring Async Functions
@@ -251,8 +251,8 @@ It might well be more efficient in this case to use the 'map' cover function (se
 
 Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). As of nodent v1.2.1, any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
 
-async, await and ES5/6
-======================
+async, await and ES5, ES6
+=========================
 
 Invoking async functions from ES5/6
 -----------------------------------
@@ -279,7 +279,7 @@ Defining async functions from ES5
 ---------------------------------
 Use nodent! Any function returning a Promise (or Thenable) can be used with `await`.
 
-Gotchas & ES7 compatibility
+Gotchas and ES7 compatibility
 ===========================
 
 Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
@@ -469,7 +469,7 @@ You still need to (at least once) create the compiler:
 
 The return ('compiler') has the additional, instance specific properties specified in the API above.
 
-Built-in conversions & helpers
+Built-in conversions and helpers
 ==============================
 
 Nodentify has a (small but possibly growing) set of covers for common Node modules. You specify these through the `require` function:
