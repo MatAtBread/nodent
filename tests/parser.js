@@ -31,8 +31,7 @@ function syntax() {
 	async = async function z(){} ;
 	async(x) ;
 	var q = async(z) ;
-	var r = async(w) => w+1 ;
-	r = async(w) => { return async function(async) { return (async(async)=>async+1)(async-1) }} ;
+
 	var sleep = async function sleep() {
 		(function (){
 			async return 0 ;
