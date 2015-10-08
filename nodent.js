@@ -42,6 +42,10 @@ var defaultCodeGenOpts = {
 	generatedSymbolPrefix:"$"
 };
 
+function globalErrorHandler(err) {
+	throw err ;
+}
+
 /* Extract compiler options from code (either a string or AST) */
 function parseCompilerOptions(code,logger) {
 	function matches(str,match){
@@ -65,7 +69,7 @@ function parseCompilerOptions(code,logger) {
 			parseOpts.es7 = true ;
 	} else {
 		// code is an AST
-		for (var i=0; i<pr.ast.body.length; i++) {
+		for (var i=0; i<code.body.length; i++) {
 			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type==='Literal') {
 				var test = "'"+code.body[i].value+"'" ;
 				parseOpts.promises = matches(test,directives.usePromisesDirective) ;
@@ -302,6 +306,7 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 			var l = r.origCode.substr(ex.pos-ex.loc.column) ;
 			l = l.split("\n")[0] ;
 			ex.message += " (nodent)\n"+l+"\n"+l.replace(/[\S ]/g,"-").substring(0,ex.loc.column)+"^" ;
+			ex.stack = "" ;
 		}
 		throw ex ;
 	}
@@ -620,9 +625,7 @@ function initialize(initOpts){
 	 * We need a global to handle funcbacks for which no error handler has ever been defined.
 	 */
 	if (!(defaultCodeGenOpts.$error in global)) {
-		global[defaultCodeGenOpts.$error] = function(err) {
-			throw err ;
-		};
+		global[defaultCodeGenOpts.$error] = globalErrorHandler ;
 	}
 
 	/* If we've not done it before, create a compiler for '.js' scripts */
@@ -681,65 +684,97 @@ initialize.Thenable = Thenable ;
 
 module.exports = initialize ;
 
+function readStream(stream) {
+	return new Thenable(function ($return, $error) {
+		var buffer = [] ;
+		stream.on('data',function(data){ 
+			buffer.push(data)
+		}) ;
+		stream.on('end',function(){
+			var code = buffer.map(function(b){ return b.toString()}).join("") ;
+            return $return(code);
+		}) ;
+		stream.on('error',$error) ;
+    }.$asyncbind(this));
+}
+
+function getCLIOpts(start) {
+	var o = [] ;
+	for (var i=start || 2; i<process.argv.length; i++) {
+		if (process.argv[i].slice(0,2)==='--')
+			o[process.argv[i].slice(2)] = true ;
+		else
+			o.push(process.argv[i]) ;
+	}
+	return o ;
+}
+
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
+	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
+	var filename, cli = getCLIOpts() ;
 	initialize.setDefaultCompileOptions({
-		sourcemap:process.argv.indexOf("--sourcemap")>=0
+		sourcemap:cli.sourcemap
 	},{
 //		asyncStackTrace:true,
 		augmentObject:true
 	});
 	var nodent = initialize(initOpts) ;
-	var path = require('path') ;
-	var n = 2 ;
 
-	while (n<process.argv.length) {
-		var opt = process.argv[n] ;
-		switch (opt) {
-		case "--sourcemap":
-			n += 1 ;
-			break ;
-		case "--out":
-		case "--pretty":
-		case "--ast":
-		case "--minast":
-		case "--parseast":
-			// Compile & output, but don't require
-			var filename = path.resolve(process.argv[n+1]) ;
-			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var parseOpts = parseCompilerOptions(content,nodent.logger) ;
-			if (!parseOpts) {
-				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
-				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
-			}
+	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast) {
+		// No input/output options - just require the 
+		// specified module now we've initialized nodent
+		var mod = path.resolve(cli[0]) ;
+		return require(mod);
+	}
+	
+	if (cli.length==0 || cli[0]==='-') {
+		filename = "(stdin)" ;
+		return readStream(process.stdin).then(processInput,globalErrorHandler) ;
+	} else {
+		filename = path.resolve(cli[0]) ;
+		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+		return processInput(content) ;
+	}
+	
+	function processInput(content){
+		var pr ;
+		var parseOpts ;
 
-			var pr = nodent.parse(content,filename,parseOpts);
-			if (opt!="--parseast" && opt!='--pretty')
-				nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
-			switch (opt) {
-			case "--out":
-			case "--pretty":
-				nodent.prettyPrint(pr,parseOpts) ;
-				console.log(pr.code) ;
-				return ;
-			case "--ast":
-				console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-				return ;
-			case "--minast":
-			case "--parseast":
-				console.log(JSON.stringify(pr.ast,function(key,value){
-					return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
-				},2,null)) ;
-				return ;
-			}
-			return;
-		default:
-			// Compile & require
-			while (process.argv.length > n && process.argv[n].substring(0,2)!='--') {
-				var mod = path.resolve(process.argv[n]) ;
-				return require(mod);
-			}
+		// Input options
+		if (cli.fromast) {
+			content = JSON.parse(content) ;
+			pr = { origCode:"", filename:filename, ast: content } ;
+			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+		} else {
+			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			pr = nodent.parse(content,filename,parseOpts);
+		}
+		if (!parseOpts) {
+			parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
+			console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+		}
+
+		// Processing options
+		if (!cli.parseast && !cli.pretty)
+			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+		
+		// Output options
+		if (cli.out || cli.pretty) {
+			nodent.prettyPrint(pr,parseOpts) ;
+			console.log(pr.code) ;
+			return ;
+		}
+		if (cli.minast || cli.parseast) {
+			console.log(JSON.stringify(pr.ast,function(key,value){
+				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
+			},2,null)) ;
+			return ;
+		}
+		if (cli.ast) {
+			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+			return ;
 		}
 	}
 }

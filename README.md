@@ -92,12 +92,16 @@ You can also simply compile and display the output, without running it. This is 
 If you are using nodent as part of a toolchain with another compiler, you can output the ES5 or ES6 AST is ESTree format:
 
 	nodent.js --ast myNodentedFile.js
+
+...or read an AST from another tool
+
+	nodent.js --fromast --out estree.json // Read the JSON file as an ESTree AST, and output the nodented JS code
 	
-To generate a source-map from the command line, precede the output option (if you're using one) with `--sourcemap`. Note: the order of the command line options is significant.
+To generate a source-map in the output, use `--sourcemap`. 
 
 	nodent.js --sourcemap --out myNodentedFile.js
 
-The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation.
+The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation (same as `--parseast --out`. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replcaing the filename with '-'.
 
 Use within your Node scripts
 ============================
@@ -391,33 +395,6 @@ Function.prototype.toString & arguments
 ---------------------------------------
 Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
 
-async getters() and setters()
------------------------------
-The parsing of async getters is not fully specified in the ES7 specification or EStree experimental documentation.
-For example:
-
-	var x = {
-		// An async functional method. Invoke with 'await x.a()'
-		async a() {
-			return "A";
-		},
-		// A sync getter. Invoke with 'x.b'
-		get b() {
-			return "b" ;
-		},
-		// An async getter - NB: This does NOT parse as async, and will not work as expected.
-		async get c() {
-			return "c" ;
-		}
-	};
-
-If you really want an async getter, the workaround is to set it via Object.defineProperty:
-
-	Object.defineProperty(x,"c",{
-		get:async function() { return "c" ; },
-		enumerable:true
-	}) ;
-	
 Diffrences from the ES7 specification
 -------------------------------------
 * Generators and Promises are optional. Nodent works simply by transforming your original source
@@ -703,16 +680,25 @@ Performance
 
 Run the test script without the `--quick` option to see how nodent code performs in ES7 mode, Promises and generators on your platform. Additionally, a try the following links to test performance against Babel and Traceur...plus nodent's output is easier to read and debug!
 
-[nodent](http://nodent.mailed.me.uk/#function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert)%3B%0A) 632ms (and shave off another 100ms by selecting 'Pure ES5' mode)
+[nodent](http://nodent.mailed.me.uk/#function%20pause%28%29%20{%0A%20%20%20%20return%20new%20Promise%28function%20%28%24return%2C%20%24error%29%20{%0A%20%20%20%20%20%20%20%20setTimeout%28function%20%28%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return%280%29%3B%0A%20%20%20%20%20%20%20%20}%2C%200%29%3B%0A%20%20%20%20}%29%3B%0A}%0A%0Aasync%20function%20doNothing%28%29%20{%0A%20%20%20%20return%3B%0A}%0A%0Aasync%20function%20test%28%29%20{%0A%20%20%20%20var%20t%20%3D%20Date.now%28%29%3B%0A%20%20%20%20for%20%28var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20for%20%28var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing%28%29%3B%0A%20%20%20%20%20%20%20%20}%0A%20%20%20%20%20%20%20%20await%20pause%28%29%3B%0A%20%20%20%20}%0A%20%20%20%20return%20Date.now%28%29%20-%20t%3B%0A}%0A%0Atest%28%29.then%28alert%29%3B%0A) 632ms (and shave off another 100ms by selecting 'Pure ES5' mode)
 
-[babel](https://babeljs.io/repl/#?experimental=true&evaluate=true&loose=false&spec=false&code=function%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 1877ms - 3x slower
+[babel](https://babeljs.io/repl/#?experimental=true&evaluate=true&loose=false&spec=false&code=function%20pause%28%29%20{%0A%20%20%20%20return%20new%20Promise%28function%20%28%24return%2C%20%24error%29%20{%0A%20%20%20%20%20%20%20%20setTimeout%28function%20%28%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return%280%29%3B%0A%20%20%20%20%20%20%20%20}%2C%200%29%3B%0A%20%20%20%20}%29%3B%0A}%0A%0Aasync%20function%20doNothing%28%29%20{%0A%20%20%20%20return%3B%0A}%0A%0Aasync%20function%20test%28%29%20{%0A%20%20%20%20var%20t%20%3D%20Date.now%28%29%3B%0A%20%20%20%20for%20%28var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20for%20%28var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing%28%29%3B%0A%20%20%20%20%20%20%20%20}%0A%20%20%20%20%20%20%20%20await%20pause%28%29%3B%0A%20%20%20%20}%0A%20%20%20%20return%20Date.now%28%29%20-%20t%3B%0A}%0A%0Atest%28%29.then%28alert%2Calert%29%3B%0A) 1877ms - 3x slower
 
-[traceur](https://google.github.io/traceur-compiler/demo/repl.html#%2F%2F%20Options%3A%20--annotations%20--array-comprehension%20--async-functions%20--async-generators%20--exponentiation%20--export-from-extended%20--for-on%20--generator-comprehension%20--member-variables%20--proper-tail-calls%20--require%20--symbols%20--types%20%0Afunction%20pause()%20%7B%0A%20%20%20%20return%20new%20Promise(function%20(%24return%2C%20%24error)%20%7B%0A%20%20%20%20%20%20%20%20setTimeout(function%20()%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return(0)%3B%0A%20%20%20%20%20%20%20%20%7D%2C%200)%3B%0A%20%20%20%20%7D)%3B%0A%7D%0A%0Aasync%20function%20doNothing()%20%7B%0A%20%20%20%20return%3B%0A%7D%0A%0Aasync%20function%20test()%20%7B%0A%20%20%20%20var%20t%20%3D%20Date.now()%3B%0A%20%20%20%20for%20(var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20for%20(var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B)%20%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing()%3B%0A%20%20%20%20%20%20%20%20%7D%0A%20%20%20%20%20%20%20%20await%20pause()%3B%0A%20%20%20%20%7D%0A%20%20%20%20return%20Date.now()%20-%20t%3B%0A%7D%0A%0Atest().then(alert%2Calert)%3B%0A) 2488ms - 4x slower
+[traceur](https://google.github.io/traceur-compiler/demo/repl.html#%2F%2F%20Options%3A%20--annotations%20--array-comprehension%20--async-functions%20--async-generators%20--exponentiation%20--export-from-extended%20--for-on%20--generator-comprehension%20--member-variables%20--proper-tail-calls%20--require%20--symbols%20--types%20%0Afunction%20pause%28%29%20{%0A%20%20%20%20return%20new%20Promise%28function%20%28%24return%2C%20%24error%29%20{%0A%20%20%20%20%20%20%20%20setTimeout%28function%20%28%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20return%20%24return%280%29%3B%0A%20%20%20%20%20%20%20%20}%2C%200%29%3B%0A%20%20%20%20}%29%3B%0A}%0A%0Aasync%20function%20doNothing%28%29%20{%0A%20%20%20%20return%3B%0A}%0A%0Aasync%20function%20test%28%29%20{%0A%20%20%20%20var%20t%20%3D%20Date.now%28%29%3B%0A%20%20%20%20for%20%28var%20j%20%3D%200%3B%20j%20%3C%2050%3B%20j%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20for%20%28var%20i%20%3D%200%3B%20i%20%3C%201000%3B%20i%2B%2B%29%20{%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20doNothing%28%29%3B%0A%20%20%20%20%20%20%20%20}%0A%20%20%20%20%20%20%20%20await%20pause%28%29%3B%0A%20%20%20%20}%0A%20%20%20%20return%20Date.now%28%29%20-%20t%3B%0A}%0A%0Atest%28%29.then%28alert%2Calert%29%3B%20%0A) 2488ms - 4x slower
+
+The example timings are from Chrome v43 on Mac OSX. I get even wider results with Firefox, and dramatically wider results on mobiles (nodent ES7 mode is upto 10x faster than generators).
 
 The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actually operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
 
 Changelog
 ==========
+
+08-Oct-15: v2.1.3
+
+- Rationalise CLI option parsing. Allow javascript/ast from stdin
+- Fix get/set method output
+- Fix method async get _() {} 
+- Error on method async set _() {}
 
 06-Oct-15: v2.1.0
 
@@ -755,7 +741,7 @@ Nodent v2.0.0 is a major update. There may be some breaking changes. Significant
 * Cleaner options for code generation and configuration.
 * The old (<v1.0.38) ES5 assignment operator "<<=" and "async-function" syntax is no longer supported.
 * The compiler always uses the Thenable protocol, even in -es7 mode, to ensure interoperability
-* Additional ES5/6 constructs are available such as object/class method definitions can be marked `async` (see gotacha about `async get fn()`)
+* Additional ES5/6 constructs are available such as object/class method definitions and getters can be marked `async`
 * ES6 constructs like arrow functions (and async arrows) and `super` are supported
 * `arguments` is correctly mapped into async function bodies and no longer refer to the $return and $error parameters 
 * Generator mode falls back to Promises mode to implement the non-ES7 standard extensions `async return expression`, `async throw expression` and `await` outside of an `async` function.
