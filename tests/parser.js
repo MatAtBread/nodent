@@ -3,7 +3,7 @@ module.exports = async function() {
 	return true ;
 }
 
-function syntax() { 
+function syntax() {
 	var async, await ;
 
 //	Nested await
@@ -16,7 +16,7 @@ function syntax() {
 	function sfoo() {}
 
 // i am an expression not a declaration
-	(async function efoo() {}); 
+	(async function efoo() {});
 
 	async function afoo () {}
 	(afoo)
@@ -36,13 +36,11 @@ function syntax() {
 		(function (){
 			async return 0 ;
 		})() ;
-	}
+	};
+
 	var c = {
 			a:async function() {
 				return arguments[2] ;
-			},
-			async x() {
-				return y ;
 			}
 	} ;
 }
