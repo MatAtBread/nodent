@@ -163,9 +163,9 @@ function initEnvironment() {
  * @params
  * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
  * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
- * resultIdx 	The argument index of the callback that holds the result. 
+ * resultIdx 	The argument index of the callback that holds the result.
  * 				'undefined' for the argument after the errorIdx (errorIdx != undefined)
- * 				[] returns all the arguments 
+ * 				[] returns all the arguments
  * promiseProvider	For promises, set this to the module providing Promises.
  */
 function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
@@ -344,12 +344,12 @@ function wrapAsyncStack(catcher) {
 			try {
 				ex.stack = //+= "\n\t...\n"+
 					ex.stack.split("\n").slice(0,3)
-					.filter(function(s){ 
+					.filter(function(s){
 						return !s.match(/^\s*at.*nodent\.js/) ;
 					}).join("\n")+
 					ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
 					context.stack.split("\n").slice(2)
-					.filter(function(s){ 
+					.filter(function(s){
 						return !s.match(/^\s*at.*nodent\.js/) ;
 					})
 					.map(function(s,idx){
@@ -530,6 +530,8 @@ NodentCompiler.prototype.parse =  parseCode ;
 NodentCompiler.prototype.compile =  compile ;
 NodentCompiler.prototype.asynchronize =  asynchronize ;
 NodentCompiler.prototype.prettyPrint =  prettyPrint ;
+NodentCompiler.prototype.parseCompilerOptions =  parseCompilerOptions ;
+
 Object.defineProperty(NodentCompiler.prototype,"Promise",{
 	get:function (){
 		initOpts.log("Warning: nodent.Promise is deprecated. Use nodent.Thenable");
@@ -599,7 +601,7 @@ function initialize(initOpts){
 				var source = frame.getFileName();
 				if (source && smCache[source]) {
 					var position = smCache[source].smc.originalPositionFor({
-						line: frame.getLineNumber(), 
+						line: frame.getLineNumber(),
 						column: frame.getColumnNumber()
 					});
 					if (position && position.line) {
@@ -687,7 +689,7 @@ module.exports = initialize ;
 function readStream(stream) {
 	return new Thenable(function ($return, $error) {
 		var buffer = [] ;
-		stream.on('data',function(data){ 
+		stream.on('data',function(data){
 			buffer.push(data)
 		}) ;
 		stream.on('end',function(){
@@ -723,12 +725,12 @@ if (require.main===module && process.argv.length>=3) {
 	var nodent = initialize(initOpts) ;
 
 	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast) {
-		// No input/output options - just require the 
+		// No input/output options - just require the
 		// specified module now we've initialized nodent
 		var mod = path.resolve(cli[0]) ;
 		return require(mod);
 	}
-	
+
 	if (cli.length==0 || cli[0]==='-') {
 		filename = "(stdin)" ;
 		return readStream(process.stdin).then(processInput,globalErrorHandler) ;
@@ -737,7 +739,7 @@ if (require.main===module && process.argv.length>=3) {
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		return processInput(content) ;
 	}
-	
+
 	function processInput(content){
 		var pr ;
 		var parseOpts ;
@@ -759,7 +761,7 @@ if (require.main===module && process.argv.length>=3) {
 		// Processing options
 		if (!cli.parseast && !cli.pretty)
 			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
-		
+
 		// Output options
 		if (cli.out || cli.pretty) {
 			nodent.prettyPrint(pr,parseOpts) ;
