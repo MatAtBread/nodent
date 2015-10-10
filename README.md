@@ -305,7 +305,7 @@ This works because Nodent translates this into:
 	        },t);
 	    });
 	}
-[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20sleep(t)%20%7B%0A%20%20%20%20setTimeout(function()%7B%0A%20%20%20%20%20%20%20%20%2F%2F%20NB%3A%20%22return%20async%22%20and%20%22throw%20async%22%20are%20NOT%20ES7%20standard%20syntax%0A%20%20%20%20%20%20%20%20return%20async%20undefined%3B%0A%20%20%20%20%7D%2Ct)%20%3B%0A%7D%20)
+[_TRY-IT_](http://nodent.mailed.me.uk/#async%20function%20sleep%28t%29%20{%0A%20%20%20%20setTimeout%28function%28%29{%0A%20%20%20%20%20%20%20%20%2F%2F%20NB%3A%20%22return%20async%22%20and%20%22throw%20async%22%20are%20NOT%20ES7%20standard%20syntax%0A%20%20%20%20%20%20%20%20async%20return%20undefined%20%3B%0A%20%20%20%20}%2Ct%29%20%3B%0A})
 
 Similarly, `async throw <expression>` causes the inner callback to make the container async function throw and exception. The `async return` and `async throw` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
