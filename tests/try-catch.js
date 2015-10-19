@@ -1,15 +1,13 @@
-"use nodent-es7";
-
 function sync(r,a) {
     try {
         r.push("try") ;
         if (a&1) throw ["a"].concat(r) ;
-        if (a&2) return ["b"].concat(r) ;
-        if (a&4) JSON.parse('*') ;
+        if (a&4) return ["b"].concat(r) ;
+        if (a&16) JSON.parse('*') ;
     } catch (ex) {
         r.push("catch("+ex+")") ;
-        if (a&8) throw ["c"].concat(r) ;
-        if (a&16) return ["d"].concat(r) ;
+        if (a&2) throw ["c"].concat(r) ;
+        if (a&8) return ["d"].concat(r) ;
         if (a&32) JSON.parse('*') ;
     }
     r.push("done") ;
@@ -21,12 +19,12 @@ async function async(r,a,f) {
     	await f() ;
         r.push("try") ;
         if (a&1) throw ["a"].concat(r) ;
-        if (a&2) return ["b"].concat(r) ;
-        if (a&4) JSON.parse('*') ;
+        if (a&4) return ["b"].concat(r) ;
+        if (a&16) JSON.parse('*') ;
     } catch (ex) {
         r.push("catch("+ex+")") ;
-        if (a&8) throw ["c"].concat(r) ;
-        if (a&16) return ["d"].concat(r) ;
+        if (a&2) throw ["c"].concat(r) ;
+        if (a&8) return ["d"].concat(r) ;
         if (a&32) JSON.parse('*') ;
     }
     r.push("done") ;
@@ -34,11 +32,11 @@ async function async(r,a,f) {
 }
 
 module.exports = check ;
+//module.exports = async function() { return true } ;
 
 async function check() {
 	var f = true,r,a,b,c,i,z = 64;
 	for (i=0; i<z; i++) {
-		if (i==33) debugger ;
 		r = [];
 		try {
 			a = "r:"+sync(r,i) +"|"+r ;
@@ -60,15 +58,15 @@ async function check() {
 			c = "x:"+ex+"|"+r ;
 		}
 
-		//if (a != b) {
-		//	f = false ;
+		if (a != b) {
+			f = false ;
 			console.log('s',i,a == b?"pass":"FAIL",("00000"+(i.toString(2))).substr(-6),a,b) ;
-		//}
-		//if (a != c) {
-		//	f = false ;
+		}
+		if (a != c) {
+			f = false ;
 			console.log('s',i,a == c?"pass":"FAIL",("00000"+(i.toString(2))).substr(-6),a,c) ;
-		//}
+		}
 	}
 	return f ;
 }
-check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))
+//check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))
