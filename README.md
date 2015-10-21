@@ -691,6 +691,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+22-Oct-15: v2.1.10
+
+- Expose acorn parser options to allow for 'module' parsing in browserifyu-nodent
+
 21-Oct-15: v2.1.9
 
 - Implement correct async semantics for 'finally' clause, add try/catch/finally tests

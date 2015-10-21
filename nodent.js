@@ -299,7 +299,7 @@ function prettyPrint(pr,opts) {
 function parseCode(code,origFilename,__sourceMapping,opts) {
 	var r = { origCode:code.toString(), filename:origFilename } ;
 	try {
-		r.ast = parser.parse(r.origCode) ;
+		r.ast = parser.parse(r.origCode, opts && opts.parser) ;
 		return r ;
 	} catch (ex) {
 		if (ex instanceof SyntaxError) {
