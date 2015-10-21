@@ -129,13 +129,13 @@ function initEnvironment() {
 		Object.defineProperties(Function.prototype,{
 			"$asyncbind":{
 				value:$asyncbind,
-				writeable:true,
+				writable:true,
 				enumerable:false,
 				configurable:true
 			},
 			"$asyncspawn":{
 				value:$asyncspawn,
-				writeable:true,
+				writable:true,
 				enumerable:false,
 				configurable:true
 			},
@@ -578,12 +578,12 @@ function initialize(initOpts){
 				value:function(promiseProvider,filter,suffix){
 					return asyncify(promiseProvider)(this,filter,suffix)
 				},
-				writeable:true,
+				writable:true,
 				configurable:true
 			},
 			"isThenable":{
 				value:isThenable,
-				writeable:true,
+				writable:true,
 				configurable:true
 			}
 		}) ;
