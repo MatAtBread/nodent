@@ -1,5 +1,3 @@
-"use nodent-promises";
-
 function sync(r,a) {
     try {
         r.push("try") ;
@@ -80,4 +78,4 @@ async function check() {
 }
 
 module.exports = check ;
-check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))
+//check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))

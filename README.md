@@ -691,7 +691,9 @@ Changelog
 
 22-Oct-15: v2.1.7
 
-- Implement correct async semantics for 'finally' clause
+- Implement correct async semantics for 'finally' clause, add try/catch/finally tests
+- Fix 'double exception' case where $Catch threw both synchronous and asynchonously.
+- Fix 'async return;' (with no argument) in generator mode
 
 08-Oct-15: v2.1.3
 

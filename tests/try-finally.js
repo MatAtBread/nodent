@@ -1,5 +1,3 @@
-"use nodent-es7";
-
 async function later() { 
 	setImmediate(function(){ 
 		try { async return ; } 
@@ -79,4 +77,4 @@ async function check() {
 }
 
 module.exports = check ;
-check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))
+//check().then(console.log.bind(console,"return"),console.log.bind(console,"exception"))
