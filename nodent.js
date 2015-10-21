@@ -317,7 +317,7 @@ function $asyncbind(self,catcher) {
 	if (catcher) {
 		if ($asyncbind.wrapAsyncStack)
 			catcher = $asyncbind.wrapAsyncStack(catcher) ;
-		function thenable(result,error){
+		var thenable = function thenable(result,error){
 			try {
 				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
 					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
