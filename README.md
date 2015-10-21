@@ -399,17 +399,13 @@ Diffrences from the ES7 specification
 -------------------------------------
 * Generators and Promises are optional. Nodent works simply by transforming your original source
 
-* As of the current version, `finally { }` blocks are NOT transformed by Nodent
-
 * As of the current version, `for (...in...)` and `for (...of...)` loops are NOT transformed by Nodent
 
-* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression. 
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. 
 
 * The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
 
 * async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`. 
-
-* Object and class getters and setters cannot be declared 'async' and must be explicitly defined.
 
 API
 ===
@@ -692,6 +688,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+22-Oct-15: v2.1.7
+
+- Implement correct async semantics for 'finally' clause
 
 08-Oct-15: v2.1.3
 

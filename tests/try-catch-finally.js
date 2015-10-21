@@ -1,13 +1,4 @@
-"use nodent-es7";
-
-async function later() { 
-	setImmediate(function(){ 
-		try { async return ; } 
-		catch(ax){ async throw ax ; }
-	});
-}
-
-async function now() { return }
+"use nodent-promises";
 
 function sync(r,a) {
     try {
@@ -15,11 +6,16 @@ function sync(r,a) {
         if (a&1) throw ["a"].concat(r) ;
         if (a&4) return ["b"].concat(r) ;
         if (a&16) JSON.parse('*') ;
-    } finally {
-    	r.push("finally") ;
+    } catch (ex) {
+        r.push("catch("+ex+")") ;
         if (a&2) throw ["c"].concat(r) ;
         if (a&8) return ["d"].concat(r) ;
         if (a&32) JSON.parse('*') ;
+    } finally {
+    	r.push("finally") ;
+        if (a&64) throw ["c"].concat(r) ;
+        if (a&128) return ["d"].concat(r) ;
+        if (a&256) JSON.parse('*') ;
     }
     r.push("done") ;
     return ["r"].concat(r) ;
@@ -32,18 +28,23 @@ async function async(r,a,f) {
         if (a&1) throw ["a"].concat(r) ;
         if (a&4) return ["b"].concat(r) ;
         if (a&16) JSON.parse('*') ;
-    } finally {
-    	r.push("finally") ;
+    } catch (ex) {
+        r.push("catch("+ex+")") ;
         if (a&2) throw ["c"].concat(r) ;
         if (a&8) return ["d"].concat(r) ;
         if (a&32) JSON.parse('*') ;
+    } finally {
+    	r.push("finally") ;
+        if (a&64) throw ["c"].concat(r) ;
+        if (a&128) return ["d"].concat(r) ;
+        if (a&256) JSON.parse('*') ;
     }
     r.push("done") ;
     return ["r"].concat(r) ;
 }
 
 async function check() {
-	var f = true,r,a,b,c,i,z = 64;
+	var f = true,r,a,b,c,i,z = 512;
 	for (i=0; i<z; i++) {
 		r = [];
 		try {
@@ -54,25 +55,25 @@ async function check() {
 
 		r = [];
 		try {
-			b = "r:"+await async(r,i,now)+"|"+r ;
+			b = "r:"+await async(r,i,async function() { return })+"|"+r ;
 		} catch(ex) {
 			b = "x:"+ex +"|"+r ;
 		}
 
 		r = [];
 		try {
-			c = "r:"+await async(r,i,later) +"|"+r ;
+			c = "r:"+await async(r,i,async function() { setImmediate(function(){ async return }) }) +"|"+r ;
 		} catch(ex) {
 			c = "x:"+ex+"|"+r ;
 		}
 
 		if (a != b) {
 			f = false ;
-			console.log('s',i,a == b?"pass":"FAIL",("00000"+(i.toString(2))).substr(-6),a,b) ;
+			console.log('s',i,a == b?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,b) ;
 		}
 		if (a != c) {
 			f = false ;
-			console.log('s',i,a == c?"pass":"FAIL",("00000"+(i.toString(2))).substr(-6),a,c) ;
+			console.log('s',i,a == c?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,c) ;
 		}
 	}
 	return f && i==z ;
