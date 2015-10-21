@@ -694,6 +694,7 @@ Changelog
 22-Oct-15: v2.1.10
 
 - Expose acorn parser options to allow for 'module' parsing in browserifyu-nodent
+- Correct 'writable' descriptor so that the fast-async can ship the function binder on each file (ugly, but there's no way to include a runtime from a babel plugin)
 
 21-Oct-15: v2.1.9
 
