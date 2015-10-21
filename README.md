@@ -691,7 +691,7 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-22-Oct-15: v2.1.8
+21-Oct-15: v2.1.9
 
 - Implement correct async semantics for 'finally' clause, add try/catch/finally tests
 - Fix case where 'finally' block is not followed by any code at all
