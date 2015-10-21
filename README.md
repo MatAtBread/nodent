@@ -62,13 +62,14 @@ That's the basics.
 Why Nodent?
 ===========
 
+* _[Performance](#performance)_ - on current JS engines, Nodent is between 2x and 4x faster than other solutions.
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
-* [Performance](#performance) - on current JS engines, Nodent is upto 4x faster than other solutions.
 * No dependency on ES6, "harmony"
 * No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
-* No execution framework needed as with traceur or regenerator 
+* No execution framework needed as with traceur, babel or regenerator 
 * No 'node-gyp' or similar OS platform requirement for threads or fibers
-* ES7 async and await on ES5 (most modern browsers and nodejs).
+* ES7 async and await on ES5 (most browsers and nodejs)
+* Compatible with ES6 too - nodent passes ES6 constructs unchanged for use with other transpilers and Node v4.x
 * For more about ES7 async functions and await see:
   *  [http://wiki.ecmascript.org/doku.php?id=strawman:async_functions](http://wiki.ecmascript.org/doku.php?id=strawman:async_functions)
   *  [http://jakearchibald.com/2014/es7-async-functions/](http://jakearchibald.com/2014/es7-async-functions/)
@@ -83,23 +84,23 @@ Command-Line usage
 ==================
 You can invoke and run a nodented JavaScript file from the command line with:
 
-	nodent.js myNodentedFile.js
+	./nodent.js myNodentedFile.js
 	
 You can also simply compile and display the output, without running it. This is useful if you want to pre-compile your scripts:
 
-	nodent.js --out myNodentedFile.js
+	./nodent.js --out myNodentedFile.js
 
 If you are using nodent as part of a toolchain with another compiler, you can output the ES5 or ES6 AST is ESTree format:
 
-	nodent.js --ast myNodentedFile.js
+	./nodent.js --ast myNodentedFile.js
 
 ...or read an AST from another tool
 
-	nodent.js --fromast --out estree.json // Read the JSON file as an ESTree AST, and output the nodented JS code
+	./nodent.js --fromast --out estree.json // Read the JSON file as an ESTree AST, and output the nodented JS code
 	
 To generate a source-map in the output, use `--sourcemap`. 
 
-	nodent.js --sourcemap --out myNodentedFile.js
+	./nodent.js --sourcemap --out myNodentedFile.js
 
 The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation (same as `--parseast --out`. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replcaing the filename with '-'.
 
@@ -656,7 +657,7 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	cd ..
 	./nodent.js tests
 		
-The tests themselves are normal (nodented) JavaScript files invoked with the parameteres require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
+The tests themselves are normal (nodented) JavaScript files invoked with the parameters require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
 If you wish to add a Promise implementation to test against, add it to the dependencies in tests/package.json and give it an entry in the tests/index.js test runner. 
 
@@ -664,12 +665,13 @@ The test runner in tests/index.js accepts the following options:
 
 	./nodent.js tests [--out --quick --quiet --save --es7 --generators] tests [test-files]
 	
-	--out        Show the generated ES5 code for Promises
-	--es7        Show the generated ES5 code for ES7 mode
-	--save       Save the output (must be used with --out or --es7)
 	--quiet      Suppress any errors or warnings
 	--quick      Don't target a specific execute time, just run each test once
 	--generators Performance test syntax transformation, followed by generators
+	--genonly	 Only run the tests in generator mode
+	--out        Show the generated ES5 code for Promises
+	--es7        Show the generated ES5 code for ES7 mode
+	--save       Save the output (must be used with --out or --es7)
 
 Performance
 -----------
@@ -684,7 +686,7 @@ Run the test script without the `--quick` option to see how nodent code performs
 
 The example timings are from Chrome v43 on Mac OSX. I get even wider results with Firefox, and dramatically wider results on mobiles (nodent ES7 mode is upto 10x faster than generators).
 
-The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actually operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
+The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actual operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
 
 Changelog
 ==========
@@ -694,6 +696,7 @@ Changelog
 - Implement correct async semantics for 'finally' clause, add try/catch/finally tests
 - Fix 'double exception' case where $Catch threw both synchronous and asynchonously.
 - Fix 'async return;' (with no argument) in generator mode
+- Separate es5 and es6 parser tests (since tests/parser.js used to fail on node<4.0.0)
 
 08-Oct-15: v2.1.3
 
