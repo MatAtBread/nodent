@@ -1,15 +1,17 @@
-/* Test parser/output routines, not transformations */
-
-/* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
+/* Test parser/output routines, not async transformations */
 var nodent = require('../nodent.js')() ;
 var fs = require('fs');
 
 var n = 0 ;
 var opts = {parser:{sourceType:'module',onComment:null}} ;
 
-var pass = ['./tests/syntax/a.js'] ;
-//var pass = fs.readdirSync('./tests/syntax').map(function(fn){ return './tests/syntax/'+fn})
-//	.concat(fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn})) ;
+/* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
+
+//var pass = ['./t.js'] ;
+var pass = fs.readdirSync('./tests/syntax').map(function(fn){ return './tests/syntax/'+fn})
+	.concat(fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}))
+	.concat(fs.readdirSync('./lib').map(function(fn){ return './lib/'+fn}))
+	.concat('./nodent.js');
 
 pass = pass.map(function(fn){
 	var code = fs.readFileSync(fn).toString() ;
