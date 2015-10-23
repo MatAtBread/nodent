@@ -294,6 +294,7 @@ function prettyPrint(pr,opts) {
 	} catch (ex) {
 		pr.code = out ;
 	}
+	return pr ;
 }
 
 function parseCode(code,origFilename,__sourceMapping,opts) {

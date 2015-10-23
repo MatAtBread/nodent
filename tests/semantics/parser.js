@@ -4,6 +4,9 @@ module.exports = async function() {
 }
 
 function syntax() {
+	(function x() {})
+	(function y() {});
+	(function z() {});
 	var async, await ;
 
 //	Nested await
