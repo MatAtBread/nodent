@@ -1,3 +1,6 @@
+xxx:"x";
+yyy:0;
+
 /* Syntax checks - just make sure it all compiles */
 module.exports = async function() {
 	return true ;
@@ -46,4 +49,16 @@ function syntax() {
 				return arguments[2] ;
 			}
 	} ;
+
+	({async:0});
+
+	a = {async:0};
+	{async:0};
+	async: async;
+
+	await;
+
+	a = {await:0};
+	{await:0};
+	await: await;
 }

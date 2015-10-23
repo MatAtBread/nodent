@@ -691,6 +691,13 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+25-Oct-15: v2.1.11
+
+- Fix a number of errors related to the output ES6 `import` and `export` statements
+- Change the default parsing sourceType from 'script' to modules. Use `nodent.setDefaultCompileOptions({parser:{sourceType:'script'})` to switch back.
+- Correct parenthesis on CallExpression & MemberExpression and some other precedence edge cases
+- Add syntax tests
+
 22-Oct-15: v2.1.10
 
 - Expose acorn parser options to allow for 'module' parsing in browserifyu-nodent
@@ -742,6 +749,7 @@ Changelog
 Upgrading
 ---------
 v2.1.x BREAKING CHANGE
+
 The ES7 extensions _return async ..._ and _throw async ..._ have been changed to `async return...` and `async throw...`. This was necessary as the inability to parse 'return async function()...' unambiguously is (clearly) a mistake. If you have a large body of code using the previous syntax extension, stick to v2.0.x or earlier.  
 
 Nodent v2.0.0 is a major update. There may be some breaking changes. Significant changes are:
