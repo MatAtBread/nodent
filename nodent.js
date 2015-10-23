@@ -33,6 +33,7 @@ var config = {
 var defaultCodeGenOpts = {
 	mapStartLine:0,
 	sourcemap:true,
+	parser:{sourceType:'module'},
 	$return:"$return",
 	$error:"$error",
 	$arguments:"$args",
@@ -298,6 +299,9 @@ function prettyPrint(pr,opts) {
 }
 
 function parseCode(code,origFilename,__sourceMapping,opts) {
+	if (typeof __sourceMapping==="object" && opts===undefined)
+		opts = __sourceMapping ;
+	
 	var r = { origCode:code.toString(), filename:origFilename } ;
 	try {
 		r.ast = parser.parse(r.origCode, opts && opts.parser) ;
@@ -422,6 +426,9 @@ function requireCover(cover,opts) {
 }
 
 function compile(code,origFilename,__sourceMapping,opts) {
+	if (typeof __sourceMapping==="object" && opts===undefined)
+		opts = __sourceMapping ;
+
 	opts = opts || {} ;
 	if (opts.promises)
 		opts.es7 = true ;
@@ -746,17 +753,22 @@ if (require.main===module && process.argv.length>=3) {
 		var parseOpts ;
 
 		// Input options
+		debugger;
 		if (cli.fromast) {
 			content = JSON.parse(content) ;
 			pr = { origCode:"", filename:filename, ast: content } ;
 			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			if (!parseOpts) {
+				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
+				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+			}
 		} else {
 			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			if (!parseOpts) {
+				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
+				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+			}
 			pr = nodent.parse(content,filename,parseOpts);
-		}
-		if (!parseOpts) {
-			parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
-			console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
 		}
 
 		// Processing options
@@ -771,7 +783,7 @@ if (require.main===module && process.argv.length>=3) {
 		}
 		if (cli.minast || cli.parseast) {
 			console.log(JSON.stringify(pr.ast,function(key,value){
-				return key[0]==="$" || key.match(/start|end|loc/)?undefined:value
+				return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
 			},2,null)) ;
 			return ;
 		}

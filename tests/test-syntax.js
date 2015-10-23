@@ -1,15 +1,15 @@
 /* Test parser/output routines, not transformations */
 
-/* For each example, read it, parse it, output it, parse it again and check the trees are unchanged */
+/* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
 var nodent = require('../nodent.js')() ;
 var fs = require('fs');
 
 var n = 0 ;
 var opts = {parser:{sourceType:'module',onComment:null}} ;
 
-var pass = ['./tests/semantics/asyncify.js'] ;
-var pass = fs.readdirSync('./tests/syntax').map(function(fn){ return './tests/syntax/'+fn})
-	.concat(fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn})) ;
+var pass = ['./tests/syntax/a.js'] ;
+//var pass = fs.readdirSync('./tests/syntax').map(function(fn){ return './tests/syntax/'+fn})
+//	.concat(fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn})) ;
 
 pass = pass.map(function(fn){
 	var code = fs.readFileSync(fn).toString() ;
@@ -30,8 +30,7 @@ pass = pass.map(function(fn){
 			return r ;
 		}
 	} catch (ex) {
-//		throw ex ;
-		r.error = ex.message ;
+		r.error = ex.stack ;
 		return r ; 
 	}
 }) ;
@@ -52,13 +51,13 @@ function eqTree(a,b,p) {
 	var kb = Object.keys(b).filter(locations).sort() ;
 	if (ka.length != kb.length)
 		throw new Error("length("+ka.length+","+kb.length+") "+p) ;
-//		return false ;
+
 	for (var i=0;i<ka.length;i++)
 		if (ka[i] != kb[i] || typeof a[ka[i]] != typeof b[kb[i]])
 			throw new Error("key("+ka[i]+","+kb[i]+") "+p) ;
-//			return false ;
+
 	for (var i=0;i<ka.length;i++)
 		if (typeof a[ka[i]] === 'object' && a[ka[i]])
-			eqTree(a[ka[i]],b[kb[i]],p+" > "+ka[i]) ;
+			eqTree(a[ka[i]],b[kb[i]],p+" > "+ka[i]+":"+a[ka[i]].type) ;
 	return true ;
 }
