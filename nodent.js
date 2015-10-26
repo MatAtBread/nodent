@@ -753,7 +753,6 @@ if (require.main===module && process.argv.length>=3) {
 		var parseOpts ;
 
 		// Input options
-		debugger;
 		if (cli.fromast) {
 			content = JSON.parse(content) ;
 			pr = { origCode:"", filename:filename, ast: content } ;

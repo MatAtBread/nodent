@@ -70,7 +70,7 @@ for (idx=3; idx < process.argv.length; idx++) {
 			if (useGenOnly)
 				process.exit(-1);
 		}
-	} else if (arg=='--out') {
+	} else if (arg=='--output') {
 		showOutput = true ;
 		providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
 	} else if (arg=='--es7') {
