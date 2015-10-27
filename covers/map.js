@@ -1,3 +1,10 @@
+function MapError(message) {
+  Error.apply(this,arguments) ;
+  this.name = 'MapError';
+}
+MapError.prototype = Object.create(Error.prototype);
+MapError.prototype.constructor = MapError;
+
 module.exports = function(nodent,opts) {
 	opts = opts || {} ;
 	return new nodent.Thenable(function map(what,result,asyncFn) {
@@ -13,7 +20,7 @@ module.exports = function(nodent,opts) {
 		}
 
 		var isArray = Array.isArray(what) ;
-		var context = new Error() ;
+		var context = new MapError() ;
 		if (!asyncFn && (typeof result in {'function':true,'undefined':true})) {
 			asyncFn = result ;
 			result = isArray?[]:{} ;
@@ -72,3 +79,6 @@ module.exports = function(nodent,opts) {
 		});
 	}) ;
 }
+
+module.exports.MapError = MapError ;
+
