@@ -36,7 +36,7 @@ pass = walkSync('.').filter(function(fn){ return fn.match(/\.js$/)}) ;
 
 console.log("Syntax check - "+pass.length+" test files installed....") ;
 
-pass = pass.map(function(fn,idx){
+pass.forEach(function(fn,idx){
 	if (idx && idx%1000==0)
 		console.log('Tested '+idx+'...') ;
 	var code = fs.readFileSync(fn).toString() ;
@@ -57,18 +57,21 @@ pass = pass.map(function(fn,idx){
 		var eq = eqTree(ci.ast,co.ast) ;
 		if (eq && r.inputs==r.output) {
 			n += 1 ;
-			return {name:fn,pass:true} ;
+			return pass[idx] = {name:fn,pass:true} ;
 		} else {
-			return r ;
+			if (pass.length<1000)
+				return pass[idx] = r ;
+			console.log("FAIL:",fn) ;
+			return pass[idx] = {name:fn,pass:fail} ;
 		}
 	} catch (ex) {
 		r.error = ex.stack ;
-		return r ; 
+		return pass[idx] = r ; 
 	}
 }) ;
 if (n===pass.length)
 	console.log("Syntax check - pass "+n+" of "+pass.length) ;
-else {
+else if (pass.length<1000) {
 	console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
 	console.log("Syntax check - FAIL "+(pass.length-n)+" of "+pass.length) ;
 }
