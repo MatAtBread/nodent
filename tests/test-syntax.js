@@ -36,7 +36,9 @@ pass = walkSync('.').filter(function(fn){ return fn.match(/\.js$/)}) ;
 
 console.log("Syntax check - "+pass.length+" test files installed....") ;
 
-pass = pass.map(function(fn){
+pass = pass.map(function(fn,idx){
+	if (idx && idx%1000==0)
+		console.log('Tested '+idx+'...') ;
 	var code = fs.readFileSync(fn).toString() ;
 	try {
 		var r = {name:fn, pass:false, toString:function(){
