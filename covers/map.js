@@ -38,7 +38,8 @@ module.exports = function(nodent,opts) {
 					len -= 1 ;
 					if (len==0) {
 						if (hasError) {
-							context.message = Object.keys(hasError).map(function(e){ return e+": "+hasError[e].message }).join(", ");							context.message = JSON.stringify(hasError) ;
+							context.message = Object.keys(hasError).map(function(e){ return e+": "+hasError[e].message }).join(", ");	
+							context.results = result ;
 							return $error(context) ;
 						}
 						return $return(result) ;
