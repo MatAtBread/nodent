@@ -43,7 +43,7 @@ async function go() {
 	return passes==tests.length*2  ;
 }
 
-var map = require('../nodent')().require('map') ;
+var map = require('../../nodent')().require('map') ;
 async function wrapMap() {
 	var fns = tests.map(function(f){ return f()}) ;
 	var m = await map(fns.concat(['abc'])) ;

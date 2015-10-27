@@ -1,4 +1,4 @@
-var nodent = require('../nodent')();
+var nodent = require('../../nodent')();
 var map = nodent.require('map') ;
 var mapex = nodent.require('map',{throwOnError:true}) ;
 

@@ -1,4 +1,4 @@
-var nodent = require('../nodent')() ;
+var nodent = require('../../nodent')() ;
 var map = nodent.require('map',{throwOnError:true}) ;
 Function.prototype.asAsync = function(){
 	var fn = this ;
