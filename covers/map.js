@@ -1,7 +1,7 @@
 module.exports = function(nodent,opts) {
 	opts = opts || {} ;
 	return new nodent.Thenable(function map(what,result,asyncFn) {
-		var hasError = null ;
+		var hasError = false ;
 		if (typeof what=="number") {
 			var period = [] ;
 			period.length = Math.floor(what) ;
@@ -31,27 +31,30 @@ module.exports = function(nodent,opts) {
 					
 					var k = isArray?i:e ; 
 					if (k in result) {
-						context.message = "nodent.map: multiple $returns/errors -"+k ; 
-						$error(context) ;
-						return ;
+						context.message = "nodent.map: multiple $returns/errors at "+k ; 
+						return $error(context) ;
 					}
 					result[k] = r ;
 					len -= 1 ;
-					if (len==0)
-						return hasError?$error(hasError):$return(result) ;
+					if (len==0) {
+						if (hasError) {
+							context.message = Object.keys(hasError).map(function(e){ return e+": "+hasError[e].message }).join(", ");							context.message = JSON.stringify(hasError) ;
+							return $error(context) ;
+						}
+						return $return(result) ;
+					}
 					else if (len<0) {
-						context.message = "nodent.map: Excess $returns/errors -"+k ;
-						$error(context) ;
-						return ;
+						context.message = "nodent.map: Excess $returns/errors at "+k ;
+						return $error(context) ;
 					}
 				} ;
 				function completeError(x) {
-					if (!hasError && opts.throwOnError) {
-						hasError = new Error() ;
-						hasError.results = result ;
-					}
 					if (!(x instanceof Error))
 						x = new Error(x) ;
+					if (opts.throwOnError) {
+						hasError = hasError || {} ;
+						hasError[isArray?i:e] = x ;
+					}
 					complete(x) ;
 				}
 				
