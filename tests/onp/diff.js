@@ -54,11 +54,8 @@ module.exports = function(a,b) {
 		toString:function(){ return doc.join('\n') },
 		summary:function() {
 			return diffs.map(function(n){ 
-				return ""+
-					(n-1)+": "+doc[n-1]+"\n"+
-					n+": "+doc[n]+"\n"+
-					(n+1)+": "+doc[n+1]
-				}).join('\n');
+				return ""+n+": "+doc[n]
+			}).join('\n');
 		}
 	} ;
 }
