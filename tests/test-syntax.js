@@ -3,7 +3,7 @@ var nodent = require('../nodent.js')() ;
 var fs = require('fs');
 
 var n = 0 ;
-var opts = {parser:{sourceType:'module',onComment:null}} ;
+var opts = {parser:{sourceType:'script',onComment:null}} ;
 
 /* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
 
@@ -28,8 +28,16 @@ function walkSync(dir, filelist) {
 
 var diff = require('./onp/diff') ;
 
-function testFiles(paths) {
-	var pass = paths || walkSync('.').filter(function(fn){ return fn.match(/\.js$/)}) ;
+function testFiles(paths,recurse) {
+	var pass = [] ;
+	paths.forEach(function(fn){
+		if (fs.statSync(fn).isDirectory()) {
+			walkSync(fn,pass) ;
+		} else {
+			pass.push(fn) ;
+		}
+	}) ;
+	pass = pass.filter(function(fn){ return fn.match(/\.js$/)}) ;
 	
 	console.log("Syntax check - "+pass.length+" test files installed....") ;
 	
@@ -40,35 +48,48 @@ function testFiles(paths) {
 		var code = fs.readFileSync(fn).toString() ;
 		try {
 			var r = {name:fn, pass:false, toString:function(){
-				return this.name+" pass:"+this.pass+(this.error?"\nerror :"+this.error:"")
-				+"\n"+this.diff.summary()
-				+"\n"+this.tree.summary() ;
+				return this.name+" pass:"+this.pass
+				+(this.error?"\nerror :"+this.error:"")
+				+(this.diff?"\n"+this.diff.summary():"")
+				+(this.tree?"\n"+this.tree.summary():"") ;
 			}} ;
+			
+			// Minified files upset diff, so pretend they're not
+//			if (code.split("\n").length<3)
+//				code = code.replace(/;/g,";\n") ;
+
 			var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
 			var co = nodent.prettyPrint(nodent.parse(ci.code,"",null,opts)) ;
 			r.diff = diff(ci.code,co.code) ;
-			r.tree = diff(JSON.stringify(ci.ast,null,2),JSON.stringify(ci.ast,null,2)) ;
-			var eq = eqTree(ci.ast,co.ast) ; 
-			if (eq && !r.diff.diff) {
+			eqTree(ci.ast,co.ast) ; 
+			if (!r.diff.diff) {
 				n += 1 ;
-				return pass[idx] = {name:fn,pass:true} ;
+				return {name:fn,pass:true} ;
 			} else {
-				if (pass.length<1000)
-					return pass[idx] = r ;
-				console.log("FAIL:",fn) ;
-				return pass[idx] = {name:fn,pass:fail} ;
+				console.log(r.toString()) ;
+				return  r ;
 			}
 		} catch (ex) {
-			r.error = ex.stack ;
-			return pass[idx] = r ; 
+			r.error = ex.message ;
+			if (ci && co && ci.ast && co.ast) {
+				var inTree = JSON.stringify(ci.ast,noLocations,2) ;
+				var outTree = JSON.stringify(co.ast,noLocations,2) ;
+				r.tree = diff(inTree,outTree) ;
+			}
+			console.log(r.toString()) ;
+			return r ; 
 		}
 	}) ;
 	if (n===pass.length)
 		console.log("Syntax check - pass "+n+" of "+pass.length) ;
 	else if (pass.length<1000) {
-		console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
+//		console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
 		console.log("Syntax check - FAIL "+(pass.length-n)+" of "+pass.length) ;
 	}
+}
+
+function noLocations(k,v) {
+	return locations(k)?v:undefined ;
 }
 
 function locations(k) {

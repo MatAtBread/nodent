@@ -109,7 +109,7 @@ async function run(fn) {
 }
 
 if (syntaxTest) {
-	require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):null) ;
+	require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):[__dirname+"/.."],true) ;
 	if (syntaxTest==1)
 		return ;
 }
