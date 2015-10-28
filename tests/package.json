@@ -9,6 +9,7 @@
   "license": "ISC",
   "dependencies": {
     "bluebird": "^2.9.13",
+    "colors": "^1.1.2",
     "rsvp": "^3.0.17",
     "when": "^3.7.2"
   }

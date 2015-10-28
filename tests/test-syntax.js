@@ -7,12 +7,6 @@ var opts = {parser:{sourceType:'module',onComment:null}} ;
 
 /* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
 
-var pass = ['./t.js'] ;
-//var pass = fs.readdirSync('./tests/syntax').map(function(fn){ return './tests/syntax/'+fn})
-//	.concat(fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}))
-//	.concat(fs.readdirSync('./lib').map(function(fn){ return './lib/'+fn}))
-//	.concat('./nodent.js');
-
 //List all files in a directory in Node.js recursively in a synchronous fashion
 function walkSync(dir, filelist) {
 	filelist = filelist || [];
@@ -32,48 +26,49 @@ function walkSync(dir, filelist) {
 	return filelist;
 };
 
-pass = walkSync('.').filter(function(fn){ return fn.match(/\.js$/)}) ;
+var diff = require('./onp/diff') ;
 
-console.log("Syntax check - "+pass.length+" test files installed....") ;
-
-pass.forEach(function(fn,idx){
-	if (idx && idx%1000==0)
-		console.log('Tested '+idx+'...') ;
-	var code = fs.readFileSync(fn).toString() ;
-	try {
-		var r = {name:fn, pass:false, toString:function(){
-			return this.name+" pass:"+this.pass+"\nsource:"+this.source+"\ninput :"
-				+this.inputs+"\noutput:"+this.output+"\nerror :"+this.error ;
-//				+"\nitree "+JSON.stringify(this.itree)+
-//				+"\notree "+JSON.stringify(this.otree);
-		}} ;
-//		r.source = code.replace(/\s+/g," ") ;
-		var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
-		r.inputs = ci.code.replace(/\s+/g," ") ;
-		r.itree = ci.ast ;
-		var co = nodent.prettyPrint(nodent.parse(ci.code,"",null,opts)) ;
-		r.output = co.code.replace(/\s+/g," ") ;
-		r.otree = co.ast ;
-		var eq = eqTree(ci.ast,co.ast) ;
-		if (eq && r.inputs==r.output) {
-			n += 1 ;
-			return pass[idx] = {name:fn,pass:true} ;
-		} else {
-			if (pass.length<1000)
-				return pass[idx] = r ;
-			console.log("FAIL:",fn) ;
-			return pass[idx] = {name:fn,pass:fail} ;
+function testFiles(paths) {
+	var pass = paths || walkSync('.').filter(function(fn){ return fn.match(/\.js$/)}) ;
+	
+	console.log("Syntax check - "+pass.length+" test files installed....") ;
+	
+	pass.forEach(function(fn,idx){
+		if (idx && idx%1000==0) {
+			console.log('Tested '+idx+'...') ;
 		}
-	} catch (ex) {
-		r.error = ex.stack ;
-		return pass[idx] = r ; 
+		var code = fs.readFileSync(fn).toString() ;
+		try {
+			var r = {name:fn, pass:false, toString:function(){
+				return this.name+" pass:"+this.pass+(this.error?"\nerror :"+this.error:"")
+				+"\n"+this.diff.summary()
+				+"\n"+this.tree.summary() ;
+			}} ;
+			var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
+			var co = nodent.prettyPrint(nodent.parse(ci.code,"",null,opts)) ;
+			r.diff = diff(ci.code,co.code) ;
+			r.tree = diff(JSON.stringify(ci.ast,null,2),JSON.stringify(ci.ast,null,2)) ;
+			var eq = eqTree(ci.ast,co.ast) ; 
+			if (eq && !r.diff.diff) {
+				n += 1 ;
+				return pass[idx] = {name:fn,pass:true} ;
+			} else {
+				if (pass.length<1000)
+					return pass[idx] = r ;
+				console.log("FAIL:",fn) ;
+				return pass[idx] = {name:fn,pass:fail} ;
+			}
+		} catch (ex) {
+			r.error = ex.stack ;
+			return pass[idx] = r ; 
+		}
+	}) ;
+	if (n===pass.length)
+		console.log("Syntax check - pass "+n+" of "+pass.length) ;
+	else if (pass.length<1000) {
+		console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
+		console.log("Syntax check - FAIL "+(pass.length-n)+" of "+pass.length) ;
 	}
-}) ;
-if (n===pass.length)
-	console.log("Syntax check - pass "+n+" of "+pass.length) ;
-else if (pass.length<1000) {
-	console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
-	console.log("Syntax check - FAIL "+(pass.length-n)+" of "+pass.length) ;
 }
 
 function locations(k) {
@@ -96,3 +91,5 @@ function eqTree(a,b,p) {
 			eqTree(a[ka[i]],b[kb[i]],p+" > "+ka[i]+":"+a[ka[i]].type) ;
 	return true ;
 }
+
+module.exports = {testFiles:testFiles} ;

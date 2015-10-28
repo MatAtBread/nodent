@@ -43,7 +43,7 @@ try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
 
 var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false ;
+var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
 var idx ;
 
 try {
@@ -55,9 +55,9 @@ try {
 for (idx=3; idx < process.argv.length; idx++) {
 	var arg = process.argv[idx] ;
 	if (arg=='--syntaxonly')
-		return require('./test-syntax') ;
-	if (arg=='--syntax') {
-		require('./test-syntax') ;
+		syntaxTest = 1 ;
+	else if (arg=='--syntax') {
+		syntaxTest = 2 ;
 	} else if (arg=='--generators' || arg=='--genonly') {
 		try {
 			useGenOnly = arg=='--genonly' ;
@@ -108,10 +108,17 @@ async function run(fn) {
 	}) 
 }
 
+if (syntaxTest) {
+	require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):null) ;
+	if (syntaxTest==1)
+		return ;
+}
 var tests = process.argv.length>idx ? 
 	process.argv.slice(idx):
 		fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
 
+	
+	
 async function runTests() {
 	for (var j=0; j<tests.length; j++) {
 		var test = tests[j] ;
