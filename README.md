@@ -346,20 +346,9 @@ Intentionally omit the return as we want another function to do it later:
 		// so exit without doing anything
 	}
 
-Loops & Conditionals
---------------------
+for (..in..) and for (..of..) loops
+-----------------------------------
 The `for (..in..)` and `for (..of..)`  constructs are NOT transformed by nodent - each iteration of the loop body is synchronized as expected, but individual iterations may be interleaved and the loop may complete before some or all of the individual keys are enumerated. This behaviour can be ameliorated using the "map" cover (see later).
-
-Conditional execution operators (`||` `&&` and `?:`) in nodent always execute on the result of awaits, and do not evaluate them sequentially. Nodent generates a warning when it sees these expressions. The generator implementation (include the standard specification) evaluates in strict synchronous order, so the expressions
-
-	await abc() && await def()
-	
-...will execute def() ONLY if abc() was true in the generator implementation, whereas the -es7/promise code will execute BOTH abc() and def(), and return the correct result.
-
-To remain compatible with all implementations, it would probably be wise to break these expressions into separate statements, e.g.:
-
-	var expr = await abc() ;			// Always wait for abc()
-	if (expr) expr = await def() ;	// Then if it is true, wait for def()
 
 Missing out await 
 -----------------
@@ -400,7 +389,7 @@ Diffrences from the ES7 specification
 -------------------------------------
 * Generators and Promises are optional. Nodent works simply by transforming your original source
 
-* As of the current version, `for (...in...)` and `for (...of...)` loops are NOT transformed by Nodent
+* As of the current version, `for (...in...)` and `for (...of...)` loops are NOT transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
 
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. 
 
@@ -650,7 +639,7 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 Testing
 =======
 
-Nodent has a test suite (in ./tests) which is itself a node package. Since it requires a bunch of Promise implementations to test against, it is NOT installed when 'nodent' is installed. If you want to run the tests:
+Nodent has a test suite (in ./tests) which is itself a node package. Since it requires a bunch of Promise implementations to test against, it is NOT installed when 'nodent' is installed. The Promise implementations are option - you can run the tests using the nodent es7, Thenable and native Promises (if available) without installing any other modules. If you want to run the tests:
 
 	cd tests
 	npm install
@@ -663,15 +652,17 @@ If you wish to add a Promise implementation to test against, add it to the depen
 
 The test runner in tests/index.js accepts the following options:
 
-	./nodent.js tests [--out --quick --quiet --save --es7 --generators] tests [test-files]
+	./nodent.js tests [OPTIONS] [test-files]
 	
-	--quiet      Suppress any errors or warnings
-	--quick      Don't target a specific execute time, just run each test once
-	--generators Performance test syntax transformation, followed by generators
-	--genonly	 Only run the tests in generator mode
-	--out        Show the generated ES5 code for Promises
-	--es7        Show the generated ES5 code for ES7 mode
-	--save       Save the output (must be used with --out or --es7)
+	--quiet      	Suppress any errors or warnings
+	--quick      	Don't target a specific execute time, just run each test once
+	--generators 	Performance test syntax transformation, followed by generators
+	--genonly	 	Only run the tests in generator mode
+	--output     	Show the generated ES5 code for Promises
+	--es7        	Show the generated ES5 code for ES7 mode
+	--save       	Save the output (must be used with --out or --es7)
+	--syntax	 	Check the parser/output code before running semantic tests
+	--syntaxonly	Only run syntax tests
 
 Performance
 -----------
