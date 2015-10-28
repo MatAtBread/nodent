@@ -53,7 +53,7 @@ To use NoDent, you need to:
 
 This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a `use nodent...` directive at the top of a .js file. 
 
-You can't use the directive, or any other Nodent features in the file that initially require("nodent")(). If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file, or start your app with nodent from the command line:
+You can't use the directive, or any other Nodent features in the file that initially `require("nodent")()`. If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file, or start your app with nodent from the command line:
 
 	./nodent.js myapp.js
 
@@ -62,7 +62,7 @@ That's the basics.
 Why Nodent?
 ===========
 
-* _[Performance](#performance)_ - on current JS engines, Nodent is between 2x and 4x faster than other solutions.
+* _[Performance](#performance)_ - on current JS engines, Nodent is between 2x and 4x faster than other solutions, and up to 10x faster on mobile browsers.
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
 * No dependency on ES6, "harmony"
 * No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
@@ -106,7 +106,7 @@ The testing options `--parseast` and `--minast` output the source as parsed into
 
 Use within your Node scripts
 ============================
-There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent-...` directive at the top, or have the extension ".njs".
+There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent-...` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched.
 
 ES7 and Promises
 ----------------
@@ -250,7 +250,7 @@ It might well be more efficient in this case to use the 'map' cover function (se
 	// When they're done:
 	console.log(mapped[0],mapped[1]+mapped[2]) ;
 
-Most Promise libraries have a similar function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). As of nodent v1.2.1, any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
+Most Promise libraries have a function called `Promise.all()`, which is similar to `nodent.map`. `nodent.map` is more flexible in that `Promise.all()` only accepts arrays whereas `map` can map Objects and apply a specific async function to each value in the Array/Object. See below for more details and  examples). Any values passed to `map` that are not Thenable (i.e. Promises or async function calls) are simply passed through unchanged.
 
 async, await and ES5, ES6
 =========================
@@ -258,8 +258,12 @@ async, await and ES5, ES6
 Invoking async functions from ES5/6
 -----------------------------------
 
-As described above, the return type from an async function is a Promise (or, to be accurate it's whatever type you assign the scoped variable `Promise` - if this is `nodent.Thenable`, then it has a `then()` member, and behaves enough like a Promise to work with Promises/A+-compliant libraries). So, to invoke the async function `readFile` from a normal ES5 script you can use the code:
+As described above, the return type from an async function is a Promise (or, to be accurate it's whatever type you assign the scoped variable `Promise` - if this is `nodent.Thenable`, then it has a `then()` member, and behaves enough like a Promise to work with Promises/A+-compliant libraries). So, to invoke an `async function` from a normal ES5 script you can use the code:
 
+	/* An async function defined somewhere */
+	async function readFile() { ... }
+					
+	/* Calling it using ES5 syntax in a non-nodented way */
 	readFile(filename).then(function(data){
 	    ...
 	},function(err){
@@ -278,7 +282,7 @@ or just:
 
 Defining async functions from ES5
 ---------------------------------
-Use nodent! Any function returning a Promise (or Thenable) can be used with `await`.
+Use nodent! And any function returning a Promise (or Thenable) can be used with `await`.
 
 Gotchas and ES7 compatibility
 ===========================
@@ -681,6 +685,14 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+29-Oct-15: v2.2.0
+
+- Implement the correct conditional execution semantics for `&& || ?:` whether they contain `await` expressions or not.
+- Revert to `'sourceType: 'script'` as 'module' forces 'strict' mode and breaks some existing files. You can override the sourceType (see v2.1.11) if necessary.
+- Enable 'import' and 'export' statements, even in 'script' mode. Nodent does nothing with these statements, but simply passes them through to your execution platform or transpiler to implement.
+- Add syntax testing to the test suite. This has been tested against over 75,000 .js files and a number of edge cases has been fixed.
+- Throw a nodent::map.MapError (derived from Error) if the `map` cover encounters an error, or one of the delegates does when `throwOnError:true`
 
 25-Oct-15: v2.1.11
 

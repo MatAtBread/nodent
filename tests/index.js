@@ -125,7 +125,7 @@ async function runTests() {
 		if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
 			continue ;
 		if (notES6 && test.match(/es6-.*/)) {
-			console.log(pad(test)+" (skipped - ES6 platform not installed)") ;
+			console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
 			continue ;
 		}
 		var samples = targetSamples ;
