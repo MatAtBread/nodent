@@ -3,7 +3,6 @@ var nodent = require('../nodent.js')() ;
 var fs = require('fs');
 
 var n = 0 ;
-var opts = {parser:{sourceType:'script',onComment:null}} ;
 
 /* For each example, read it, parse it, output it, parse it again and check the trees & code strings are the same */
 
@@ -43,38 +42,44 @@ function testFiles(paths,recurse) {
 	
 	pass.forEach(function(fn,idx){
 		if (idx && idx%1000==0) {
-			console.log('Tested '+idx+'...') ;
+			console.error('Tested '+idx+'...') ;
 		}
 		var code = fs.readFileSync(fn).toString() ;
 		try {
-			var r = {name:fn, pass:false, toString:function(){
-				return this.name+" pass:"+this.pass
-				+(this.error?"\nerror :"+this.error:"")
+			var r = {name:fn, toString:function(){
+				return this.name+": "+(this.error||"")
 				+(this.diff?"\n"+this.diff.summary():"")
 				+(this.tree?"\n"+this.tree.summary():"") ;
 			}} ;
 			
-			// Minified files upset diff, so pretend they're not
-//			if (code.split("\n").length<3)
-//				code = code.replace(/;/g,";\n") ;
-
-			var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
+			var opts = {parser:{sourceType:'script',allowImportExportEverywhere:true,onComment:null}} ;
+			try {
+				var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
+			} catch(ex) {
+				opts.parser.sourceType = 'module' ;
+				ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
+			}
 			var co = nodent.prettyPrint(nodent.parse(ci.code,"",null,opts)) ;
 			r.diff = diff(ci.code,co.code) ;
 			eqTree(ci.ast,co.ast) ; 
 			if (!r.diff.diff) {
 				n += 1 ;
-				return {name:fn,pass:true} ;
+				return {name:fn} ;
 			} else {
-				console.log(r.toString()) ;
+				console.log(r.error = r.toString()) ;
 				return  r ;
 			}
 		} catch (ex) {
-			r.error = ex.message ;
-			if (ci && co && ci.ast && co.ast) {
-				var inTree = JSON.stringify(ci.ast,noLocations,2) ;
-				var outTree = JSON.stringify(co.ast,noLocations,2) ;
-				r.tree = diff(inTree,outTree) ;
+			if (!ci) {
+				n += 1 ;
+				r.error = "Not valid javascript (ignored "+opts.parser.sourceType+")" ;
+			} else {
+				r.error = ex.message ;
+				if (ci && co && ci.ast && co.ast) {
+					var inTree = JSON.stringify(ci.ast,noLocations,2) ;
+					var outTree = JSON.stringify(co.ast,noLocations,2) ;
+					r.tree = diff(inTree,outTree) ;
+				}
 			}
 			console.log(r.toString()) ;
 			return r ; 
@@ -83,7 +88,6 @@ function testFiles(paths,recurse) {
 	if (n===pass.length)
 		console.log("Syntax check - pass "+n+" of "+pass.length) ;
 	else if (pass.length<1000) {
-//		console.log("Syntax check - Errors\n",pass.filter(function(p){ return !p.pass}).join("\n")) ;
 		console.log("Syntax check - FAIL "+(pass.length-n)+" of "+pass.length) ;
 	}
 }
