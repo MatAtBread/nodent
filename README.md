@@ -346,10 +346,6 @@ Intentionally omit the return as we want another function to do it later:
 		// so exit without doing anything
 	}
 
-for (..in..) and for (..of..) loops
------------------------------------
-The `for (..in..)` and `for (..of..)`  constructs are NOT transformed by nodent - each iteration of the loop body is synchronized as expected, but individual iterations may be interleaved and the loop may complete before some or all of the individual keys are enumerated. This behaviour can be ameliorated using the "map" cover (see later).
-
 Missing out await 
 -----------------
 Forgetting to put `await` in front of an async call is easy. And usually not what you want - you'll get a reference
@@ -385,11 +381,15 @@ Function.prototype.toString & arguments
 ---------------------------------------
 Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
 
-Diffrences from the ES7 specification
--------------------------------------
+Differences from the ES7 specification
+--------------------------------------
 * Generators and Promises are optional. Nodent works simply by transforming your original source
 
-* As of the current version, `for (...in...)` and `for (...of...)` loops are NOT transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
+* As of the current version, some constructs do not transform correctly if the contain an `await` expression:
+
+	- `for (...in...)` and `for (...of...)` loops containing an `await` are not transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
+	- `case` blocks that fall through into the following block will not asynchronise correctly if they contain an `await`. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
+	- `break` or `continue` in a loop containing an `await` cannot have a labelled exit.
 
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. 
 
