@@ -6,7 +6,7 @@
   "scripts": {
     "test": "./nodent.js tests --syntax --quick --quiet --generators",
     "start": "./nodent.js",
-    "install": "echo 'nodent v2.1.0 introduced a BREAKING CHANGE to the non-standard syntax extensions. See README.md for details'"
+    "install": "echo 'nodent v2.1.0 introduced a BREAKING CHANGE to the non-standard syntax extensions. See README.md (https://github.com/MatAtBread/nodent#upgrading) for details'"
   },
   "dependencies": {
     "acorn": "2.5.2",
