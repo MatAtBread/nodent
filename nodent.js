@@ -33,7 +33,7 @@ var config = {
 var defaultCodeGenOpts = {
 	mapStartLine:0,
 	sourcemap:true,
-	parser:{sourceType:'module'},
+	parser:{sourceType:'script'},
 	$return:"$return",
 	$error:"$error",
 	$arguments:"$args",
