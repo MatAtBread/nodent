@@ -42,7 +42,7 @@ function testFiles(paths,recurse) {
 	
 	pass.forEach(function(fn,idx){
 		if (idx && idx%1000==0) {
-			console.error('Tested '+idx+'...') ;
+			console.error('Tested '+idx+'. '+(idx-n)+' fails so far...') ;
 		}
 		var code = fs.readFileSync(fn).toString() ;
 		try {
