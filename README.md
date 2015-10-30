@@ -685,6 +685,9 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+30-Oct-15: v2.2.1
+
+- Include parentheses in the expression +(+x) to avoid it looking like ++x
 
 29-Oct-15: v2.2.0
 
