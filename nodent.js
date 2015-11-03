@@ -11,7 +11,7 @@ var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var outputCode = require('./lib/output') ;
 var parser = require('./lib/parser') ;
-var asynchronize = require('./lib/arboriculture').asynchronize ;
+var treeSurgeon = require('./lib/arboriculture') ;
 
 var directives = {
 	useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
@@ -27,7 +27,8 @@ var config = {
 	augmentObject:false,									// Only one has to say 'yes'
 	extension:'.njs',										// The 'default' extension
 	dontMapStackTraces:false,								// Only one has to say 'no'
-	asyncStackTrace:false
+	asyncStackTrace:false,
+	babelTree:false
 } ;
 
 var defaultCodeGenOpts = {
@@ -71,7 +72,7 @@ function parseCompilerOptions(code,logger) {
 	} else {
 		// code is an AST
 		for (var i=0; i<code.body.length; i++) {
-			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type==='Literal') {
+			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/Literal$/)) {
 				var test = "'"+code.body[i].value+"'" ;
 				parseOpts.promises = matches(test,directives.usePromisesDirective) ;
 				parseOpts.es7 = parseOpts.promises || matches(test,directives.useES7Directive) ;
@@ -280,7 +281,7 @@ function prettyPrint(pr,opts) {
 		file: filename+"(original)",
 		sourceMapRoot: filepath.join("/"),
 		sourceContent: pr.origCode
-	}}:null) ;
+	}}:null, pr.origCode) ;
 
 	try {
 		var mapUrl = "" ;
@@ -305,6 +306,13 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	var r = { origCode:code.toString(), filename:origFilename } ;
 	try {
 		r.ast = parser.parse(r.origCode, opts && opts.parser) ;
+		if (opts.babelTree) {
+			parser.treeWalker(r.ast,function(node,descend,path){
+				if (node.type==='Literal')
+					path[0].replace(treeSurgeon.babelLiteralNode(node.value)) ;
+				descend() ;
+			}) ;
+		}
 		return r ;
 	} catch (ex) {
 		if (ex instanceof SyntaxError) {
@@ -534,9 +542,9 @@ NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
 NodentCompiler.prototype.$asyncspawn =  $asyncspawn ;
 NodentCompiler.prototype.$asyncbind =  $asyncbind ;
 // Exported ; but not to be used lightly!
-NodentCompiler.prototype.parse =  parseCode ;
+NodentCompiler.prototype.parse = parseCode ;
 NodentCompiler.prototype.compile =  compile ;
-NodentCompiler.prototype.asynchronize =  asynchronize ;
+NodentCompiler.prototype.asynchronize =  treeSurgeon.asynchronize ;
 NodentCompiler.prototype.prettyPrint =  prettyPrint ;
 NodentCompiler.prototype.parseCompilerOptions =  parseCompilerOptions ;
 
