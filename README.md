@@ -3,7 +3,7 @@
 NoDent
 ======
 
-NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node. 
+NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node.
 
 This README assumes you're using Nodent v2.x.x - see [Upgrading](#upgrading) if your upgrading from an earlier version.
 
@@ -51,7 +51,7 @@ To use NoDent, you need to:
 
 	require('nodent')() ;
 
-This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a `use nodent...` directive at the top of a .js file. 
+This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a `use nodent...` directive at the top of a .js file.
 
 You can't use the directive, or any other Nodent features in the file that initially `require("nodent")()`. If necessary, have a simple "loader.js" that includes Nodent and then requires your first Nodented file, or start your app with nodent from the command line:
 
@@ -66,7 +66,7 @@ Why Nodent?
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
 * No dependency on ES6, "harmony"
 * No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
-* No execution framework needed as with traceur, babel or regenerator 
+* No execution framework needed as with traceur, babel or regenerator
 * No 'node-gyp' or similar OS platform requirement for threads or fibers
 * ES7 async and await on ES5 (most browsers and nodejs)
 * Compatible with ES6 too - nodent passes ES6 constructs unchanged for use with other transpilers and Node v4.x
@@ -85,7 +85,7 @@ Command-Line usage
 You can invoke and run a nodented JavaScript file from the command line with:
 
 	./nodent.js myNodentedFile.js
-	
+
 You can also simply compile and display the output, without running it. This is useful if you want to pre-compile your scripts:
 
 	./nodent.js --out myNodentedFile.js
@@ -97,8 +97,8 @@ If you are using nodent as part of a toolchain with another compiler, you can ou
 ...or read an AST from another tool
 
 	./nodent.js --fromast --out estree.json // Read the JSON file as an ESTree AST, and output the nodented JS code
-	
-To generate a source-map in the output, use `--sourcemap`. 
+
+To generate a source-map in the output, use `--sourcemap`.
 
 	./nodent.js --sourcemap --out myNodentedFile.js
 
@@ -150,7 +150,7 @@ For example, with connect:
 		"./static-files/web",	// Path to where the files are located
 		/\.njs$/,				// Only parse & compiles ending in ".njs"
 		options					// Options (see below)
-	)) ;	
+	)) ;
 
 The regex can be omitted, in which case it has the value above.
 
@@ -172,13 +172,13 @@ Note that parsing of script tags within HTML is relatively simple - the parsing 
 
 The runtime routine that should be defined on the Function.prototype in the execution environment provides compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`, or for use with generators (probably not a good idea in a browser as support is limited and slow), `nodent.$asyncspawn.toString()`.
 
-If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example 
+If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example
 
 	// Called when an async function throws an exception during asynchronous operations
 	// and the calling synchronous function has returned.
-	window.$error = function(exception) { 
-		/* Maybe log the error somewhere */ 
-		throw ex ; 
+	window.$error = function(exception) {
+		/* Maybe log the error somewhere */
+		throw ex ;
 	};
 
 Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2
@@ -262,20 +262,20 @@ As described above, the return type from an async function is a Promise (or, to 
 
 	/* An async function defined somewhere */
 	async function readFile() { ... }
-					
+
 	/* Calling it using ES5 syntax in a non-nodented way */
 	readFile(filename).then(function(data){
 	    ...
 	},function(err){
 		....
 	}) ;
-	
+
 Similarly, you can wait for any Promise with the `await`keyword - i.e. not just functions you defined yourself as `async`:
 
 	// The elasticsearch library returns a Promise if you don't supply a callback
 	var resultPromise = elasticsearch.search(query) ;
 	console.log(await resultPromise) ;
-	
+
 or just:
 
 	console.log(await elasticsearch.search(query)) ;
@@ -299,7 +299,7 @@ Specifically in Nodent (not specified by ES7), you can interface an ES7 async fu
 	    	// NB: "async return" and "async throw" are NOT ES7 standard syntax
 	    	async return undefined;
 	    },t) ;
-	} 
+	}
 
 This works because Nodent translates this into:
 
@@ -338,10 +338,10 @@ Intentionally omit the return as we want another function to do it later:
 	async function test2(x) {
 		if (x)
 			return fileItem[x] ;
-			
+
 		// Oops! If x==0, do something via a traditional Node callback
 		fs.readFile("404.html",function(err,data){
-				// The callback is NOT mapped by Nodent - this function 
+				// The callback is NOT mapped by Nodent - this function
 				// is a standard callback, not an async function
 				if (err) async throw err ;
 				async return data ;
@@ -350,7 +350,7 @@ Intentionally omit the return as we want another function to do it later:
 		// so exit without doing anything
 	}
 
-Missing out await 
+Missing out await
 -----------------
 Forgetting to put `await` in front of an async call is easy. And usually not what you want - you'll get a reference
 to a Promise. This can be useful though, when you need a reference to an async function:
@@ -360,7 +360,7 @@ to a Promise. This can be useful though, when you need a reference to an async f
 		fn = test(x) ; // 'test' is async - don't await
 	else
 		fn = testDefault() ;	// testDefault is async - don't await
-		
+
 	return await fn ;	// Now await for which function fn refers to
 
 
@@ -368,17 +368,17 @@ to a Promise. This can be useful though, when you need a reference to an async f
 	var x = f() ;	// 'x' = a Thenable object
 
 	// Call x using nodent
-	try { 
-		result = await x ; 
-		... 
-	} catch(error) { 
-		... 
+	try {
+		result = await x ;
+		...
+	} catch(error) {
+		...
 	}
 	// or call x from ES5/6
 	x.then(function(result){
-	 	... 
+	 	...
 	},function(error){
-	 	... 
+	 	...
 	}) ;
 
 Function.prototype.toString & arguments
@@ -395,18 +395,18 @@ Differences from the ES7 specification
 	- `case` blocks that fall through into the following block will not asynchronise correctly if they contain an `await`. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
 	- `break` or `continue` in a loop containing an `await` cannot have a labelled exit.
 
-* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. 
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function.
 
 * The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
 
-* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`. 
+* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`.
 
 API
 ===
 Create an instance of a nodent compiler:
 
 	var nodent = require('nodent')(options);
-	
+
 Options:
 
 |Member| Type |  |
@@ -447,12 +447,12 @@ The available meta-properties are:
 |setDefaultCompileOptions (compiler[,env])|function|Set the defaults for the compiler and environment. This should be called before the first compiler is created. The default environment options (`log augmentObject extension dontMapStackTraces asyncStackTrace`) will be used when the corresponding option is missing when the compiler is created. The environment options (`sourcemap` and default symbol names) must be set before the first compiler is created. The other compilation options (`es7 promises generators`) are set by the corresponding directive|
 
 	// Turn off sourcemap generation:
-	nodent.setDefaultCompileOptions({sourcemap:false},{asyncStackTrace:true}) 
-	
+	nodent.setDefaultCompileOptions({sourcemap:false},{asyncStackTrace:true})
+
 	// Access values that are global to all nodent compiler instances
 	var Promise = global.Promise || nodent.Thenable ;	// Set a Promise provider for this module
 	nodent.asyncify
-	
+
 You still need to (at least once) create the compiler:
 
 	var compiler = nodent(options) ;
@@ -465,7 +465,7 @@ Built-in conversions and helpers
 Nodentify has a (small but possibly growing) set of covers for common Node modules. You specify these through the `require` function:
 
 	var nodent = require('nodent')() ;
-	var nhttp = nodent.require('http') ; 
+	var nhttp = nodent.require('http') ;
 
 Some covers can accept a configuation object, in this case specify the options in the second parameter:
 
@@ -528,11 +528,11 @@ The "http" cover (not https) can accept a single configuration option 'autoProto
 
 "map"
 -----
-The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map() or Promsie.all(). The map function takes three parameters: 
+The nodent cover "map" works like an aynchronous, parallel object/array mapper, similar to Array.prototype.map() or Promsie.all(). The map function takes three parameters:
 
-* the entity to iterate over, 
+* the entity to iterate over,
 * optionally an object in which to place the results (they are returned from the async map in any case),
-* the async function to call on each iteration. 
+* the async function to call on each iteration.
 
 The function completes when all the aync-iteration function calls have completed (via a return or exception). The order of execution of each async function is not guarenteed. When complete, the async-return is a complementary object or array containing the mapped values as returned asynchronously. If present, the return values are placed into the optional second parameter. If omitted, a new object or array is created to hold the results. The initial argument (the entity to iterate over) can be either:
 
@@ -549,7 +549,7 @@ Example: mapping an object
 	// Asynchronously map every key in "myObject" by adding 1 to the value of the key
 	mapped = await map(myObject,async function(key){
 		// This can be async without issues
-		return myObject[key]+1 ;	
+		return myObject[key]+1 ;
 	}) ;
 	// All done - mapped contains the new object with all the elements "incremeneted"
 
@@ -584,7 +584,7 @@ Example: execute arbitrary async functions in parallel and return when they are 
 	var map = nodent.require('map') ;
 
 	mapped = await map([asyncFn("abc"),asyncFn2("def")]) ;
-	
+
 	/* All done - mapped is an new array containing the async-returns */
 
 Example: execute arbitrary labelled async functions in parallel and return when they are all complete
@@ -602,7 +602,7 @@ In the latter two cases, where there is only an single parameter, the async retu
 The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.  the first function (at index [0]) and the async-return of the second funcrion (at index [1]). There is no programmatic limit to the number of async functions that can be passed in the array. Note that the functions have no useful parameters (use a closure or wrap the function if necessary). The order of execution is not guaranteed (as with all calls to map), but the completion routine will only be called when all async functions have finished either via a return or exception.
 
 ### Exceptions in mapped functions
-By default, in the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, and so they can be easily tested for in the mapped object after completion. 
+By default, in the event of an error or exception in the async-mapping function, the error value is substitued in the mapped object or array. This works well since all the exceptions will be instances of the JavaScript Error() type, and so they can be easily tested for in the mapped object after completion.
 
 The map() function only errors if an async function illegally returns more than once (including multiple errors or both an error and normal response).
 
@@ -625,7 +625,7 @@ This helper function wraps "normal" Node asynchronous functions (i.e. those whos
 	console.log((await afs.readFile("./test/a.js")).toString()) ;
 
 By default, asyncify creates an object that has it's ancestor as its prototype with functions members mapped to the await call signature.
-Internally, asyncify filters these so that only functions that don't end in 'Sync' and that have a member named the same without 'Sync'. 
+Internally, asyncify filters these so that only functions that don't end in 'Sync' and that have a member named the same without 'Sync'.
 For 'fs', this works (readFile does not end in Sync, and so is mapped, readFileSync ends in 'Sync' and a member called 'readFile' exists).
 
 You can optionally supply your own filter to asyncify. For example to only map a function called 'queryDb':
@@ -649,15 +649,15 @@ Nodent has a test suite (in ./tests) which is itself a node package. Since it re
 	npm install
 	cd ..
 	./nodent.js tests
-		
+
 The tests themselves are normal (nodented) JavaScript files invoked with the parameters require,module and Promise. If you want to add a test, make sure it exports a single async function which the test runner can call. The async return value from this function should be `true` for success and `false` for failure.
 
-If you wish to add a Promise implementation to test against, add it to the dependencies in tests/package.json and give it an entry in the tests/index.js test runner. 
+If you wish to add a Promise implementation to test against, add it to the dependencies in tests/package.json and give it an entry in the tests/index.js test runner.
 
 The test runner in tests/index.js accepts the following options:
 
 	./nodent.js tests [OPTIONS] [test-files]
-	
+
 	--quiet      	Suppress any errors or warnings
 	--quick      	Don't target a specific execute time, just run each test once
 	--generators 	Performance test syntax transformation, followed by generators
@@ -685,13 +685,14 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
-04-Nov-15: v2.2.3 
+04-Nov-15: v2.2.4
 
 - Support enhanced ESTree constructs as used by Babel v6.x.x for [fast-async](https://www.npmjs.com/package/fast-async) Babel plugin
+- Only hoist (scoped) declarations if the scope contains an 'await'.
 
 30-Oct-15: v2.2.2
 
-- Correct case where an ArrowFunctionExpression.body is a SequenceExpression (requires parens), e.g `x => (x,y)`, which is different from `x => x,y` 
+- Correct case where an ArrowFunctionExpression.body is a SequenceExpression (requires parens), e.g `x => (x,y)`, which is different from `x => x,y`
 - Include parentheses in the expression +(+x) to avoid it looking like ++x
 
 29-Oct-15: v2.2.0
@@ -726,7 +727,7 @@ Changelog
 
 - Rationalise CLI option parsing. Allow javascript/ast from stdin
 - Fix get/set method output
-- Fix method async get _() {} 
+- Fix method async get _() {}
 - Error on method async set _() {}
 
 06-Oct-15: v2.1.0
@@ -738,7 +739,7 @@ Changelog
 
 02-Oct-15: v2.0.4
 
-- Add --pretty to cli (output input, no transformation) 
+- Add --pretty to cli (output input, no transformation)
 - Add [] as a final option to .noDentify() to forward all arguments to the callback to the awaiting call (useful for very non-standard callbacks that split results across parameters)
 - Include the first line of the async stack trace (usually the message)
 - Add 'npm test' script Rationalise x-* tests Add asyncify test
@@ -773,5 +774,5 @@ Nodent v2.0.0 is a major update. There may be some breaking changes. Significant
 * The compiler always uses the Thenable protocol, even in -es7 mode, to ensure interoperability
 * Additional ES5/6 constructs are available such as object/class method definitions and getters can be marked `async`
 * ES6 constructs like arrow functions (and async arrows) and `super` are supported
-* `arguments` is correctly mapped into async function bodies and no longer refer to the $return and $error parameters 
+* `arguments` is correctly mapped into async function bodies and no longer refer to the $return and $error parameters
 * Generator mode falls back to Promises mode to implement the non-ES7 standard extensions `async return expression`, `async throw expression` and `await` outside of an `async` function.
