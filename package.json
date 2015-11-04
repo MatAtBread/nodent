@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "acorn": "2.5.2",
-    "acorn-es7-plugin": "^1.0.6",
+    "acorn-es7-plugin": "^1.0.7",
     "source-map": "0.5.3"
   },
   "repository": {

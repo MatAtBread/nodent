@@ -685,6 +685,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+04-Nov-15: v2.2.3 
+
+- Support enhanced ESTree constructs as used by Babel v6.x.x for [fast-async](https://www.npmjs.com/package/fast-async) Babel plugin
+
 30-Oct-15: v2.2.2
 
 - Correct case where an ArrowFunctionExpression.body is a SequenceExpression (requires parens), e.g `x => (x,y)`, which is different from `x => x,y` 
