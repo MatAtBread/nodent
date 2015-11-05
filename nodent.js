@@ -28,7 +28,8 @@ var config = {
 	extension:'.njs',										// The 'default' extension
 	dontMapStackTraces:false,								// Only one has to say 'no'
 	asyncStackTrace:false,
-	babelTree:false
+	babelTree:false,
+	dontInstallRequireHook:false
 } ;
 
 var defaultCodeGenOpts = {
@@ -302,7 +303,7 @@ function prettyPrint(pr,opts) {
 function parseCode(code,origFilename,__sourceMapping,opts) {
 	if (typeof __sourceMapping==="object" && opts===undefined)
 		opts = __sourceMapping ;
-	
+
 	var r = { origCode:code.toString(), filename:origFilename } ;
 	try {
 		r.ast = parser.parse(r.origCode, opts && opts.parser) ;
@@ -634,11 +635,6 @@ function initialize(initOpts){
 		}
 	}
 
-	// Create a new compiler
-	var nodent = new NodentCompiler({
-		logger: initOpts.log
-	}) ;
-
 	/**
 	 * We need a global to handle funcbacks for which no error handler has ever been defined.
 	 */
@@ -647,21 +643,27 @@ function initialize(initOpts){
 	}
 
 	/* If we've not done it before, create a compiler for '.js' scripts */
-	if (!stdJSLoader) {
-		stdJSLoader = require.extensions['.js'] ;
-		var stdCompiler = compileNodentedFile(new NodentCompiler({logger:initOpts.log}),initOpts.log) ;
-		require.extensions['.js'] = function(mod,filename) {
-			var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-			var parseOpts = parseCompilerOptions(content,initOpts.log) ;
-			if (parseOpts)
-				return stdCompiler(mod,filename,parseOpts) ;
-			return stdJSLoader(mod,filename) ;
-		} ;
-	}
+	// Create a new compiler
+	var nodent = new NodentCompiler({
+		logger: initOpts.log
+	}) ;
+  if (!initOpts.dontInstallRequireHook) {
+		if (!stdJSLoader) {
+			stdJSLoader = require.extensions['.js'] ;
+			var stdCompiler = compileNodentedFile(new NodentCompiler({logger:initOpts.log}),initOpts.log) ;
+			require.extensions['.js'] = function(mod,filename) {
+				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+				var parseOpts = parseCompilerOptions(content,initOpts.log) ;
+				if (parseOpts)
+					return stdCompiler(mod,filename,parseOpts) ;
+				return stdJSLoader(mod,filename) ;
+			} ;
+		}
 
-	/* If the initOpts specified a file extension, use this compiler for it */
-	if (initOpts.extension && !require.extensions[initOpts.extension]) {
-		require.extensions[initOpts.extension] = compileNodentedFile(nodent,initOpts.log) ;
+		/* If the initOpts specified a file extension, use this compiler for it */
+		if (initOpts.extension && !require.extensions[initOpts.extension]) {
+			require.extensions[initOpts.extension] = compileNodentedFile(nodent,initOpts.log) ;
+		}
 	}
 
 	// Finally, load any required covers
