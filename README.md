@@ -685,6 +685,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+06-Nov-15: v2.2.6
+
+- Fix incorrect 'async' value on AST Property and correctly use the Property.value.async for full compliance with the ESTree spec.
+- Update to acorn-es7-plugin 1.0.9 (fixes source location for async and await, and adds tests thanks to @jamestalmage) 
+
 04-Nov-15: v2.2.4
 
 - Support enhanced ESTree constructs as used by Babel v6.x.x for [fast-async](https://www.npmjs.com/package/fast-async) Babel plugin
