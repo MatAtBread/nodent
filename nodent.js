@@ -599,7 +599,7 @@ function initialize(initOpts){
 				configurable:true
 			},
 			"isThenable":{
-				value:isThenable,
+				value:function(){ return isThenable(this) },
 				writable:true,
 				configurable:true
 			}
