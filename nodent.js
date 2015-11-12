@@ -697,6 +697,7 @@ initialize.setDefaultCompileOptions = function(compiler,env) {
 			throw new Error("NoDent: unknown configuration option: "+k) ;
 		config[k] = env[k] ;
 	}) ;
+	return initialize ;
 }
 
 initialize.asyncify = asyncify ;
