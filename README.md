@@ -685,6 +685,12 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+12-Nov-15: v2.2.7
+
+- Correctly bind 'Finally' so that 'this' is maintained in success cases
+- Return initialize from setDefaultCompileOptions() so the statement `nodent = require('nodent').setDefaultCompileOptions(...)()` works
+- Fix implementation of Object.isThenable
+
 06-Nov-15: v2.2.6
 
 - Fix incorrect 'async' value on AST Property and correctly use the Property.value.async for full compliance with the ESTree spec.
