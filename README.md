@@ -685,6 +685,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+23-Nov-15: v2.2.8
+
+- Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case. 
+
 12-Nov-15: v2.2.7
 
 - Correctly bind 'Finally' so that 'this' is maintained in success cases
