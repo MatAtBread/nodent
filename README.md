@@ -685,6 +685,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+24-Nov-15: v2.2.9
+
+- Report the original filename being parsed in handling SyntaxError from acorn.
+- Only warn about for...in/of loops if they contain an `await`
+
 23-Nov-15: v2.2.8
 
 - Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case. 
