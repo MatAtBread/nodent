@@ -692,7 +692,7 @@ Changelog
 
 23-Nov-15: v2.2.8
 
-- Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case. 
+- Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case.
 
 12-Nov-15: v2.2.7
 
@@ -703,7 +703,7 @@ Changelog
 06-Nov-15: v2.2.6
 
 - Fix incorrect 'async' value on AST Property and correctly use the Property.value.async for full compliance with the ESTree spec.
-- Update to acorn-es7-plugin 1.0.9 (fixes source location for async and await, and adds tests thanks to @jamestalmage) 
+- Update to acorn-es7-plugin 1.0.9 (fixes source location for async and await, and adds tests thanks to @jamestalmage)
 
 04-Nov-15: v2.2.4
 

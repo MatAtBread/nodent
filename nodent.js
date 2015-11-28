@@ -33,6 +33,7 @@ var config = {
 } ;
 
 var defaultCodeGenOpts = {
+	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
 	parser:{sourceType:'script'},
@@ -418,6 +419,9 @@ function $asyncspawn(promiseProvider,self) {
 function Thenable(thenable) {
 	return thenable.then = thenable ;
 };
+Thenable.resolve = function(v){
+		return isThenable(v)?v:{then:function(resolve){return resolve(v)}};
+};
 
 function isThenable(obj) {
 	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
@@ -589,6 +593,11 @@ function initialize(initOpts){
 
 	// "Global" options:
 	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
+	Object.defineProperty(Object,'$makeThenable',{
+		value:Thenable.resolve,
+		writable:true,
+		configurable:true
+	}) ;
 	if (initOpts.augmentObject) {
 		Object.defineProperties(Object.prototype,{
 			"asyncify":{
@@ -733,14 +742,16 @@ function getCLIOpts(start) {
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
 	var path = require('path') ;
-	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) ;
+	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
 	initialize.setDefaultCompileOptions({
-		sourcemap:cli.sourcemap
+		sourcemap:cli.sourcemap,
+		wrapAwait: true
 	},{
 //		asyncStackTrace:true,
 		augmentObject:true
 	});
+//	initOpts.wrapAwait = cli.wrapAwait;
 	var nodent = initialize(initOpts) ;
 
 	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast) {

@@ -37,9 +37,15 @@ if (global.Promise) {
 	providers.push({name:'native',p:global.Promise}) ;
 }
 
+function makePromiseCompliant(module,promise,resolve) {
+	var p = module[promise] ;
+	p.resolve = module[resolve] ;
+	return p ;
+}
+
 try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
-try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
+try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
 
 var msgs = [] ;
 var targetSamples = -1 ;
@@ -98,14 +104,14 @@ async function run(fn) {
 		$error = null ;
 		return x(new Error("timeout")) ;
 	},5000) ;
-	
+
 	fn.then(function(r){
 		tid && clearTimeout(tid) ;
 		return $return && $return(r) ;
 	},function(ex){
 		tid && clearTimeout(tid) ;
 		return $error && $error(ex) ;
-	}) 
+	})
 }
 
 if (syntaxTest) {
@@ -113,12 +119,12 @@ if (syntaxTest) {
 	if (syntaxTest==1)
 		return ;
 }
-var tests = process.argv.length>idx ? 
+var tests = process.argv.length>idx ?
 	process.argv.slice(idx):
 		fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
 
-	
-	
+
+
 async function runTests() {
 	for (var j=0; j<tests.length; j++) {
 		var test = tests[j] ;
@@ -176,7 +182,7 @@ async function runTests() {
 						info.push("x"+samples) ;
 					} else {
 						for (var reSample=0; reSample<samples; reSample++){
-							result = await run(m.exports()); 
+							result = await run(m.exports());
 							if (!(reSample&31))
 								t += await breathe() ;
 						}
