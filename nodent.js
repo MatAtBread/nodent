@@ -13,26 +13,19 @@ var outputCode = require('./lib/output') ;
 var parser = require('./lib/parser') ;
 var treeSurgeon = require('./lib/arboriculture') ;
 
-var directives = {
-	useDirective:/^\s*['"]use\s+nodent['"]\s*;/,
-	useES7Directive:/^\s*['"]use\s+nodent\-es7['"]\s*;/,
-	usePromisesDirective:/^\s*['"]use\s+nodent\-promises?['"]\s*;/,
-	useGeneratorsDirective:/^\s*['"]use\s+nodent\-generators?['"]\s*;/
-};
-
 // Config options, which relate to a specific instance of nodent and it's compiler/extension
 // These defaults are also used by the '.js' extension compiler when a "use nodent" directive is present
 var config = {
 	log:function(msg){ console.warn("Nodent: "+msg) },		// Where to print errors and warnings. This can only be (re)set once
 	augmentObject:false,									// Only one has to say 'yes'
-	extension:'.njs',										// The 'default' extension
-	dontMapStackTraces:false,								// Only one has to say 'no'
+	extension:'.njs',											// The 'default' extension
+	dontMapStackTraces:false,							// Only one has to say 'no'
 	asyncStackTrace:false,
 	babelTree:false,
 	dontInstallRequireHook:false
 } ;
 
-var defaultCodeGenOpts = {
+var initialCodeGenOpts = {
 	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
@@ -46,55 +39,55 @@ var defaultCodeGenOpts = {
 	generatedSymbolPrefix:"$"
 };
 
+function copyObj(a){
+	var o = {} ;
+	a.forEach(function(b){
+		Object.keys(b).forEach(function(k){
+			o[k] = b[k] ;
+		}) ;
+	}) ;
+	return o ;
+};
+
+var defaultCodeGenOpts = copyObj([initialCodeGenOpts,{es7:true}]) ;
+var optionSets = {
+	es7:copyObj([initialCodeGenOpts,{es7:true}]),
+	promise:copyObj([initialCodeGenOpts,{es7:true,promises:true}]),
+	generator:copyObj([initialCodeGenOpts,{generators:true}])
+};
+optionSets[undefined] = defaultCodeGenOpts ;
+optionSets.promises = optionSets.promise ;
+optionSets.generators = optionSets.generator ;
+
 function globalErrorHandler(err) {
 	throw err ;
 }
 
 /* Extract compiler options from code (either a string or AST) */
-function parseCompilerOptions(code,logger) {
-	function matches(str,match){
-		if (!match)
-			return false ;
-		if (typeof match==="string")
-			return match==str ;
-		if ("test" in match)
-			return match.test(str) ;
-	}
+var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?['"]\s*;/
 
-	var parseOpts = {} ;
-
+function parseCompilerOptions(code,log) {
+	var m, parseOpts = {} ;
 	if (typeof code=="string") {
-		parseOpts = {
-				promises: !!code.match(directives.usePromisesDirective),
-				es7: !!code.match(directives.useES7Directive),
-				generators: !!code.match(directives.useGeneratorsDirective)
-		} ;
-		if (parseOpts.promises)
-			parseOpts.es7 = true ;
-	} else {
-		// code is an AST
+		if (m = code.match(useDirective)) {
+			parseOpts = optionSets[m[1]] || defaultCodeGenOpts;
+		}
+	} else { // code is an AST
 		for (var i=0; i<code.body.length; i++) {
 			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/Literal$/)) {
 				var test = "'"+code.body[i].value+"'" ;
-				parseOpts.promises = matches(test,directives.usePromisesDirective) ;
-				parseOpts.es7 = parseOpts.promises || matches(test,directives.useES7Directive) ;
-				parseOpts.generators = matches(test,directives.useGeneratorsDirective) ;
+				if (m = test.match(useDirective)) {
+					parseOpts = optionSets[m[1]] || defaultCodeGenOpts;
+				}
 			}
 		}
 	}
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
 		if ((parseOpts.promises || parseOpts.es7) && parseOpts.generators) {
-			logger("No valid 'use nodent*' directive, assumed -es7 mode") ;
-			parseOpts = {es7:true} ;
+			log("No valid 'use nodent' directive, assumed -es7 mode") ;
+			parseOpts = optionSets.es7 ;
 		}
-
-		// Fill in any default codeGen options
-		for (var k in defaultCodeGenOpts) {
-			if (!(k in parseOpts))
-				parseOpts[k] = defaultCodeGenOpts[k] ;
-		}
-
 		return parseOpts ;
 	}
 	return null ; // No valid nodent options
@@ -200,12 +193,12 @@ function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
 	};
 }
 
-function compileNodentedFile(nodent,logger) {
+function compileNodentedFile(nodent,log) {
 	return function(mod, filename, parseOpts) {
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		var pr = nodent.parse(content,filename,parseOpts);
-		parseOpts = parseOpts || parseCompilerOptions(pr.ast,logger) ;
-		nodent.asynchronize(pr,undefined,parseOpts,logger) ;
+		parseOpts = parseOpts || parseCompilerOptions(pr.ast,log) ;
+		nodent.asynchronize(pr,undefined,parseOpts,log) ;
 		nodent.prettyPrint(pr,parseOpts) ;
 		mod._compile(pr.code, pr.filename);
 	}
@@ -422,6 +415,7 @@ function Thenable(thenable) {
 Thenable.resolve = function(v){
 		return isThenable(v)?v:{then:function(resolve){return resolve(v)}};
 };
+Object.$makeThenable = Thenable.resolve ;
 
 function isThenable(obj) {
 	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
@@ -453,7 +447,7 @@ function compile(code,origFilename,__sourceMapping,opts) {
 	}
 
 	var pr = this.parse(code,origFilename,null,opts);
-	this.asynchronize(pr,null,opts,this.logger) ;
+	this.asynchronize(pr,null,opts,this.log) ;
 	this.prettyPrint(pr,opts) ;
 	return pr ;
 }
@@ -537,7 +531,7 @@ function NodentCompiler(members) {
 		this[k] = members[k] ;
 }
 
-NodentCompiler.prototype.version =  require("./package.json").version ;
+NodentCompiler.prototype.version =  require(__dirname+"/package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
 NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
@@ -552,10 +546,11 @@ NodentCompiler.prototype.compile =  compile ;
 NodentCompiler.prototype.asynchronize =  treeSurgeon.asynchronize ;
 NodentCompiler.prototype.prettyPrint =  prettyPrint ;
 NodentCompiler.prototype.parseCompilerOptions =  parseCompilerOptions ;
+NodentCompiler.prototype.getDefaultCompileOptions = undefined ;
 
 Object.defineProperty(NodentCompiler.prototype,"Promise",{
 	get:function (){
-		initOpts.log("Warning: nodent.Promise is deprecated. Use nodent.Thenable");
+		initOpts.log("Warning: nodent.Promise is deprecated. Use nodent.Thenable instead");
 		return Thenable;
 	},
 	enumerable:false,
@@ -593,11 +588,6 @@ function initialize(initOpts){
 
 	// "Global" options:
 	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
-	Object.defineProperty(Object,'$makeThenable',{
-		value:Thenable.resolve,
-		writable:true,
-		configurable:true
-	}) ;
 	if (initOpts.augmentObject) {
 		Object.defineProperties(Object.prototype,{
 			"asyncify":{
@@ -653,13 +643,11 @@ function initialize(initOpts){
 
 	/* If we've not done it before, create a compiler for '.js' scripts */
 	// Create a new compiler
-	var nodent = new NodentCompiler({
-		logger: initOpts.log
-	}) ;
+	var nodent = new NodentCompiler(initOpts) ;
   if (!initOpts.dontInstallRequireHook) {
 		if (!stdJSLoader) {
 			stdJSLoader = require.extensions['.js'] ;
-			var stdCompiler = compileNodentedFile(new NodentCompiler({logger:initOpts.log}),initOpts.log) ;
+			var stdCompiler = compileNodentedFile(new NodentCompiler(initOpts),initOpts.log) ;
 			require.extensions['.js'] = function(mod,filename) {
 				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 				var parseOpts = parseCompilerOptions(content,initOpts.log) ;
@@ -707,7 +695,7 @@ initialize.setDefaultCompileOptions = function(compiler,env) {
 		config[k] = env[k] ;
 	}) ;
 	return initialize ;
-}
+};
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
@@ -731,8 +719,10 @@ function readStream(stream) {
 function getCLIOpts(start) {
 	var o = [] ;
 	for (var i=start || 2; i<process.argv.length; i++) {
-		if (process.argv[i].slice(0,2)==='--')
-			o[process.argv[i].slice(2)] = true ;
+		if (process.argv[i].slice(0,2)==='--') {
+			var opt = process.argv[i].slice(2).split('=') ;
+			o[opt[0]] = opt[1] || true ;
+		}
 		else
 			o.push(process.argv[i]) ;
 	}
@@ -746,19 +736,24 @@ if (require.main===module && process.argv.length>=3) {
 	var filename, cli = getCLIOpts() ;
 	initialize.setDefaultCompileOptions({
 		sourcemap:cli.sourcemap,
-		wrapAwait: true
+		wrapAwait:cli.wrapAwait
 	},{
 //		asyncStackTrace:true,
 		augmentObject:true
 	});
-//	initOpts.wrapAwait = cli.wrapAwait;
+
 	var nodent = initialize(initOpts) ;
 
-	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast) {
+	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast && !cli.exec) {
 		// No input/output options - just require the
 		// specified module now we've initialized nodent
-		var mod = path.resolve(cli[0]) ;
-		return require(mod);
+		try {
+			var mod = path.resolve(cli[0]) ;
+			return require(mod);
+		} catch (ex) {
+			ex.message = cli[0]+": "+ex.message ;
+			throw ex ;
+		}
 	}
 
 	if (cli.length==0 || cli[0]==='-') {
@@ -775,42 +770,43 @@ if (require.main===module && process.argv.length>=3) {
 		var parseOpts ;
 
 		// Input options
+		cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
 		if (cli.fromast) {
 			content = JSON.parse(content) ;
 			pr = { origCode:"", filename:filename, ast: content } ;
-			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			parseOpts = parseCompilerOptions(content,nodent.log) ;
 			if (!parseOpts) {
-				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
-				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+				parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+				console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
 			}
 		} else {
-			parseOpts = parseCompilerOptions(content,nodent.logger) ;
+			parseOpts = parseCompilerOptions(content,nodent.log) ;
 			if (!parseOpts) {
-				parseOpts = parseCompilerOptions('"use nodent-es7";',nodent.logger) ;
-				console.warn("/* "+filename+": No 'use nodent*' directive, assumed -es7 mode */") ;
+				parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+				console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
 			}
 			pr = nodent.parse(content,filename,parseOpts);
 		}
 
 		// Processing options
 		if (!cli.parseast && !cli.pretty)
-			nodent.asynchronize(pr,undefined,parseOpts,nodent.logger) ;
+			nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
 
 		// Output options
+		nodent.prettyPrint(pr,parseOpts) ;
 		if (cli.out || cli.pretty) {
-			nodent.prettyPrint(pr,parseOpts) ;
 			console.log(pr.code) ;
-			return ;
 		}
 		if (cli.minast || cli.parseast) {
 			console.log(JSON.stringify(pr.ast,function(key,value){
 				return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
 			},2,null)) ;
-			return ;
 		}
 		if (cli.ast) {
 			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-			return ;
+		}
+		if (cli.exec) {
+			(new Function(pr.code))() ;
 		}
 	}
 }

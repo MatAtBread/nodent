@@ -157,13 +157,13 @@ async function runTests() {
 					var m = {} ;
 					if (showOutput)
 						console.log(pr.code) ;
-					var fn = new Function("module","require","Promise","es7",pr.code) ;
+					var fn = new Function("module","require","Promise","es7","nodent",pr.code) ;
 					failed = fn.toString() ;
 					if (showOutput && saveOutput) {
 						fs.writeFileSync(test+".out",pr.code) ;
 					}
 
-					fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
+					fn(m,require,promise.p || nodent.Thenable,!promise.p,nodent) ;
 					await breathe();
 
 					var result,t = Date.now() ;
@@ -189,7 +189,7 @@ async function runTests() {
 					}
 
 					t = Date.now()-t ;
-					if (result!==true) {
+					if (result!==true && result!=='n/a') {
 						info.push([promise.name+" \u2717",result]) ;
 					} else {
 						failed = null ;

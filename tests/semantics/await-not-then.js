@@ -1,8 +1,10 @@
-//"use nodent-promises";
+"use nodent";
 
-async function test() {
-	return 'abc' === await 'abc' ;
+// Only run this test if await-wrapping is enabled
+if (__nodent.wrapAwait) {
+	module.exports = async function() {
+		return 'abc' === await 'abc' ;
+	} ;
+} else {
+	module.exports = async function() { return 'n/a' } ;
 }
-
-module.exports = test ;
-//test().then(console.log.bind(console),console.error.bind(console)) ;
