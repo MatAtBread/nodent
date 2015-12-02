@@ -190,6 +190,10 @@ This are generated automatically in the transpiled files when you set the `runti
 
 Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2.
 
+Other options
+-------------
+You can also invoke nodent from browserify as a [plugin](https://www.npmjs.com/package/browserify-nodent), or as an alternative, faster implementation in [babel](https://www.npmjs.com/package/fast-async) 
+
 Async and Await syntax
 ======================
 
