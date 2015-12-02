@@ -13,17 +13,34 @@ var outputCode = require('./lib/output') ;
 var parser = require('./lib/parser') ;
 var treeSurgeon = require('./lib/arboriculture') ;
 
-// Config options, which relate to a specific instance of nodent and it's compiler/extension
-// These defaults are also used by the '.js' extension compiler when a "use nodent" directive is present
+// Config options used to control the run-time behaviour of the compiler
 var config = {
-	log:function(msg){ console.warn("Nodent: "+msg) },		// Where to print errors and warnings. This can only be (re)set once
+	log:function(msg){ console.warn("Nodent: "+msg) },		// Where to print errors and warnings
 	augmentObject:false,									// Only one has to say 'yes'
-	extension:'.njs',											// The 'default' extension
-	dontMapStackTraces:false,							// Only one has to say 'no'
+	extension:'.njs',										// The 'default' extension
+	dontMapStackTraces:false,								// Only one has to say 'no'
 	asyncStackTrace:false,
 	babelTree:false,
 	dontInstallRequireHook:false
 } ;
+
+// Code generation options, which are determined by the "use nodent"; directive. Specifically,
+// the (optional) portion as in "use nodent<-option-set>"; is used to select a compilation
+// behaviour on a file-by-file basis. There are preset option sets called "es7", "promise(s)"
+// and "generators" (which cannot be over-written). Others can be specified via the
+// 'setCompileOptions(name,options)' call, or via the 'nodent:{directive:{'name':{...}}}' entry in the
+// current project's package.json. In the latter's case, the name 'default' is also reserved and
+// is used for a bare 'use nodent' driective with no project-specific extension.
+// Finally, the 'use nodent' directive can be followed by a JSON encoded set of options, for example:
+//		'use nodent-es7 {"wrapAwait":true}';
+//		'use nodent {"wrapAwait":true,"promise":true}';
+//		'use nodent-generators {"parser":{"sourceType":"module"}}';
+//
+// The order of application of these options is:
+//		initialCodeGenOpts (hard-coded)
+//		named by the 'use nodent-OPTION', as read from the package.json
+//		named by the 'use nodent-OPTION', as set by the setCompileOptions (or setDefaultCompileOptions)
+//		set within the directive as a JSON-encoded extension
 
 var initialCodeGenOpts = {
 	wrapAwait:null,
@@ -33,29 +50,38 @@ var initialCodeGenOpts = {
 	$return:"$return",
 	$error:"$error",
 	$arguments:"$args",
+	$asyncspawn:"$asyncspawn",
+	$asyncbind:"$asyncbind",
+	/* deprecated
 	bindAwait:"$asyncbind",
 	bindAsync:"$asyncbind",
-	bindLoop:"$asyncbind",
-	generatedSymbolPrefix:"$"
+	bindLoop:"$asyncbind", */
+	generatedSymbolPrefix:"$",
+	$makeThenable:'$makeThenable'
 };
 
 function copyObj(a){
 	var o = {} ;
 	a.forEach(function(b){
-		Object.keys(b).forEach(function(k){
-			o[k] = b[k] ;
-		}) ;
+		if (b && typeof b==='object')
+			for (k in b)
+				o[k] = b[k]  ;
 	}) ;
 	return o ;
 };
 
-var defaultCodeGenOpts = copyObj([initialCodeGenOpts,{es7:true}]) ;
+var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ; 
 var optionSets = {
-	es7:copyObj([initialCodeGenOpts,{es7:true}]),
-	promise:copyObj([initialCodeGenOpts,{es7:true,promises:true}]),
-	generator:copyObj([initialCodeGenOpts,{generators:true}])
+	default:defaultCodeGenOpts,
+	es7:Object.create(defaultCodeGenOpts),
+	promise:Object.create(defaultCodeGenOpts,{
+		promises:{value:true,writeable:true,enumerable:true}
+	}),
+	generator:Object.create(defaultCodeGenOpts,{
+		generators:{value:true,writeable:true,enumerable:true},
+		es7:{value:false,writeable:true,enumerable:true},
+	})
 };
-optionSets[undefined] = defaultCodeGenOpts ;
 optionSets.promises = optionSets.promise ;
 optionSets.generators = optionSets.generator ;
 
@@ -64,23 +90,39 @@ function globalErrorHandler(err) {
 }
 
 /* Extract compiler options from code (either a string or AST) */
-var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?['"]\s*;/
+var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
 
 function parseCompilerOptions(code,log) {
-	var m, parseOpts = {} ;
+	var regex, set, parseOpts = {} ;
 	if (typeof code=="string") {
-		if (m = code.match(useDirective)) {
-			parseOpts = optionSets[m[1]] || defaultCodeGenOpts;
+		if (regex = code.match(useDirective)) {
+			set = regex[1] || 'default' ;
 		}
 	} else { // code is an AST
 		for (var i=0; i<code.body.length; i++) {
 			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/Literal$/)) {
 				var test = "'"+code.body[i].value+"'" ;
-				if (m = test.match(useDirective)) {
-					parseOpts = optionSets[m[1]] || defaultCodeGenOpts;
+				if (regex = test.match(useDirective)) {
+					set = regex[1] || 'default' ;
+					break ;
 				}
 			}
 		}
+	}
+	if (!regex)
+		return null ;
+
+	if (set) {
+		try {
+			var packageOptions = JSON.parse(fs.readFileSync(__dirname+"/../../package.json")).nodent.directive[set] ;
+		} catch(ex) {
+			// Meh
+		}
+	}
+	try {
+		parseOpts = copyObj([optionSets[set],packageOptions,regex[2] && JSON.parse(regex[2])]);
+	} catch(ex) {
+		log("Invalid literal compiler option:"+regex[2]);
 	}
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
@@ -116,34 +158,6 @@ function btoa(str) {
 	}
 
 	return buffer.toString('base64');
-}
-
-/* Initialize global things - unrelated to config options */
-function initEnvironment() {
-	// Initialize global/environment things
-	if (!initialize.configured) {
-		initialize.configured = true ;
-		Object.defineProperties(Function.prototype,{
-			"$asyncbind":{
-				value:$asyncbind,
-				writable:true,
-				enumerable:false,
-				configurable:true
-			},
-			"$asyncspawn":{
-				value:$asyncspawn,
-				writable:true,
-				enumerable:false,
-				configurable:true
-			},
-			"noDentify":{
-				value:noDentify,
-				configurable:true,
-				enumerable:false,
-				writable:true
-			}
-		}) ;
-	}
 }
 
 /**
@@ -195,6 +209,7 @@ function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
 
 function compileNodentedFile(nodent,log) {
 	return function(mod, filename, parseOpts) {
+		//console.log("Using nodent@",nodent._ident,"to load",filename) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		var pr = nodent.parse(content,filename,parseOpts);
 		parseOpts = parseOpts || parseCompilerOptions(pr.ast,log) ;
@@ -247,11 +262,6 @@ function asyncify(promiseProvider) {
 								a[obj[k].length-1] = cb ;
 							}
 							var ret = obj[k].apply(obj,a) ;
-							/* EXPERIMENTAL !!
-							if (ret !== undefined) {
-								$return(ret) ;
-							}
-							 */
 						} ;
 						return new promiseProvider(resolver) ;
 					}
@@ -336,6 +346,10 @@ function $asyncbind(self,catcher) {
 		thenable.then = thenable ;
 		return thenable ;
 	} else {
+//		Thenable.resolve = function(v){
+//			return isThenable(v)?v:{then:function($){return $(WRAPPED)}};
+//		};
+
 		var then = function(result,error) {
 			return resolver.call(self,result,error) ;
 		} ;
@@ -413,9 +427,8 @@ function Thenable(thenable) {
 	return thenable.then = thenable ;
 };
 Thenable.resolve = function(v){
-		return isThenable(v)?v:{then:function(resolve){return resolve(v)}};
+	return isThenable(v)?v:{then:function(resolve){return resolve(v)}};
 };
-Object.$makeThenable = Thenable.resolve ;
 
 function isThenable(obj) {
 	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
@@ -437,8 +450,6 @@ function compile(code,origFilename,__sourceMapping,opts) {
 		opts = __sourceMapping ;
 
 	opts = opts || {} ;
-	if (opts.promises)
-		opts.es7 = true ;
 
 	// Fill in any default codeGen options
 	for (var k in defaultCodeGenOpts) {
@@ -462,6 +473,7 @@ function generateRequestHandler(path, matchRegex, options) {
 		options = {compiler:{}} ;
 	else if (!options.compiler)
 		options.compiler = {} ;
+	var compilerOptions = copyObj([initialCodeGenOpts,options.compiler]) ;
 
 	return function (req, res, next) {
 		if (cache[req.url]) {
@@ -502,13 +514,15 @@ function generateRequestHandler(path, matchRegex, options) {
 						contentType = "text/html" ;
 					} else {
 						if (options.runtime) {
-							pr = "Function.prototype.$asyncbind = "+$asyncbind.toString()+";" ;
-							options.compiler.mapStartLine = pr.split("\n").length ;
+							pr = "Function.prototype."+compilerOptions.$asyncbind+" = "+$asyncbind.toString()+";" ;
+							if (compilerOptions.wrapAwait && !compilerOptions.promises)
+								pr += "Object."+compilerOptions.$makeThenable+" = "+Thenable.resolve.toString()+";" ;
+							compilerOptions.mapStartLine = pr.split("\n").length ;
 							pr += "\n";
 						} else {
 							pr = "" ;
 						}
-						pr += compiler.compile(content.toString(),req.url,null,options.compiler).code;
+						pr += compiler.compile(content.toString(),req.url,null,compilerOptions).code;
 						contentType = "application/javascript" ;
 					}
 					res.setHeader("Content-Type", contentType);
@@ -527,10 +541,16 @@ function generateRequestHandler(path, matchRegex, options) {
 
 function NodentCompiler(members) {
 	this.covers = {} ;
-	for (var k in members)
-		this[k] = members[k] ;
+	this._ident = NodentCompiler.prototype.version+"_"+Math.random() ;
+	this.setOptions(members) ;
 }
 
+NodentCompiler.prototype.setOptions = function(members){
+	this.log = members.log || this.log ;
+	this.options = copyObj([this.options,members]) ;
+	delete this.options.log ;
+	return this ;
+};
 NodentCompiler.prototype.version =  require(__dirname+"/package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
 NodentCompiler.prototype.isThenable =  isThenable ;
@@ -557,34 +577,72 @@ Object.defineProperty(NodentCompiler.prototype,"Promise",{
 	configurable:false
 }) ;
 
-/* Construct a 'nodent' object - combining logic and options */
-function initialize(initOpts){
-	initEnvironment() ;
-
-	// Validate the options
-/* initOpts:{
- * 		log:function(msg),
- * 		augmentObject:boolean,
- * 		extension:string?
- * 		dontMapStackTraces:boolean
- * 		asyncStackTrace:boolean
- */
-	if (!initOpts)
-		initOpts = {} ;
-
-	// Fill in any missing options with their default values
-	Object.keys(config).forEach(function(k){
-		if (!(k in initOpts))
-			initOpts[k] = config[k] ;
-	}) ;
-
-	// Throw an error for any options we don't know about
-	for (var k in initOpts) {
-		if (k==="use")
-			continue ; // deprecated
-		if (!config.hasOwnProperty(k))
-			throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(initOpts[k])) ;
+function prepareMappedStackTrace(error, stack) {
+	function mappedTrace(frame) {
+		var source = frame.getFileName();
+		if (source && smCache[source]) {
+			var position = smCache[source].smc.originalPositionFor({
+				line: frame.getLineNumber(),
+				column: frame.getColumnNumber()
+			});
+			if (position && position.line) {
+				var desc = frame.toString() ;
+				return '\n    at '
+					+ desc.substring(0,desc.length-1)
+					+ " => \u2026"+position.source+":"+position.line+":"+position.column
+					+ (frame.getFunctionName()?")":"");
+			}
+		}
+		return '\n    at '+frame;
 	}
+	return error + stack.map(mappedTrace).join('');
+}
+
+// Set the 'global' references to the (backward-compatible) versions
+// required by the current version of Nodent
+function setGlobalEnvironment(initOpts) {
+	var codeGenOpts = defaultCodeGenOpts ;
+	/*
+	Object.$makeThenable
+	Object.prototype.isThenable
+	Object.prototype.asyncify
+	Function.prototype.noDentify
+	Function.prototype.$asyncspawn
+	Function.prototype.$asyncbind
+	Error.prepareStackTrace
+	global[defaultCodeGenOpts.$error]
+	*/
+
+	var augmentFunction = {} ;
+	augmentFunction[defaultCodeGenOpts.$asyncbind] = {
+		value:$asyncbind,
+		writable:true,
+		enumerable:false,
+		configurable:true
+	};
+	augmentFunction[defaultCodeGenOpts.$asyncspawn] = {
+		value:$asyncspawn,
+		writable:true,
+		enumerable:false,
+		configurable:true
+	};
+	augmentFunction.noDentify = {
+		value:noDentify,
+		configurable:true,
+		enumerable:false,
+		writable:true
+	} ;
+	Object.defineProperties(Function.prototype,augmentFunction) ;
+
+	/**
+	 * We need a global to handle funcbacks for which no error handler has ever been defined.
+	 */
+	if (!(defaultCodeGenOpts[defaultCodeGenOpts.$error] in global)) {
+		global[defaultCodeGenOpts[defaultCodeGenOpts.$error]] = globalErrorHandler ;
+	}
+
+	if (initOpts.asyncStackTrace)
+		$asyncbind.wrapAsyncStack = wrapAsyncStack ;
 
 	// "Global" options:
 	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
@@ -605,61 +663,138 @@ function initialize(initOpts){
 		}) ;
 	}
 
-	if (initOpts.asyncStackTrace)
-		$asyncbind.wrapAsyncStack = wrapAsyncStack ;
+	Object[defaultCodeGenOpts.$makeThenable] = Thenable.resolve ;
+}
+
+/* Construct a 'nodent' object - combining logic and options */
+var compiler ;
+function initialize(initOpts){
+	// Validate the options
+/* initOpts:{
+ * 		log:function(msg),
+ * 		augmentObject:boolean,
+ * 		extension:string?
+ * 		dontMapStackTraces:boolean
+ * 		asyncStackTrace:boolean
+ */
+	if (!initOpts)
+		initOpts = {} ;
+	else {
+		// Throw an error for any options we don't know about
+		for (var k in initOpts) {
+			if (k==="use")
+				continue ; // deprecated
+			if (!config.hasOwnProperty(k))
+				throw new Error("NoDent: unknown option: "+k+"="+JSON.stringify(initOpts[k])) ;
+		}
+	}
+
+
+	if (compiler) {
+		compiler.setOptions(initOpts);
+	} else {
+		// Fill in any missing options with their default values
+		Object.keys(config).forEach(function(k){
+			if (!(k in initOpts))
+				initOpts[k] = config[k] ;
+		}) ;
+		compiler = new NodentCompiler(initOpts) ;
+	}
 
 	// If anyone wants to mapStackTraces, do it. The augmentation does not depend on the config options
 	if (!initOpts.dontMapStackTraces) {
 		// This function is part of the V8 stack trace API, for more info see:
 		// http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
-		Error.prepareStackTrace = function(error, stack) {
-			function mappedTrace(frame) {
-				var source = frame.getFileName();
-				if (source && smCache[source]) {
-					var position = smCache[source].smc.originalPositionFor({
-						line: frame.getLineNumber(),
-						column: frame.getColumnNumber()
-					});
-					if (position && position.line) {
-						var desc = frame.toString() ;
-						return '\n    at '
-							+ desc.substring(0,desc.length-1)
-							+ " => \u2026"+position.source+":"+position.line+":"+position.column
-							+ (frame.getFunctionName()?")":"");
-					}
-				}
-				return '\n    at '+frame;
-			}
-			return error + stack.map(mappedTrace).join('');
-		}
+		Error.prepareStackTrace = prepareMappedStackTrace ;
 	}
 
-	/**
-	 * We need a global to handle funcbacks for which no error handler has ever been defined.
-	 */
-	if (!(defaultCodeGenOpts.$error in global)) {
-		global[defaultCodeGenOpts.$error] = globalErrorHandler ;
-	}
+	setGlobalEnvironment(initOpts) ;
 
 	/* If we've not done it before, create a compiler for '.js' scripts */
 	// Create a new compiler
-	var nodent = new NodentCompiler(initOpts) ;
-  if (!initOpts.dontInstallRequireHook) {
+
+	var nodentLoaders = [];
+	function compareSemVer(a,b) {
+		a = a.split('.') ;
+		b = b.split('.') ;
+		for (var i=0;i<3;i++) {
+			if (a[i]<b[i]) return -1 ;
+			if (a[i]>b[i]) return 1 ;
+		}
+		return 0 ;
+	}
+
+	if (!initOpts.dontInstallRequireHook) {
 		if (!stdJSLoader) {
 			stdJSLoader = require.extensions['.js'] ;
-			var stdCompiler = compileNodentedFile(new NodentCompiler(initOpts),initOpts.log) ;
-			require.extensions['.js'] = function(mod,filename) {
-				var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-				var parseOpts = parseCompilerOptions(content,initOpts.log) ;
-				if (parseOpts)
-					return stdCompiler(mod,filename,parseOpts) ;
-				return stdJSLoader(mod,filename) ;
+			var stdCompiler = compileNodentedFile(compiler,initOpts.log) ;
+			require.extensions['.js'] = versionAwareNodentJSLoader ;
+			function versionAwareNodentJSLoader(mod,filename) {
+				if (filename.match(/nodent\/nodent.js$/)) {
+					var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent.js$/,"")} ;
+					if (downLevel.path) {
+						downLevel.version = JSON.parse(fs.readFileSync(filename.replace(/nodent\.js$/,"package.json"))).version ;
+						// Load the specified nodent
+						stdJSLoader(mod,filename) ;
+
+						// If the version of nodent we've just loaded is lower than the
+						// current (version-aware) version, hook the initialzer
+						// so we can replace the JS loader after it's been run.
+						if (compareSemVer(downLevel.version,NodentCompiler.prototype.version)<0) {
+							downLevel.originalNodentLoader = mod.exports ;
+							mod.exports = function(){
+								var previousJSLoader = require.extensions['.js'] ;
+								var defaultNodentInstance = downLevel.originalNodentLoader.apply(this,arguments) ;
+								downLevel.jsCompiler = require.extensions['.js'] ;
+								require.extensions['.js'] = previousJSLoader ;
+								setGlobalEnvironment(initOpts) ;
+								return defaultNodentInstance ;
+							} ;
+							Object.keys(downLevel.originalNodentLoader).forEach(function(k){
+								mod.exports[k] = downLevel.originalNodentLoader[k] ;
+							}) ;
+							nodentLoaders.push(downLevel) ;
+							nodentLoaders = nodentLoaders.sort(function(a,b){
+								return b.path.length - a.path.length ;
+							}) ;
+						}
+					}
+				} else {
+					// The the appropriate loader for this file
+					for (var n=0; n<nodentLoaders.length; n++) {
+						if (filename.slice(0,nodentLoaders[n].path.length)==nodentLoaders[n].path) {
+							//console.log("Using nodent@",nodentLoaders[n].version,"to load",filename) ;
+							return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
+						}
+					}
+
+					var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+					var parseOpts = parseCompilerOptions(content,initOpts.log) ;
+					if (parseOpts) {
+						return stdCompiler(mod,filename,parseOpts) ;
+					}
+					return stdJSLoader(mod,filename) ;
+				}
 			} ;
 		}
 
 		/* If the initOpts specified a file extension, use this compiler for it */
-		if (initOpts.extension && !require.extensions[initOpts.extension]) {
-			require.extensions[initOpts.extension] = compileNodentedFile(nodent,initOpts.log) ;
+		if (initOpts.extension) {
+			if (Array.isArray(initOpts.extension)) {
+				initOpts.extension.forEach(registerExtension) ;
+			} else {
+				registerExtension(initOpts.extension) ;
+			}
+
+			function registerExtension(extension) {
+				 if (require.extensions[extension]) {
+					 var changedKeys = Object.keys(initOpts).filter(function(k){ return compiler[k] != initOpts[k]}) ;
+					 if (changedKeys.length) {
+						 initOpts.log("File extension "+extension+" already configured for async/await compilation.") ;
+					 }
+				 }
+				 require.extensions[extension] = compileNodentedFile(compiler,initOpts.log) ;
+			}
 		}
 	}
 
@@ -669,30 +804,43 @@ function initialize(initOpts){
 			initOpts.log("Warning: nodent({use:[...]}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
 			if (initOpts.use.length) {
 				initOpts.use.forEach(function(x){
-					nodent[x] = nodent.require(x) ;
+					compiler[x] = compiler.require(x) ;
 				}) ;
 			}
 		} else {
 			initOpts.log("Warning: nodent({use:{...}}) is deprecated. Use nodent.require(module,options)\n"+(new Error().stack).split("\n")[2]);
 			Object.keys(initOpts.use).forEach(function(x){
-				nodent[x] = nodent.require(x,initOpts.use[x])
+				compiler[x] = compiler.require(x,initOpts.use[x])
 			}) ;
 		}
 	}
-	return nodent ;
+	return compiler ;
 } ;
 
 /* Export these so that we have the opportunity to set the options for the default .js parser */
 initialize.setDefaultCompileOptions = function(compiler,env) {
-	compiler && Object.keys(compiler).forEach(function(k){
-		if (!(k in defaultCodeGenOpts))
-			throw new Error("NoDent: unknown compiler option: "+k) ;
-		defaultCodeGenOpts[k] = compiler[k] ;
-	}) ;
+	if (compiler) {
+		Object.keys(compiler).forEach(function(k){
+			if (!(k in defaultCodeGenOpts))
+				throw new Error("NoDent: unknown compiler option: "+k) ;
+			defaultCodeGenOpts[k] = compiler[k] ;
+		}) ;
+	}
+
 	env && Object.keys(env).forEach(function(k){
 		if (!(k in env))
 			throw new Error("NoDent: unknown configuration option: "+k) ;
 		config[k] = env[k] ;
+	}) ;
+	return initialize ;
+};
+
+initialize.setCompileOptions = function(set,compiler) {
+	optionSet[set] = optionSet[set] || copyObj([defaultCodeGenOpts]);
+	compiler && Object.keys(compiler).forEach(function(k){
+		if (!(k in defaultCodeGenOpts))
+			throw new Error("NoDent: unknown compiler option: "+k) ;
+		optionSet[set][k] = compiler[k] ;
 	}) ;
 	return initialize ;
 };
@@ -702,47 +850,47 @@ initialize.Thenable = Thenable ;
 
 module.exports = initialize ;
 
-function readStream(stream) {
-	return new Thenable(function ($return, $error) {
-		var buffer = [] ;
-		stream.on('data',function(data){
-			buffer.push(data)
-		}) ;
-		stream.on('end',function(){
-			var code = buffer.map(function(b){ return b.toString()}).join("") ;
-            return $return(code);
-		}) ;
-		stream.on('error',$error) ;
-    }.$asyncbind(this));
-}
-
-function getCLIOpts(start) {
-	var o = [] ;
-	for (var i=start || 2; i<process.argv.length; i++) {
-		if (process.argv[i].slice(0,2)==='--') {
-			var opt = process.argv[i].slice(2).split('=') ;
-			o[opt[0]] = opt[1] || true ;
-		}
-		else
-			o.push(process.argv[i]) ;
-	}
-	return o ;
-}
-
 /* If invoked as the top level module, read the next arg and load it */
 if (require.main===module && process.argv.length>=3) {
+	function readStream(stream) {
+		return new Thenable(function ($return, $error) {
+			var buffer = [] ;
+			stream.on('data',function(data){
+				buffer.push(data)
+			}) ;
+			stream.on('end',function(){
+				var code = buffer.map(function(b){ return b.toString()}).join("") ;
+	            return $return(code);
+			}) ;
+			stream.on('error',$error) ;
+	    }.$asyncbind(this));
+	}
+
+	function getCLIOpts(start) {
+		var o = [] ;
+		for (var i=start || 2; i<process.argv.length; i++) {
+			if (process.argv[i].slice(0,2)==='--') {
+				var opt = process.argv[i].slice(2).split('=') ;
+				o[opt[0]] = opt[1] || true ;
+			}
+			else
+				o.push(process.argv[i]) ;
+		}
+		return o ;
+	}
+
 	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
 	initialize.setDefaultCompileOptions({
 		sourcemap:cli.sourcemap,
 		wrapAwait:cli.wrapAwait
-	},{
-//		asyncStackTrace:true,
-		augmentObject:true
 	});
 
-	var nodent = initialize(initOpts) ;
+	var nodent = initialize({
+		asyncStackTrace:true,
+		augmentObject:true
+	}) ;
 
 	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast && !cli.exec) {
 		// No input/output options - just require the

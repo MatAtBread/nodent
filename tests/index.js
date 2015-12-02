@@ -2,6 +2,8 @@
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
+var path = require('path') ;
+var msgs = [] ;
 var nodent = require('../nodent')({
 	log:function(msg){ msgs.push(msg) }
 }) ;
@@ -47,9 +49,8 @@ try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
 try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
 
-var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
+var wrapAwait = false, showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
 var idx ;
 
 try {
@@ -58,10 +59,20 @@ try {
 	notES6 = true ;
 }
 
-for (idx=3; idx < process.argv.length; idx++) {
+for (idx=0; idx<process.argv.length; idx++) {
+	var fqPath = path.resolve(process.argv[idx]) ; 
+	if (fqPath == __filename || fqPath == __dirname)
+		break ;
+}
+
+idx += 1 ;
+
+for (;idx < process.argv.length; idx++) {
 	var arg = process.argv[idx] ;
 	if (arg=='--syntaxonly')
 		syntaxTest = 1 ;
+	else if (arg.match(/--await=/))
+		wrapAwait = arg.split("=")[1] ;
 	else if (arg=='--syntax') {
 		syntaxTest = 2 ;
 	} else if (arg=='--generators' || arg=='--genonly') {
@@ -123,8 +134,6 @@ var tests = process.argv.length>idx ?
 	process.argv.slice(idx):
 		fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
 
-
-
 async function runTests() {
 	for (var j=0; j<tests.length; j++) {
 		var test = tests[j] ;
@@ -152,7 +161,10 @@ async function runTests() {
 				try {
 					var code = fs.readFileSync(test).toString() ;
 					var pr = nodent.compile(code,test,showOutput?2:3,{
-						es7:true,promises:!!promise.p,generators:g>0
+						wrapAwait:wrapAwait || !!test.match(/\.wrap\.js/),
+						es7:true,
+						promises:!!promise.p,
+						generators:g>0
 					}) ;
 					var m = {} ;
 					if (showOutput)

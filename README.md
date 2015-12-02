@@ -65,7 +65,7 @@ Why Nodent?
 * _[Performance](#performance)_ - on current JS engines, Nodent is between 2x and 4x faster than other solutions, and up to 10x faster on mobile browsers.
 * Simple, imperative code style. Avoids callback pyramids in while maintaining 100% compatibility with existing code.
 * No dependency on ES6, "harmony"
-* No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE
+* No run-time overhead for Promises, Generators or any other feature beyond ES5 - works on most mobile browsers & IE (although Nodent can use Promises and Generators if you want it to!)
 * No execution framework needed as with traceur, babel or regenerator
 * No 'node-gyp' or similar OS platform requirement for threads or fibers
 * ES7 async and await on ES5 (most browsers and nodejs)
@@ -82,7 +82,7 @@ Installation
 
 Command-Line usage
 ==================
-You can invoke and run a nodented JavaScript file from the command line with:
+You can invoke and run a nodented JavaScript file from the command line (although for Node apps it's much easier using the [JS transpiler](#use-within-your-node-scripts)). To load, compile and run your JS file (containing `async` and `await`), use:
 
 	./nodent.js myNodentedFile.js
 
@@ -102,36 +102,36 @@ To generate a source-map in the output, use `--sourcemap`.
 
 	./nodent.js --sourcemap --out myNodentedFile.js
 
-The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation (same as `--parseast --out`. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replcaing the filename with '-'.
+The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation (same as `--parseast --out`. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replcaing the filename with `-`.
 
 Use within your Node scripts
 ============================
-There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent-...` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched.
+There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent...` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched and run as normal.
 
 ES7 and Promises
 ----------------
 Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the one of directives:
 
-	"use nodent-promises";
-	"use nodent-es7";
-	"use nodent-generators";
+	'use nodent-promises';
+	'use nodent-es7';
+	'use nodent-generators';
 
 The ES7 proposal for async and await specifies the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a hidden Promise, and await should be followed by an expression that evaluates to a Promise. The proposal also contains an implementation based on generators.
 
 ### Which one should you use?
-All the implementations work with each other - you can mix and match.
+All the implementations work with each other - you can mix and match. If you're unsure as to which will suit your application best, or want to try them all out `'use nodent';` will use a 'default' configuration you can determine in your application's package.json. See [Advanced Configuration](#advanced-config) for details. 
 
 #### Shipping a self-contained app to a browser or other unknown environment
 `use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, and works on a wide range of desktop and mobile browsers.
 
 #### Shipping a self-contained app within Node
-`use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, but can consume Promises returned by other modules (via `await`) and provide Thenables as well (via `async`). `use nodent-promises` is also a good choice, and if you don't want to import a full Promise implementation you can set `var Promise = require('nodent').Thenable` immediately after the directive. Node v0.12 and later have a native Promise implementation which works, but is a bit slow.
+`use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, but can consume Promises returned by other modules (via `await`) and provide Thenables as well (via `async`). `use nodent-promises` is also a good choice, especially for Node v4.1.x and later where Promise performance is pretty good. If you're using an earlier version and don't want to import a full Promise implementation you can set `var Promise = require('nodent').Thenable` immediately after the directive. Node v0.12 has a native Promise implementation which works, but is a bit slow.
 
 #### Shipping a module within Node, npm or similar
-`use nodent-promises` provides the most compatibility between modules and apps. You should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API.
+`use nodent-promises` provides the most compatibility between modules and apps. If your module or library targets Node earlier than v4.1.x, you should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API.
 
 #### Generators
-`use nodent-generators` provides code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x (which has compatibility issues with some popular libraries) and the performance and memory overhead of generators is poor - currently averaging 3 or 4 times slower.
+`use nodent-generators` provides code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x. The performance and memory overhead of generators is poor - currently averaging 3 or 4 times slower.
 
 Use within a browser
 ====================
@@ -161,18 +161,19 @@ The currently supported options are:
 	extensions: <string-array>	// A set of file extensions to append if the specified URL path does not exist.
 	htmlScriptRegex: <optional regex> // If present, Nodent will attempt to read and parse <script> tags within HTML files matching the specified regex
 	compiler:{					// Options for the code generator
-		es7:<boolean>,			// Compile in es7 mode (if no 'use nodent-' directive is present)
-		promises:<boolean>,		// Compile in Promises mode (if no 'use nodent-' directive is present)
-		generator:<boolean>,	// Compile in generator mode (if no 'use nodent-' directive is present)
-		sourcemap:<boolean>		// Create a sourcemap for the browser's debugger
+		es7:<boolean>,			// Compile in es7 mode (like 'use nodent-es7')
+		promises:<boolean>,		// Compile in Promises mode (like 'use nodent-promises')
+		generator:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
+		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
+		wrapAwait:<boolean>		// Allow 'await' on a non-Promise expression
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
 Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text 'script', or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
 
-The runtime routine that should be defined on the Function.prototype in the execution environment provides compatability with Promises and is required. You see either include it in a cross-compiled file with the `runtime:true` option (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`, or for use with generators (probably not a good idea in a browser as support is limited and slow), `nodent.$asyncspawn.toString()`.
+The runtime routine that should be defined on the Function.prototype in the execution environment provides compatability with Promises and is required. Include it in the cross-compiled file by setting `runtime:true` (above), or serve it directly from your Node application with `nodent.$asyncbind.toString()`, or for use with generators (probably not a good idea in a browser as support is limited and slow), `nodent.$asyncspawn.toString()`. If you're using `wrapAwait`, you'll also need to define `Object.$makeThenable` to be the function `nodent.Thenable.resolve`.
 
-If you call an async function from a non-async function, you need to provide a globally accessible error handler, for example
+If you use await outside of an async function, you'll need to provide a globally accessible error handler, for example
 
 	// Called when an async function throws an exception during asynchronous operations
 	// and the calling synchronous function has returned.
@@ -381,8 +382,24 @@ to a Promise. This can be useful though, when you need a reference to an async f
 	 	...
 	}) ;
 
-Function.prototype.toString & arguments
----------------------------------------
+await with a non-Promise
+------------------------
+Although not explicitly allowed in the specification, the template implementation allows an application to `await` on a non-Promise value (this occurs because the template implementation wraps every generated value in a Promise). So the statement:
+
+	var x = await 100 ; // 100
+	
+...is valid. Nodent, by default, does _not_ allow this behaviour (you'll get a run-time error about '100.then is not a function'. Generally, this is not a problem in that you obviously only want to wait on asynchronous things (and not numbers or strings). However, there is one unpleasant edge case, which is where an expression _might_ be a Promise (my advice is to never write code like this, and avoid code that does it). 
+
+	var x = await maybeThisIsAPromise() ;
+
+In this case, the expression will need wrapping before it is awaited on by Nodent. You can emulate this behaviour by specifying the code-generate flag 'wrapAwait' in your package.json or after the nodent directive:
+
+	'use nodent {"wrapAwait":true}';
+
+Wrapping every value in a Promise (or Thenable for -es7 mode) increases the time taken to invoke an async function by about 20%.
+
+Function.prototype.toString
+---------------------------
 Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
 
 Differences from the ES7 specification
@@ -400,6 +417,8 @@ Differences from the ES7 specification
 * The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
 
 * async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`.
+
+* By default, it is _not_ possible to `await` on a non-Promise. See [here](#await-with-a-non-promise) for details.
 
 API
 ===
