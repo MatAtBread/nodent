@@ -515,6 +515,8 @@ function generateRequestHandler(path, matchRegex, options) {
 					} else {
 						if (options.runtime) {
 							pr = "Function.prototype."+compilerOptions.$asyncbind+" = "+$asyncbind.toString()+";" ;
+							if (compilerOptions.generators)
+								pr += "Function.prototype."+compilerOptions.$asyncspawn+" = "+$asyncspawn.toString()+";" ;
 							if (compilerOptions.wrapAwait && !compilerOptions.promises)
 								pr += "Object."+compilerOptions.$makeThenable+" = "+Thenable.resolve.toString()+";" ;
 							compilerOptions.mapStartLine = pr.split("\n").length ;
