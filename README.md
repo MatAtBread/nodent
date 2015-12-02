@@ -465,11 +465,13 @@ When determining what options to use when compiling an individual file, nodent f
 
 You can also set options for the pre-defined sets here (default,es7,promises,generators).
 
-* Finally, nodent applies any options specified _within_ the directive, but after the name. The options are strict JSON and cannot be an expression. This is useful for quickly testing options, but is probably a bad idea if applied to very many files. For example, to create the same effect as the 'myapp' set above:
+* Finally, nodent applies any options specified _within_ the directive, but after the name. The options are strict JSON and cannot be an expression. This is useful for quickly testing options, but is probably a bad idea if applied to very many files. One exception is rare use of the `wrapAwait` options, which has a performance overhead and few genuine use-cases. For example, to create the same effect as the 'myapp' set above:
 
 	'use nodent-promises {"wrapAwait":true}';
 
 You can programmatically set these options _before_ creating the nodent compiler (but after requiring nodent) by using the setDefaultCompileOptions() and setCompileOptions() API calls.
+
+Within a nodented file, the special symbol `__nodent` is expanded out to the current option set. It is not a variable and cannot be assigned to - it is an object literal. This has few useful use-cases, except for testing. An example is [here](https://github.com/MatAtBread/nodent/blob/master/tests/semantics/await.wrap.js)
 
 API
 ===
