@@ -890,7 +890,6 @@ if (require.main===module && process.argv.length>=3) {
 	});
 
 	var nodent = initialize({
-		asyncStackTrace:true,
 		augmentObject:true
 	}) ;
 
