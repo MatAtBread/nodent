@@ -346,10 +346,6 @@ function $asyncbind(self,catcher) {
 		thenable.then = thenable ;
 		return thenable ;
 	} else {
-//		Thenable.resolve = function(v){
-//			return isThenable(v)?v:{then:function($){return $(WRAPPED)}};
-//		};
-
 		var then = function(result,error) {
 			return resolver.call(self,result,error) ;
 		} ;
