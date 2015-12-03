@@ -164,7 +164,7 @@ The currently supported options are:
 	compiler:{					// Options for the code generator
 		es7:<boolean>,			// Compile in es7 mode (like 'use nodent-es7')
 		promises:<boolean>,		// Compile in Promises mode (like 'use nodent-promises')
-		generator:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
+		generators:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
 		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
 		wrapAwait:<boolean>		// Allow 'await' on non-Promise expressions
 	}
@@ -548,13 +548,6 @@ Some covers can accept a configuation object, in this case specify the options i
 
 	var http = nodent.require('http',{autoProtocol:true}) ;
 
-NB: As of v1.2.x, the previous nodent option `{use:["name"]}` option is deprecated (although still implemented), as it was dependent on module loading order in the case where you require a module that itself requires nodent with different options. To access a cover or helper, use the `nodent.require("name")` function.
-
-As of version v1.2.7, the nodent initialisation option `{augmentObject:true}` adds the following functions to Object.prototype. Although polluting a global prototype is considered by some poor design, it is useful in some cases. Specifically, being able to determine if an object is Thenable (i.e. has a member called `then` which is a function), or `asyncify`ing  an arbitrary object so it can be awaited on very handy. For example:
-
-/* Create a redis client from a library that can be used with await */
-var redis = require('redis').asyncify() ;
-
 "http" and "https"
 ------------------
 The nodent version of http.get returns a Thenable:
@@ -717,6 +710,11 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 	// Async version of readFile() has "Async" appended
 	await afs.readFileAsync("./mydata.txt") ;
 
+If you specifiy the environment option `augmentObject` as in `require('nodent')({augmentObject:true})` you can directly asyncify an API, for example:
+
+	/* Create a redis client from a library that can be used with await */
+	var redis = require('redis').asyncify() ;
+
 Testing
 =======
 
@@ -762,6 +760,12 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+03-Dec-15 v2.3.0
+
+- Implement version-aware in-process JS compiler so modules built with different versions of nodent can co-exist
+- Implement wrapAwait option to allow for the `await nonPromise` edge-case enabled in the standard implementation
+- Implement 'optionSets' for each `use nodent` directive and allow their specification in the package.json to avoid use unnecessary use of setDefaultCompileOptions() and the consequent dependency between code and environment. 
+
 24-Nov-15: v2.2.9
 
 - Report the original filename being parsed in handling SyntaxError from acorn.
