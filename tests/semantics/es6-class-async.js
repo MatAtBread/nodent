@@ -25,7 +25,7 @@ class Two extends One {
 	sname(r) {
 		return super.sname(r)+1 ;
 	}
-} ;
+}
 
 class Three extends Two {
 	constructor(init) {
@@ -34,13 +34,13 @@ class Three extends Two {
 	}
 	async name(r) {
 		setImmediate(function(){
-			async return (await super.name(r)*4) ; 
+			async return (await super.name(r)*4) ;
 		}.bind(this));
 	}
 	sname(r) {
 		return super.sname(r)*4 ;
 	}
-} ;
+}
 
 class Four extends Three {
 	constructor() {
@@ -48,12 +48,12 @@ class Four extends Three {
 		this.n.push("D") ;
 	}
 	async name(r) {
-		return this.n.join("")+await super.name(r) ; 
+		return this.n.join("")+await super.name(r) ;
 	}
 	sname(r) {
-		return this.n.join("")+super.sname(r) ; 
+		return this.n.join("")+super.sname(r) ;
 	}
-} ;
+}
 
 async function test() {
 	let x = new Four() ;
@@ -61,5 +61,3 @@ async function test() {
 }
 
 module.exports = test ;
-
-

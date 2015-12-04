@@ -2,6 +2,8 @@
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
+var path = require('path') ;
+var msgs = [] ;
 var nodent = require('../nodent')({
 	log:function(msg){ msgs.push(msg) }
 }) ;
@@ -37,13 +39,18 @@ if (global.Promise) {
 	providers.push({name:'native',p:global.Promise}) ;
 }
 
+function makePromiseCompliant(module,promise,resolve) {
+	var p = module[promise] ;
+	p.resolve = module[resolve] ;
+	return p ;
+}
+
 try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
-try { providers.push({name:'when',p:require('when').promise}) } catch (ex) { }
+try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
 
-var msgs = [] ;
 var targetSamples = -1 ;
-var showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
+var wrapAwait = false, showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
 var idx ;
 
 try {
@@ -52,10 +59,20 @@ try {
 	notES6 = true ;
 }
 
-for (idx=3; idx < process.argv.length; idx++) {
+for (idx=0; idx<process.argv.length; idx++) {
+	var fqPath = path.resolve(process.argv[idx]) ; 
+	if (fqPath == __filename || fqPath == __dirname)
+		break ;
+}
+
+idx += 1 ;
+
+for (;idx < process.argv.length; idx++) {
 	var arg = process.argv[idx] ;
 	if (arg=='--syntaxonly')
 		syntaxTest = 1 ;
+	else if (arg.match(/--await=/))
+		wrapAwait = arg.split("=")[1] ;
 	else if (arg=='--syntax') {
 		syntaxTest = 2 ;
 	} else if (arg=='--generators' || arg=='--genonly') {
@@ -98,14 +115,14 @@ async function run(fn) {
 		$error = null ;
 		return x(new Error("timeout")) ;
 	},5000) ;
-	
+
 	fn.then(function(r){
 		tid && clearTimeout(tid) ;
 		return $return && $return(r) ;
 	},function(ex){
 		tid && clearTimeout(tid) ;
 		return $error && $error(ex) ;
-	}) 
+	})
 }
 
 if (syntaxTest) {
@@ -113,12 +130,10 @@ if (syntaxTest) {
 	if (syntaxTest==1)
 		return ;
 }
-var tests = process.argv.length>idx ? 
+var tests = process.argv.length>idx ?
 	process.argv.slice(idx):
 		fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
 
-	
-	
 async function runTests() {
 	for (var j=0; j<tests.length; j++) {
 		var test = tests[j] ;
@@ -146,18 +161,21 @@ async function runTests() {
 				try {
 					var code = fs.readFileSync(test).toString() ;
 					var pr = nodent.compile(code,test,showOutput?2:3,{
-						es7:true,promises:!!promise.p,generators:g>0
+						wrapAwait:wrapAwait || !!test.match(/\.wrap\.js/),
+						es7:true,
+						promises:!!promise.p,
+						generators:g>0
 					}) ;
 					var m = {} ;
 					if (showOutput)
 						console.log(pr.code) ;
-					var fn = new Function("module","require","Promise","es7",pr.code) ;
+					var fn = new Function("module","require","Promise","es7","nodent",pr.code) ;
 					failed = fn.toString() ;
 					if (showOutput && saveOutput) {
 						fs.writeFileSync(test+".out",pr.code) ;
 					}
 
-					fn(m,require,promise.p || nodent.Thenable,!promise.p) ;
+					fn(m,require,promise.p || nodent.Thenable,!promise.p,nodent) ;
 					await breathe();
 
 					var result,t = Date.now() ;
@@ -176,14 +194,14 @@ async function runTests() {
 						info.push("x"+samples) ;
 					} else {
 						for (var reSample=0; reSample<samples; reSample++){
-							result = await run(m.exports()); 
+							result = await run(m.exports());
 							if (!(reSample&31))
 								t += await breathe() ;
 						}
 					}
 
 					t = Date.now()-t ;
-					if (result!==true) {
+					if (result!==true && result!=='n/a') {
 						info.push([promise.name+" \u2717",result]) ;
 					} else {
 						failed = null ;
