@@ -685,6 +685,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+04-Dec-15: v2.2.10
+
+- Fix error that mangled the declaration of a `let` statement under certain conditions
+
 24-Nov-15: v2.2.9
 
 - Report the original filename being parsed in handling SyntaxError from acorn.
