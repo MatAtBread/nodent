@@ -100,7 +100,7 @@ function parseCompilerOptions(code,log) {
 		}
 	} else { // code is an AST
 		for (var i=0; i<code.body.length; i++) {
-			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/Literal$/)) {
+			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/^(StringLiteral|Literal)$/)) {
 				var test = "'"+code.body[i].value+"'" ;
 				if (regex = test.match(useDirective)) {
 					set = regex[1] || 'default' ;
