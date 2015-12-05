@@ -1,5 +1,5 @@
 if (!__nodent.wrapAwait)
-	module.exports = async function() { return false ;}
+	module.exports = async function() { return 'n/a' ;}
 else {
 	async function inc(x) { return x+1 ; } 
 
