@@ -206,16 +206,16 @@ var tests = process.argv.length>idx ?
                                 t = Date.now()-t ;
                                 if (i==0 && targetSamples==1) {
                                     info.push("x1, "+t+"ms") ;
-                                    continue ;
-                                }
-                                if (result!==true && result!=='n/a') {
-                                    info.push([promise.name+" \u2717",result]) ;
                                 } else {
-                                    failed = null ;
-                                    if (targetSamples==1)
-                                        info.push([promise.name+" \u2713"]) ;
-                                    else if (reSample)
-                                        info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
+                                    if (result!==true && result!=='n/a') {
+                                        info.push([promise.name+" \u2717",result]) ;
+                                    } else {
+                                        failed = null ;
+                                        if (targetSamples==1)
+                                            info.push([promise.name+" \u2713"]) ;
+                                        else if (reSample && i>0)
+                                            info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
+                                    }
                                 }
                             } catch (ex) {
                                 info.push([promise.name+" \u2717","*error*"]) ;
