@@ -325,40 +325,23 @@ This works because Nodent translates this into:
 
 Similarly, `async throw <expression>` causes the inner callback to make the container async function throw and exception. The `async return` and `async throw` statements are NOT ES7 standards (see [https://github.com/tc39/ecmascript-asyncawait/issues/38](https://github.com/tc39/ecmascript-asyncawait/issues/38)). If you want your code to remain compatible with standard ES7 implementations when the arrive, use the second form above, which is what nodent would generate and is therefore ES5 compatible.
 
-Implicit return
----------------
-Async functions in Nodent do _not_ have an implicit return - i.e. not using the return keyword at the end of an async function means that the caller will never emerge from the `await`. This is intentional, without this behaviour, it would be difficult to have one async function call another (since the first would eventually return, as well as the second).
+If, and only if, your async function contains an `async return` or `async throw`, the async function will _not_ implicitly return at the end of the function. This is intentional, without this behaviour, it would be impossible to delegate the async return to the callback as the main function would 'return' as well at the end.
 
-	async function test2(x) {
-		if (x)
-			return x+1 ;
-		// Oops! If x==0, we never return!
-	}
-
-Provide an explicit return:
-
-	async function test2(x) {
-		if (x)
-			return x+1 ;
-		// Oops! If x==0 either return or throw
-		return -1 ;
-	}
-
-Intentionally omit the return as we want another function to do it later:
-
-	async function test2(x) {
-		if (x)
-			return fileItem[x] ;
-
-		// Oops! If x==0, do something via a traditional Node callback
-		fs.readFile("404.html",function(err,data){
-				// The callback is NOT mapped by Nodent - this function
-				// is a standard callback, not an async function
-				if (err) async throw err ;
-				async return data ;
+	var cache = {} ;
+	async function getFile(f) {
+		if (cache[f])
+			return cache[f] ;
+		
+		fs.readFile(f,function(err,data){
+			if (err)
+				async throw err ;
+			cache[f] = data ;
+			async return data ;
 		}) ;
-		// NB: An implicit return here would cause two returns to be invoked
-		// so exit without doing anything
+		
+		// Use of 'async throw/return' stops the
+		// function also return 'undefined'
+		// here, when it gets to the end
 	}
 
 Missing out await
@@ -409,7 +392,7 @@ Wrapping every value in a Promise (or Thenable for -es7 mode) increases the time
 
 Function.prototype.toString
 ---------------------------
-Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code.
+Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code. Similarly, `new Function()` does not compile ES7 keywords.
 
 Differences from the ES7 specification
 --------------------------------------
@@ -419,13 +402,10 @@ Differences from the ES7 specification
 
 	- `for (...in...)` and `for (...of...)` loops containing an `await` are not transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
 	- `case` blocks that fall through into the following block will not asynchronise correctly if they contain an `await`. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
-	- `break` or `continue` in a loop containing an `await` cannot have a labelled exit, but will exit/continue their immediately containing loop.
 
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. In essence this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
 
 * The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
-
-* async functions that fall-through (i.e. never encounter a `return` or `throw` (async or otherwise) do not return. In the ES7 spec, these functions return `undefined` when `await`ed. This behaviour does not permit async functions to be terminated by callbacks. To remain compatible with the ES7 spec, make sure your async functions either return, throw an exception or delegate to a callback that contains a `async return` or `async throw`.
 
 * By default, it is _not_ possible to `await` on a non-Promise. See [here](#await-with-a-non-promise) for details.
 
@@ -760,11 +740,13 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
-04-Dec-15 v2.3.0
+07-Dec-15 v2.3.0
 
 - Implement version-aware in-process JS compiler so modules built with different versions of nodent can co-exist
 - Implement wrapAwait option to allow for the `await nonPromise` edge-case enabled in the standard implementation
 - Implement 'optionSets' for each `use nodent` directive and allow their specification in the package.json to avoid use unnecessary use of setDefaultCompileOptions() and the consequent dependency between code and environment. 
+- Implement labeled `break` and `continue` containing `await`
+- Only suppress the automatic insertion of `return undefined` if a function uses `async return` or `async throw`. Other async functions now return `undefined` asynchronously if the run to completion.
 
 04-Dec-15: v2.2.10
 
