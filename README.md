@@ -740,6 +740,12 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+08-Dec-15 v2.3.4
+
+- Mark ArrowFunctionExpression containing a BlockStatement as having a scope (it does in Chrome 46) to constrain hoisting of variables declared inside Arrow Functions
+- Correct 'return undefined' suppression in object/class methods (as well as normal functions)
+- Numerous fixes to make Babel-style Object/ClassMethod play nicely with the ESTree Property & MethodDefinition (v2.3.1-2.3.3)
+
 07-Dec-15 v2.3.0
 
 - Implement version-aware in-process JS compiler so modules built with different versions of nodent can co-exist
