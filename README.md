@@ -298,10 +298,24 @@ Use nodent! And any function returning a Promise (or Thenable) can be used with 
 Gotchas and ES7 compatibility
 ===========================
 
-Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid:
+Async programming with Nodent (or ES7) is much easier and simpler to debug than doing it by hand, or even using run-time constructs such as Promises, which have a complex implementation of the their own when compiled to ES5. However, a couple of common cases are important to avoid.
+
+Differences from the ES7 specification
+--------------------------------------
+* As of the current version, some `case` blocks that fall thorugh into the following block do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
+
+* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. In essence this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
+
+* The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise. See [below](#returning-async-functions-from-callbacks) for details.
+
+* By default, it is _not_ possible to `await` on a non-Promise. See [here](#await-with-a-non-promise) for details.
+
+* Being a trans-compiler, Nodent does not provide the AsyncFunction prototype, and it is not possible to call `new AsyncFunction()` to dynamically create AsyncFunctions. Similarly `Function.prototype.toString()` is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source (this can be useful to see what Nodent did to your code). Similarly, `new Function()` does not compile ES7 keywords.
+
+All other JavaScript ES5/6/2015 constructs will be transformed as necessary to implement `async` and `await`.
 
 Returning async functions from callbacks
-----------------------------------------
+---------------------------------------
 
 Specifically in Nodent (not specified by ES7), you can interface an ES7 async function with a old style callback-based function. For example, to create an async function that sleeps for a bit, you can use the standard setTimeout function, and in its callback use the form `async return <expression>` to not only return from the callback, but also the surrounding async function:
 
@@ -389,25 +403,6 @@ In this case, the expression will need wrapping before it is awaited on by Noden
 	'use nodent {"wrapAwait":true}';
 
 Wrapping every value in a Promise (or Thenable for -es7 mode) increases the time taken to invoke an async function by about 20%.
-
-Function.prototype.toString
----------------------------
-Since fn.toString() is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source. This can be useful to see what Nodent did to your code. Similarly, `new Function()` does not compile ES7 keywords.
-
-Differences from the ES7 specification
---------------------------------------
-* Generators and Promises are optional. Nodent works simply by transforming your original source
-
-* As of the current version, some constructs do not transform correctly if they contain an `await` expression:
-
-	- `for (...in...)` loops containing an `await` are not transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
-	- `case` blocks that fall through into the following block will not asynchronise correctly if they contain an `await`. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
-
-* The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. In essence this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
-
-* The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise.
-
-* By default, it is _not_ possible to `await` on a non-Promise. See [here](#await-with-a-non-promise) for details.
 
 Advanced Configuration
 ======================
