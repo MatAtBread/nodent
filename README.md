@@ -400,7 +400,7 @@ Differences from the ES7 specification
 
 * As of the current version, some constructs do not transform correctly if they contain an `await` expression:
 
-	- `for (...in...)` and `for (...of...)` loops containing an `await` are not transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
+	- `for (...in...)` loops containing an `await` are not transformed by Nodent. All iterations are performed, but in parallel, not synchronously.
 	- `case` blocks that fall through into the following block will not asynchronise correctly if they contain an `await`. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`.
 
 * The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent, but generally a Thenable protocol representing the first awaitable expression encountered during the function. In essence this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
@@ -740,6 +740,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+09-Dec-15 v2.3.5
+
+- Correctly asynchronize ES6 `for...of` loops.
+
 08-Dec-15 v2.3.4
 
 - Mark ArrowFunctionExpression containing a BlockStatement as having a scope (it does in Chrome 46) to constrain hoisting of variables declared inside Arrow Functions
