@@ -8,8 +8,8 @@
     "start": "./nodent.js"
   },
   "dependencies": {
-    "acorn": "2.5.2",
-    "acorn-es7-plugin": "^1.0.9",
+    "acorn": "2.6.4",
+    "acorn-es7-plugin": "^1.0.10",
     "source-map": "0.5.3"
   },
   "repository": {
