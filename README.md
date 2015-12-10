@@ -736,10 +736,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-10-Dec-15 v2.3.6
+10-Dec-15 v2.3.7
 
 - Correctly asynchronize ES6 `for...in` loops.
 - Update the plugin code to remove 'async' and 'await' from the super-strict keyword tests introduced in acorn v2.6.x that generate parse errors before the plugin gets a chance to manage them. Also compatible with acorn v2.5.2 as used by previous versions of nodent. 
+- Remove spurious 'debugger' statement, fix case where for..in body is a single expression.
 
 09-Dec-15 v2.3.5
 
