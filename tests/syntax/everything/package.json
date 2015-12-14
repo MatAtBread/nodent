@@ -1,0 +1,29 @@
+{
+  "name": "everything.js",
+  "version": "1.0.3",
+  "description": "a single javascript file that contains every ECMA-262 edition 5.1 grammatical production",
+  "main": "es5.js",
+  "scripts": {
+    "test": "mocha --inline-diffs --check-leaks -u tdd -R dot test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:michaelficarra/everything.js.git"
+  },
+  "keywords": [
+    "ECMA-262",
+    "grammar",
+    "example",
+    "javascript"
+  ],
+  "author": "Michael Ficarra",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/michaelficarra/everything.js/issues"
+  },
+  "homepage": "https://github.com/michaelficarra/everything.js",
+  "devDependencies": {
+    "esprima": "^1.2.2",
+    "mocha": "^1.21.3"
+  }
+}
