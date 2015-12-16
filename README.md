@@ -736,6 +736,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+16-Dec-15 v2.3.9
+
+- Correct cases where arrow functions contain deeply nested expressions containing await and logical/conditional operators
+- Fix edge cases in code output (sparse array constants, object pattern precedence, generator member functions), add everything.js syntax tests
+
 10-Dec-15 v2.3.7
 
 - Correctly asynchronize ES6 `for...in` loops.
