@@ -310,7 +310,7 @@ Differences from the ES7 specification
 
 * By default, it is _not_ possible to `await` on a non-Promise. See [here](#await-with-a-non-promise) for details.
 
-* Being a trans-compiler, Nodent does not provide the AsyncFunction prototype, and it is not possible to call `new AsyncFunction()` to dynamically create AsyncFunctions. Similarly `Function.prototype.toString()` is a run-time feature of JavaScript, the string you get back is the trans-compiled source, not the original source (this can be useful to see what Nodent did to your code). Similarly, `new Function()` does not compile ES7 keywords.
+* The `AsyncFunction` type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. 
 
 All other JavaScript ES5/6/2015 constructs will be transformed as necessary to implement `async` and `await`.
 
@@ -657,6 +657,28 @@ Alternatively, if instantiated with the option `throwOnError`, if any of the asy
 
 Instances of 'map' are independent of each other - you can require() both the throwing and non-throwing version in different modules, or the same module as different variables.
 
+"asyncfunction"
+---------------
+
+The `AsyncFunction` type is returned by requiring 'asyncfunction'. This creates a class that can compile async functions on the fly (like `new Function()`).
+
+To access the type:
+
+	var AsyncFunction = nodent.require('asyncfunction',opts) ;
+	
+...where the `opts` parameter is optional, but if supplied contains the compiler flags as specified in [Advanced Configuration](#advanced-configuration). By default AsyncFunction uses Promises if they are defined globally, and ES7 mode otherwise.
+
+Once defined, you can create async functions on the fly just like normal functions:
+
+	// Create a new async function
+    var add = new AsyncFunction("i","j","return i+j") ;
+    
+    console.log(add instanceof Function)		// true: An AsyncFunction is also a function
+    console.log(add instanceof AsyncFunction)	// true
+    console.log(add.toString())					// The original source "return i+j"
+    console.log(add.toES5String())				// The compiled source
+    console.log(await add(10,11))				// 21
+
 nodent.asyncify
 ---------------
 This helper function wraps "normal" Node asynchronous functions (i.e. those whose final paramter is of the form `function(err,data)`) to make them usuable with `await`. For example, to asyncify the standard Node module 'fs':
@@ -735,6 +757,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+17-Dec-15 v2.3.10
+
+- Provide the cover 'asyncfunction' which implements the type `AsyncFunction` to dynamically compile and create asynchronous functions.
 
 16-Dec-15 v2.3.9
 
