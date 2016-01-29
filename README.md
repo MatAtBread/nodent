@@ -466,7 +466,7 @@ Options:
 |asyncStackTrace|boolean|default: false - chain stack traces across `await` for easier debugging. Note this has a significant impact on memory requirements (and some performance penalty) at runtime, and should not be used in production environments.
 |augmentObject|boolean|Adds asyncify(PromiseProvider) and isThenable() to Object.prototype, making expressions such as `var client = new DB().asyncify(Promise)` and `if (abc.isThenable()) await abc()` less verbose
 |extension|string|extension for files to be compiled (default: '.njs'). Note that this is unused if the file has a `use nodent-` directive.
-|log (msg)|function|Called when nodent has a warning of similar to show. By default they are passed to console.warn(). Set this member to, for example, suppress logging
+|log (msg)|function/boolean|Called when nodent has a warning of similar to show. By default they are passed to console.warn(). Set this member to `false` to suppress logging.
 
 Return: a 'nodent' compiler object with the following properties:
 

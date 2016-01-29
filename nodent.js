@@ -544,11 +544,13 @@ function NodentCompiler(members) {
 }
 
 NodentCompiler.prototype.setOptions = function(members){
-	this.log = members.log || this.log ;
+	this.log = members.log || (members.log === false ? noop : this.log) ;
 	this.options = copyObj([this.options,members]) ;
 	delete this.options.log ;
 	return this ;
 };
+function noop() {}
+
 NodentCompiler.prototype.version =  require(__dirname+"/package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
 NodentCompiler.prototype.isThenable =  isThenable ;
