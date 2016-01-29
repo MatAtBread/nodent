@@ -45,7 +45,11 @@ function makePromiseCompliant(module,promise,resolve) {
     return p ;
 }
 
-try { providers.push({name:'bluebird',p:require('bluebird')}) } catch (ex) { }
+try {
+    var bluebird = require('bluebird');
+    bluebird.config({ warnings: false });
+    providers.push({name:'bluebird',p:bluebird});
+} catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
 try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
 
