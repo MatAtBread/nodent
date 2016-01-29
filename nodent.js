@@ -261,7 +261,7 @@ function asyncify(promiseProvider) {
 								// Assume the CB is the final arg
 								a[obj[k].length-1] = cb ;
 							}
-							var ret = obj[k].apply(obj,a) ;
+							obj[k].apply(obj,a) ;
 						} ;
 						return new promiseProvider(resolver) ;
 					}
@@ -277,7 +277,6 @@ function asyncify(promiseProvider) {
 };
 
 function prettyPrint(pr,opts) {
-	var map ;
 	var filepath = pr.filename.split("/") ;
 	var filename = filepath.pop() ;
 
@@ -599,7 +598,6 @@ function prepareMappedStackTrace(error, stack) {
 // Set the 'global' references to the (backward-compatible) versions
 // required by the current version of Nodent
 function setGlobalEnvironment(initOpts) {
-	var codeGenOpts = defaultCodeGenOpts ;
 	/*
 	Object.$makeThenable
 	Object.prototype.isThenable
