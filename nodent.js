@@ -7,7 +7,6 @@
  */
 var stdJSLoader ;
 var smCache = {} ;
-var SourceMapConsumer = require('source-map').SourceMapConsumer;
 var fs = require('fs') ;
 var outputCode = require('./lib/output') ;
 var parser = require('./lib/parser') ;
@@ -91,6 +90,8 @@ function globalErrorHandler(err) {
 
 /* Extract compiler options from code (either a string or AST) */
 var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
+
+function noLogger(){}
 
 function parseCompilerOptions(code,log) {
 	var regex, set, parseOpts = {} ;
@@ -209,7 +210,6 @@ function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
 
 function compileNodentedFile(nodent,log) {
 	return function(mod, filename, parseOpts) {
-		//console.log("Using nodent@",nodent._ident,"to load",filename) ;
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		var pr = nodent.parse(content,filename,parseOpts);
 		parseOpts = parseOpts || parseCompilerOptions(pr.ast,log) ;
@@ -288,18 +288,24 @@ function prettyPrint(pr,opts) {
 		sourceContent: pr.origCode
 	}}:null, pr.origCode) ;
 
-	try {
-		var mapUrl = "" ;
-		var jsmap = out.map.toJSON();
-		if (jsmap) {
-			pr.sourcemap = jsmap ;
-			smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
-			mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"
-				+btoa(JSON.stringify(jsmap))+"\n" ;
-		}
-		pr.code = out.code+mapUrl ;
-	} catch (ex) {
-		pr.code = out ;
+	if (opts && opts.sourcemap){
+	    try {
+	        var mapUrl = "" ;
+	        var jsmap = out.map.toJSON();
+	        if (jsmap) {
+	            // require an expression to defeat browserify
+	            var SourceMapConsumer = require('source-map').SourceMapConsumer;
+	            pr.sourcemap = jsmap ;
+	            smCache[pr.filename] = {map:jsmap,smc:new SourceMapConsumer(jsmap)} ;
+	            mapUrl = "\n\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,"
+	                +btoa(JSON.stringify(jsmap))+"\n" ;
+	        }
+	        pr.code = out.code+mapUrl ;
+	    } catch (ex) {
+	        pr.code = out ;
+	    }
+	} else {
+        pr.code = out ;
 	}
 	return pr ;
 }
@@ -454,7 +460,7 @@ function compile(code,origFilename,__sourceMapping,opts) {
 	}
 
 	var pr = this.parse(code,origFilename,null,opts);
-	this.asynchronize(pr,null,opts,this.log) ;
+	this.asynchronize(pr,null,opts,this.log || noLogger) ;
 	this.prettyPrint(pr,opts) ;
 	return pr ;
 }
@@ -544,7 +550,7 @@ function NodentCompiler(members) {
 }
 
 NodentCompiler.prototype.setOptions = function(members){
-	this.log = members.log || this.log ;
+	this.log = members.log || this.log || noLogger;
 	this.options = copyObj([this.options,members]) ;
 	delete this.options.log ;
 	return this ;
