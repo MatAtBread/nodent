@@ -549,7 +549,7 @@ NodentCompiler.prototype.setOptions = function(members){
 	delete this.options.log ;
 	return this ;
 };
-NodentCompiler.prototype.version =  require(__dirname+"/package.json").version ;
+NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
 NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
