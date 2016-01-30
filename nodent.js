@@ -93,6 +93,12 @@ var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
 
 function noLogger(){}
 
+function isDirective(node){
+    return node.type === 'ExpressionStatement' && 
+        (node.expression.type === 'StringLiteral' || 
+            (node.expression.type === 'Literal' && typeof node.expression.value === 'string')) ;
+}
+
 function parseCompilerOptions(code,log) {
 	var regex, set, parseOpts = {} ;
 	if (typeof code=="string") {
@@ -101,12 +107,14 @@ function parseCompilerOptions(code,log) {
 		}
 	} else { // code is an AST
 		for (var i=0; i<code.body.length; i++) {
-			if (code.body[i].type==='ExpressionStatement' && code.body[i].expression.type.match(/^(StringLiteral|Literal)$/)) {
-				var test = "'"+code.body[i].value+"'" ;
+			if (isDirective(code.body[i].type)) {
+			    var test = "'"+code.body[i].value+"'" ;
 				if (regex = test.match(useDirective)) {
 					set = regex[1] || 'default' ;
 					break ;
 				}
+			} else {
+			    break ; // Directives should preceed all other statements
 			}
 		}
 	}
