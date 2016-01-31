@@ -739,6 +739,7 @@ The test runner in tests/index.js accepts the following options:
 	--save       	Save the output (must be used with --out or --es7)
 	--syntax	 	Check the parser/output code before running semantic tests
 	--syntaxonly	Only run syntax tests
+	--forceStrict	Run the tests with a 'use strict' inserted at the top of every test file
 
 Performance
 -----------

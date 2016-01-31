@@ -50,7 +50,9 @@ try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
 try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
 
 var targetSamples = -1 ;
-var wrapAwait = false, showOutput = false, saveOutput = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0 ;
+var wrapAwait = false, showOutput = false, saveOutput = false, 
+    quiet = false, useGenerators = false, useGenOnly = false, 
+    notES6 = false, syntaxTest = 0, forceStrict = "" ;
 var idx ;
 
 try {
@@ -99,6 +101,8 @@ for (;idx < process.argv.length; idx++) {
         quiet = true ;
     } else if (arg=='--quick') {
         targetSamples = 1 ;
+    } else if (arg=='--forceStrict') {
+        forceStrict = "'use strict';\n" ;
     } else {
         break ;
     }
@@ -163,7 +167,7 @@ var tests = process.argv.length>idx ?
 
                             try {
                                 var code = fs.readFileSync(test).toString() ;
-                                var pr = nodent.compile(code,test,showOutput?2:3,{
+                                var pr = nodent.compile(forceStrict+code,test,showOutput?2:3,{
                                     wrapAwait:wrapAwait>0,// || !!test.match(/\.wrap\.js/),
                                     es7:true,
                                     promises:!!promise.p,
