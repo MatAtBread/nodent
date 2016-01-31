@@ -312,6 +312,8 @@ Differences from the ES7 specification
 
 * The `AsyncFunction` type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. 
 
+* In 'es7' mode, async invocations are not 'greedy' (as of the current version). Specifially, `myAsync()` without a preceding `await` returns a Thenable that has yet to execute, whereas in 'promise' (or generator) mode it returns a Promise that will have been started (and will complete) even though the result is unavailable. This mechanism allows non-async functions to invoke async functions for side effects, even though the result is unavailable to the caller. To fully comply with the ES7 specification, use 'promise' mode. The non-standard behaviour of 'es7' mode may be modified in future releases. The sequence `await myAsyncFunction()` behaves the same way in all cases, and so this deviation from the spec only applies to 'es7' mode where `await` has been omitted.
+
 All other JavaScript ES5/6/2015 constructs will be transformed as necessary to implement `async` and `await`.
 
 Returning async functions from callbacks
@@ -766,6 +768,7 @@ Changelog
 - Re-implement mapLogicalOps to generate correct code for expressions like `a || b && await c`. Previous version produced code that wouldn't run.
 - Allow the option `{log:false}` instead of a noop function
 - Correctly place directives at the top of the Program/function when hoisting declarations.
+- Thanks to https://github.com/epoberezkin for the addtional test cases and enhancements
 
 17-Dec-15 v2.3.10
 
