@@ -4,6 +4,7 @@
 var fs = require('fs') ;
 var path = require('path') ;
 var msgs = [] ;
+var tTotalCompilerTime = 0 ;
 var nodent = require('../nodent')({
     log:function(msg){ msgs.push(msg) }
 }) ;
@@ -167,12 +168,14 @@ var tests = process.argv.length>idx ?
 
                             try {
                                 var code = fs.readFileSync(test).toString() ;
+                                var tCompiler = Date.now() ;
                                 var pr = nodent.compile(forceStrict+code,test,showOutput?2:3,{
-                                    wrapAwait:wrapAwait>0,// || !!test.match(/\.wrap\.js/),
+                                    wrapAwait:wrapAwait>0,
                                     es7:true,
                                     promises:!!promise.p,
                                     generators:g>0
                                 }) ;
+                                tTotalCompilerTime += Date.now()-tCompiler ;
                                 var m = {} ;
                                 if (showOutput)
                                     console.log(pr.code) ;
@@ -234,3 +237,4 @@ var tests = process.argv.length>idx ?
         }
 
         await runTests() ;
+        console.log("Total compile time:",tTotalCompilerTime,"ms");
