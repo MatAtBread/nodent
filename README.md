@@ -759,6 +759,14 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+31-Jan-16 v2.3.11
+
+- Improve compiler performance (approx 20%)
+- Fix issues related to the generation of nested FunctionDeclarations in ES5-Strict mode
+- Re-implement mapLogicalOps to generate correct code for expressions like `a || b && await c`. Previous version produced code that wouldn't run.
+- Allow the option `{log:false}` instead of a noop function
+- Correctly place directives at the top of the Program/function when hoisting declarations.
+
 17-Dec-15 v2.3.10
 
 - Provide the cover 'asyncfunction' which implements the type `AsyncFunction` to dynamically compile and create asynchronous functions.
