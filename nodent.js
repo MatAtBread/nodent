@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+'use strict';
 /**
  * NoDent - Asynchronous JavaScript Language extensions for Node
  *
@@ -63,7 +64,7 @@ function copyObj(a){
 	var o = {} ;
 	a.forEach(function(b){
 		if (b && typeof b==='object')
-			for (k in b)
+			for (var k in b)
 				o[k] = b[k]  ;
 	}) ;
 	return o ;
@@ -736,77 +737,77 @@ function initialize(initOpts){
 		return 0 ;
 	}
 
-	if (!initOpts.dontInstallRequireHook) {
+    function versionAwareNodentJSLoader(mod,filename) {
+        if (filename.match(/nodent\/nodent.js$/)) {
+            var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent.js$/,"")} ;
+            if (downLevel.path) {
+                downLevel.version = JSON.parse(fs.readFileSync(filename.replace(/nodent\.js$/,"package.json"))).version ;
+                // Load the specified nodent
+                stdJSLoader(mod,filename) ;
+
+                // If the version of nodent we've just loaded is lower than the
+                // current (version-aware) version, hook the initialzer
+                // so we can replace the JS loader after it's been run.
+                if (compareSemVer(downLevel.version,NodentCompiler.prototype.version)<0) {
+                    downLevel.originalNodentLoader = mod.exports ;
+                    mod.exports = function(){
+                        var previousJSLoader = require.extensions['.js'] ;
+                        var defaultNodentInstance = downLevel.originalNodentLoader.apply(this,arguments) ;
+                        downLevel.jsCompiler = require.extensions['.js'] ;
+                        require.extensions['.js'] = previousJSLoader ;
+                        setGlobalEnvironment(initOpts) ;
+                        return defaultNodentInstance ;
+                    } ;
+                    Object.keys(downLevel.originalNodentLoader).forEach(function(k){
+                        mod.exports[k] = downLevel.originalNodentLoader[k] ;
+                    }) ;
+                    nodentLoaders.push(downLevel) ;
+                    nodentLoaders = nodentLoaders.sort(function(a,b){
+                        return b.path.length - a.path.length ;
+                    }) ;
+                }
+            }
+        } else {
+            // The the appropriate loader for this file
+            for (var n=0; n<nodentLoaders.length; n++) {
+                if (filename.slice(0,nodentLoaders[n].path.length)==nodentLoaders[n].path) {
+                    //console.log("Using nodent@",nodentLoaders[n].version,"to load",filename) ;
+                    return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
+                }
+            }
+
+            var content = stripBOM(fs.readFileSync(filename, 'utf8'));
+            var parseOpts = parseCompilerOptions(content,initOpts.log) ;
+            if (parseOpts) {
+                return stdCompiler(mod,filename,parseOpts) ;
+            }
+            return stdJSLoader(mod,filename) ;
+        }
+    }
+
+    function registerExtension(extension) {
+        if (Array.isArray(extension))
+            return extension.forEach(registerExtension) ;
+
+        if (require.extensions[extension]) {
+            var changedKeys = Object.keys(initOpts).filter(function(k){ return compiler[k] != initOpts[k]}) ;
+            if (changedKeys.length) {
+                initOpts.log("File extension "+extension+" already configured for async/await compilation.") ;
+            }
+        }
+    	require.extensions[extension] = compileNodentedFile(compiler,initOpts.log) ;
+    }
+        
+    if (!initOpts.dontInstallRequireHook) {
 		if (!stdJSLoader) {
 			stdJSLoader = require.extensions['.js'] ;
 			var stdCompiler = compileNodentedFile(compiler,initOpts.log) ;
 			require.extensions['.js'] = versionAwareNodentJSLoader ;
-			function versionAwareNodentJSLoader(mod,filename) {
-				if (filename.match(/nodent\/nodent.js$/)) {
-					var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent.js$/,"")} ;
-					if (downLevel.path) {
-						downLevel.version = JSON.parse(fs.readFileSync(filename.replace(/nodent\.js$/,"package.json"))).version ;
-						// Load the specified nodent
-						stdJSLoader(mod,filename) ;
-
-						// If the version of nodent we've just loaded is lower than the
-						// current (version-aware) version, hook the initialzer
-						// so we can replace the JS loader after it's been run.
-						if (compareSemVer(downLevel.version,NodentCompiler.prototype.version)<0) {
-							downLevel.originalNodentLoader = mod.exports ;
-							mod.exports = function(){
-								var previousJSLoader = require.extensions['.js'] ;
-								var defaultNodentInstance = downLevel.originalNodentLoader.apply(this,arguments) ;
-								downLevel.jsCompiler = require.extensions['.js'] ;
-								require.extensions['.js'] = previousJSLoader ;
-								setGlobalEnvironment(initOpts) ;
-								return defaultNodentInstance ;
-							} ;
-							Object.keys(downLevel.originalNodentLoader).forEach(function(k){
-								mod.exports[k] = downLevel.originalNodentLoader[k] ;
-							}) ;
-							nodentLoaders.push(downLevel) ;
-							nodentLoaders = nodentLoaders.sort(function(a,b){
-								return b.path.length - a.path.length ;
-							}) ;
-						}
-					}
-				} else {
-					// The the appropriate loader for this file
-					for (var n=0; n<nodentLoaders.length; n++) {
-						if (filename.slice(0,nodentLoaders[n].path.length)==nodentLoaders[n].path) {
-							//console.log("Using nodent@",nodentLoaders[n].version,"to load",filename) ;
-							return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
-						}
-					}
-
-					var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-					var parseOpts = parseCompilerOptions(content,initOpts.log) ;
-					if (parseOpts) {
-						return stdCompiler(mod,filename,parseOpts) ;
-					}
-					return stdJSLoader(mod,filename) ;
-				}
-			} ;
 		}
 
 		/* If the initOpts specified a file extension, use this compiler for it */
 		if (initOpts.extension) {
-			if (Array.isArray(initOpts.extension)) {
-				initOpts.extension.forEach(registerExtension) ;
-			} else {
-				registerExtension(initOpts.extension) ;
-			}
-
-			function registerExtension(extension) {
-				 if (require.extensions[extension]) {
-					 var changedKeys = Object.keys(initOpts).filter(function(k){ return compiler[k] != initOpts[k]}) ;
-					 if (changedKeys.length) {
-						 initOpts.log("File extension "+extension+" already configured for async/await compilation.") ;
-					 }
-				 }
-				 require.extensions[extension] = compileNodentedFile(compiler,initOpts.log) ;
-			}
+			registerExtension(initOpts.extension) ;
 		}
 	}
 
@@ -863,34 +864,79 @@ initialize.Thenable = Thenable ;
 module.exports = initialize ;
 
 /* If invoked as the top level module, read the next arg and load it */
+function readStream(stream) {
+    return new Thenable(function ($return, $error) {
+        var buffer = [] ;
+        stream.on('data',function(data){
+            buffer.push(data)
+        }) ;
+        stream.on('end',function(){
+            var code = buffer.map(function(b){ return b.toString()}).join("") ;
+            return $return(code);
+        }) ;
+        stream.on('error',$error) ;
+    }.$asyncbind(this));
+}
+
+function getCLIOpts(start) {
+    var o = [] ;
+    for (var i=start || 2; i<process.argv.length; i++) {
+        if (process.argv[i].slice(0,2)==='--') {
+            var opt = process.argv[i].slice(2).split('=') ;
+            o[opt[0]] = opt[1] || true ;
+        }
+        else
+            o.push(process.argv[i]) ;
+    }
+    return o ;
+}
+
+function processInput(content){
+    var pr ;
+    var parseOpts ;
+
+    // Input options
+    cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+    if (cli.fromast) {
+        content = JSON.parse(content) ;
+        pr = { origCode:"", filename:filename, ast: content } ;
+        parseOpts = parseCompilerOptions(content,nodent.log) ;
+        if (!parseOpts) {
+            parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+            console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+        }
+    } else {
+        parseOpts = parseCompilerOptions(content,nodent.log) ;
+        if (!parseOpts) {
+            parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+            console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+        }
+        pr = nodent.parse(content,filename,parseOpts);
+    }
+
+    // Processing options
+    if (!cli.parseast && !cli.pretty)
+        nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
+
+    // Output options
+    nodent.prettyPrint(pr,parseOpts) ;
+    if (cli.out || cli.pretty) {
+        console.log(pr.code) ;
+    }
+    if (cli.minast || cli.parseast) {
+        console.log(JSON.stringify(pr.ast,function(key,value){
+            return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
+        },2,null)) ;
+    }
+    if (cli.ast) {
+        console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+    }
+    if (cli.exec) {
+        (new Function(pr.code))() ;
+    }
+}
+
 if (require.main===module && process.argv.length>=3) {
-	function readStream(stream) {
-		return new Thenable(function ($return, $error) {
-			var buffer = [] ;
-			stream.on('data',function(data){
-				buffer.push(data)
-			}) ;
-			stream.on('end',function(){
-				var code = buffer.map(function(b){ return b.toString()}).join("") ;
-	            return $return(code);
-			}) ;
-			stream.on('error',$error) ;
-	    }.$asyncbind(this));
-	}
-
-	function getCLIOpts(start) {
-		var o = [] ;
-		for (var i=start || 2; i<process.argv.length; i++) {
-			if (process.argv[i].slice(0,2)==='--') {
-				var opt = process.argv[i].slice(2).split('=') ;
-				o[opt[0]] = opt[1] || true ;
-			}
-			else
-				o.push(process.argv[i]) ;
-		}
-		return o ;
-	}
-
 	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
@@ -920,52 +966,6 @@ if (require.main===module && process.argv.length>=3) {
 		return readStream(process.stdin).then(processInput,globalErrorHandler) ;
 	} else {
 		filename = path.resolve(cli[0]) ;
-		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-		return processInput(content) ;
-	}
-
-	function processInput(content){
-		var pr ;
-		var parseOpts ;
-
-		// Input options
-		cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
-		if (cli.fromast) {
-			content = JSON.parse(content) ;
-			pr = { origCode:"", filename:filename, ast: content } ;
-			parseOpts = parseCompilerOptions(content,nodent.log) ;
-			if (!parseOpts) {
-				parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-				console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
-			}
-		} else {
-			parseOpts = parseCompilerOptions(content,nodent.log) ;
-			if (!parseOpts) {
-				parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-				console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
-			}
-			pr = nodent.parse(content,filename,parseOpts);
-		}
-
-		// Processing options
-		if (!cli.parseast && !cli.pretty)
-			nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-
-		// Output options
-		nodent.prettyPrint(pr,parseOpts) ;
-		if (cli.out || cli.pretty) {
-			console.log(pr.code) ;
-		}
-		if (cli.minast || cli.parseast) {
-			console.log(JSON.stringify(pr.ast,function(key,value){
-				return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
-			},2,null)) ;
-		}
-		if (cli.ast) {
-			console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-		}
-		if (cli.exec) {
-			(new Function(pr.code))() ;
-		}
+		return processInput(stripBOM(fs.readFileSync(filename, 'utf8'))) ;
 	}
 }
