@@ -217,6 +217,7 @@ function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
 }
 
 function compileNodentedFile(nodent,log) {
+    log = log || nodent.log ;
 	return function(mod, filename, parseOpts) {
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		var pr = nodent.parse(content,filename,parseOpts);
