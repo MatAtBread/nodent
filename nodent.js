@@ -559,7 +559,7 @@ function NodentCompiler(members) {
 }
 
 NodentCompiler.prototype.setOptions = function(members){
-	this.log = members.log || this.log || noLogger;
+	this.log = members.log===false?noLogger:members.log||this.log;
 	this.options = copyObj([this.options,members]) ;
 	delete this.options.log ;
 	return this ;

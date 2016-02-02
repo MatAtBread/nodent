@@ -761,8 +761,9 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-02-Feb-16 v2.3.12 v2.3.11
+02-Feb-16 v2.3.11-v2.3.13
 
+- Fix issue where different versions of nodent attempt to use different loggers
 - Fix typo in mapCondOp
 - Improve compiler performance (approx 25%)
 - Fix issues related to the generation of nested FunctionDeclarations in ES5-Strict mode
