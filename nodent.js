@@ -153,14 +153,13 @@ function stripBOM(content) {
 		content = content.slice(1);
 	}
 	if (content.substring(0,2) === "#!") {
-		content = content.slice(content.indexOf("\n"));
+		content = "//"+content ;
 	}
 	return content;
 }
 
 function btoa(str) {
 	var buffer ;
-
 	if (str instanceof Buffer) {
 		buffer = str;
 	} else {
