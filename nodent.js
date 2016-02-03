@@ -52,10 +52,6 @@ var initialCodeGenOpts = {
 	$arguments:"$args",
 	$asyncspawn:"$asyncspawn",
 	$asyncbind:"$asyncbind",
-	/* deprecated
-	bindAwait:"$asyncbind",
-	bindAsync:"$asyncbind",
-	bindLoop:"$asyncbind", */
 	generatedSymbolPrefix:"$",
 	$makeThenable:'$makeThenable'
 };
@@ -347,7 +343,7 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 
 function $asyncbind(self,catcher) {
 	var resolver = this ;
-	if (catcher) {
+	if (catcher && catcher !== true) {
 		if ($asyncbind.wrapAsyncStack)
 			catcher = $asyncbind.wrapAsyncStack(catcher) ;
 		var thenable = function thenable(result,error){
@@ -361,12 +357,36 @@ function $asyncbind(self,catcher) {
 		thenable.then = thenable ;
 		return thenable ;
 	} else {
-		var then = function(result,error) {
-			return resolver.call(self,result,error) ;
-		} ;
-		then.then = then ;
-		return then ;
+		if (catcher===true) {
+            var captureResult = resolveThen ;
+            var captureError = rejectThen ;
+            resolver.call(self,function(a){captureResult(a)},function(x){captureError(x)}) ;
+            return {then:settler}
+		} else {
+	        var then = function(result,error) {
+	            return resolver.call(self,result,error) ;
+	        } ;
+	        then.then = then ;
+	        return then ;
+		}
 	}
+    var result, settled = 0 ;
+    function resolveThen(a){
+        settled = 1 ;
+        result = a ;
+    }
+    function rejectThen(x){
+        settled = 2 ;
+        result = x ;
+    }
+    function settler(resolver,rejecter){
+        if (settled) {
+            (settled==1?resolver:rejecter)(result);    
+        } else {
+            captureResult = resolver ;
+            captureError = rejecter ;
+        }
+    }
 }
 
 function wrapAsyncStack(catcher) {

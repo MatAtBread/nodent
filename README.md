@@ -312,8 +312,6 @@ Differences from the ES7 specification
 
 * The `AsyncFunction` type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. 
 
-* In 'es7' mode, async invocations are not 'greedy' (as of the current version). Specifially, `myAsync()` without a preceding `await` returns a Thenable that has yet to execute, whereas in 'promise' (or generator) mode it returns a Promise that will have been started (and will complete) even though the result is unavailable. This mechanism allows non-async functions to invoke async functions for side effects, even though the result is unavailable to the caller. To fully comply with the ES7 specification, use 'promise' mode. The non-standard behaviour of 'es7' mode may be modified in future releases. The sequence `await myAsyncFunction()` behaves the same way in all cases, and so this deviation from the spec only applies to 'es7' mode where `await` has been omitted.
-
 All other JavaScript ES5/6/2015 constructs will be transformed as necessary to implement `async` and `await`.
 
 Returning async functions from callbacks
@@ -760,6 +758,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+04-Feb-16 v2.4.0
+
+- Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148)
+- Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager), this means that you can invoke an async function _without_ an `await` (simply by calling it as normal), but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This brings the semantics of all modes into compliance with the specification, but changes those of 'ES7' mode compared to versions prior to 2.3.x. Specifically calls to `myAsyncFunction()` in ES7 without an `await` _wouldn't actually execute the function body_, but would provide a Thenable that would. As of v2.4.0, the body is executed in any case, but without the `await` the result is not available.
 
 02-Feb-16 v2.3.11-v2.3.13
 
