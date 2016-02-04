@@ -4,7 +4,7 @@ module.exports = function(nodent,config) {
     config = config || {} ;
     if (!('promises' in config))
         config.promises = 'Promise' in global ;
-    if (!('log' in config))
+    if (!('log' in config) || config.log===false)
         config.log = Nothing ;
             
     function AsyncFunction() {
