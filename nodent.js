@@ -43,6 +43,8 @@ var config = {
 //		set within the directive as a JSON-encoded extension
 
 var initialCodeGenOpts = {
+    lazyThenables:false,
+    noUseDirective:false,
 	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
@@ -115,8 +117,12 @@ function parseCompilerOptions(code,log) {
 			}
 		}
 	}
-	if (!regex)
-		return null ;
+	if (!regex) {
+	    if (!defaultCodeGenOpts.noUseDirective)
+	        return null ;
+	    set = "default" ;
+	    regex = [null,null,"{}"] ;
+	}
 
 	if (set) {
 		try {
@@ -128,7 +134,7 @@ function parseCompilerOptions(code,log) {
 	try {
 		parseOpts = copyObj([optionSets[set],packageOptions,regex[2] && JSON.parse(regex[2])]);
 	} catch(ex) {
-		log("Invalid literal compiler option:"+regex[2]);
+		log("Invalid literal compiler option: "+((regex && regex[0]) || "<no options found>"));
 	}
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
@@ -358,10 +364,9 @@ function $asyncbind(self,catcher) {
 		return thenable ;
 	} else {
 		if (catcher===true) {
-            var captureResult = resolveThen ;
-            var captureError = rejectThen ;
-            resolver.call(self,function(a){captureResult(a)},function(x){captureError(x)}) ;
-            return {then:settler}
+		    var state = {then:settler,_thens:[[],[]]} ;
+            resolver.call(self,resolveThen,rejectThen) ;
+            return state ;
 		} else {
 	        var then = function(result,error) {
 	            return resolver.call(self,result,error) ;
@@ -370,21 +375,27 @@ function $asyncbind(self,catcher) {
 	        return then ;
 		}
 	}
-    var result, settled = 0 ;
-    function resolveThen(a){
-        settled = 1 ;
-        result = a ;
+
+    function release(f) { f(this) }
+    function resolveThen(x){
+        state.result = x ;
+        var c = state._thens[0] ;
+        delete state._thens ;
+        c.forEach(release,state.result) ;
     }
     function rejectThen(x){
-        settled = 2 ;
-        result = x ;
+        state.reject = true ;
+        state.result = x ;
+        var c = state._thens[1] ;
+        delete state._thens ;
+        c.forEach(release,state.result) ;
     }
     function settler(resolver,rejecter){
-        if (settled) {
-            (settled==1?resolver:rejecter)(result);    
+        if ('result' in state) {
+            (state.reject?rejecter:resolver)(state.result);    
         } else {
-            captureResult = resolver ;
-            captureError = rejecter ;
+            state._thens[0].push(resolver) ;
+            state._thens[1].push(rejecter) ;
         }
     }
 }
@@ -883,86 +894,92 @@ initialize.Thenable = Thenable ;
 
 module.exports = initialize ;
 
-/* If invoked as the top level module, read the next arg and load it */
-function readStream(stream) {
-    return new Thenable(function ($return, $error) {
-        var buffer = [] ;
-        stream.on('data',function(data){
-            buffer.push(data)
-        }) ;
-        stream.on('end',function(){
-            var code = buffer.map(function(b){ return b.toString()}).join("") ;
-            return $return(code);
-        }) ;
-        stream.on('error',$error) ;
-    }.$asyncbind(this));
-}
-
-function getCLIOpts(start) {
-    var o = [] ;
-    for (var i=start || 2; i<process.argv.length; i++) {
-        if (process.argv[i].slice(0,2)==='--') {
-            var opt = process.argv[i].slice(2).split('=') ;
-            o[opt[0]] = opt[1] || true ;
+function runFromCLI(){
+    function readStream(stream) {
+        return new Thenable(function ($return, $error) {
+            var buffer = [] ;
+            stream.on('data',function(data){
+                buffer.push(data)
+            }) ;
+            stream.on('end',function(){
+                var code = buffer.map(function(b){ return b.toString()}).join("") ;
+                return $return(code);
+            }) ;
+            stream.on('error',$error) ;
+        }.$asyncbind(this));
+    }
+    
+    function getCLIOpts(start) {
+        var o = [] ;
+        for (var i=start || 2; i<process.argv.length; i++) {
+            if (process.argv[i].slice(0,2)==='--') {
+                var opt = process.argv[i].slice(2).split('=') ;
+                o[opt[0]] = opt[1] || true ;
+            }
+            else
+                o.push(process.argv[i]) ;
         }
-        else
-            o.push(process.argv[i]) ;
+        return o ;
     }
-    return o ;
-}
-
-function processInput(content){
-    var pr ;
-    var parseOpts ;
-
-    // Input options
-    cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
-    if (cli.fromast) {
-        content = JSON.parse(content) ;
-        pr = { origCode:"", filename:filename, ast: content } ;
-        parseOpts = parseCompilerOptions(content,nodent.log) ;
-        if (!parseOpts) {
-            parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-            console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+    
+    function processInput(content){
+        var pr ;
+        var parseOpts ;
+    
+        // Input options
+        cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+        if (cli.fromast) {
+            content = JSON.parse(content) ;
+            pr = { origCode:"", filename:filename, ast: content } ;
+            parseOpts = parseCompilerOptions(content,nodent.log) ;
+            if (!parseOpts) {
+                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+            }
+        } else {
+            parseOpts = parseCompilerOptions(cli.use?cli.use:content,nodent.log) ;
+            if (!parseOpts) {
+                cli.use = "use nodent" ;
+                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+            }
+            pr = nodent.parse(content,filename,parseOpts);
         }
-    } else {
-        parseOpts = parseCompilerOptions(content,nodent.log) ;
-        if (!parseOpts) {
-            parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-            console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+    
+        // Processing options
+        if (!cli.parseast && !cli.pretty)
+            nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
+    
+        // Output options
+        nodent.prettyPrint(pr,parseOpts) ;
+        if (cli.out || cli.pretty) {
+            if (cli.runtime) {
+                console.log("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
+                console.log("global.$error = global.$error || "+global.$error.toString()+";\n") ;
+            }
+            console.log(pr.code) ;
         }
-        pr = nodent.parse(content,filename,parseOpts);
+        if (cli.minast || cli.parseast) {
+            console.log(JSON.stringify(pr.ast,function(key,value){
+                return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
+            },2,null)) ;
+        }
+        if (cli.ast) {
+            console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+        }
+        if (cli.exec) {
+            (new Function(pr.code))() ;
+        }
     }
-
-    // Processing options
-    if (!cli.parseast && !cli.pretty)
-        nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-
-    // Output options
-    nodent.prettyPrint(pr,parseOpts) ;
-    if (cli.out || cli.pretty) {
-        console.log(pr.code) ;
-    }
-    if (cli.minast || cli.parseast) {
-        console.log(JSON.stringify(pr.ast,function(key,value){
-            return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
-        },2,null)) ;
-    }
-    if (cli.ast) {
-        console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-    }
-    if (cli.exec) {
-        (new Function(pr.code))() ;
-    }
-}
-
-if (require.main===module && process.argv.length>=3) {
+    
 	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
 	initialize.setDefaultCompileOptions({
 		sourcemap:cli.sourcemap,
-		wrapAwait:cli.wrapAwait
+        wrapAwait:cli.wrapAwait,
+        lazyThenables:cli.lazyThenables,
+        noUseDirective:cli.use?true:false
 	});
 
 	var nodent = initialize({
@@ -976,7 +993,7 @@ if (require.main===module && process.argv.length>=3) {
 			var mod = path.resolve(cli[0]) ;
 			return require(mod);
 		} catch (ex) {
-			ex.message = cli[0]+": "+ex.message ;
+			ex && (ex.message = cli[0]+": "+ex.message) ;
 			throw ex ;
 		}
 	}
@@ -989,3 +1006,7 @@ if (require.main===module && process.argv.length>=3) {
 		return processInput(stripBOM(fs.readFileSync(filename, 'utf8'))) ;
 	}
 }
+
+if (require.main===module && process.argv.length>=3)
+    runFromCLI() ;
+
