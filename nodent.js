@@ -332,6 +332,16 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 			parser.treeWalker(r.ast,function(node,descend,path){
 				if (node.type==='Literal')
 					path[0].replace(treeSurgeon.babelLiteralNode(node.value)) ;
+				else if (node.type==='Property') {
+				    // Class/ObjectProperty in babel6
+				    if (path[0].parent.type==='ClassBody'){
+				        // There's no easy mapping here as it appears to be borderline in the specification?
+				        // It's definitely a kind of ClassProperty tho....
+                        node.type = 'ClassProperty' ;
+				    } else {
+				        node.type = 'ObjectProperty' ;
+				    }
+				}
 				descend() ;
 			}) ;
 		}
