@@ -386,19 +386,19 @@ function $asyncbind(self,catcher) {
 		}
 	}
 
-    function release(f) { f(this) }
+    function release(f) { f(this.result) }
     function resolveThen(x){
         state.result = x ;
         var c = state._thens[0] ;
         delete state._thens ;
-        c.forEach(release,state.result) ;
+        c.forEach(release,state) ;
     }
     function rejectThen(x){
         state.reject = true ;
         state.result = x ;
         var c = state._thens[1] ;
         delete state._thens ;
-        c.forEach(release,state.result) ;
+        c.forEach(release,state) ;
     }
     function settler(resolver,rejecter){
         if ('result' in state) {
