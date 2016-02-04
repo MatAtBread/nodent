@@ -1,14 +1,15 @@
 {
   "name": "nodent",
-  "version": "2.3.13",
+  "version": "2.4.0",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
+  	"cover": "istanbul cover ./nodent.js tests -- --quick --quiet --syntax --generators --forceStrict ; open ./coverage/lcov-report/index.html",
     "test": "./nodent.js tests --syntax --quick --quiet --generators",
     "start": "./nodent.js"
   },
   "dependencies": {
-    "acorn": "2.6.4",
+    "acorn": "2.7.0",
     "acorn-es7-plugin": "^1.0.11",
     "source-map": "0.5.3"
   },
