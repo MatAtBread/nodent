@@ -103,7 +103,25 @@ To generate a source-map in the output, use `--sourcemap`.
 
 	./nodent.js --sourcemap --out myNodentedFile.js
 
-The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replcaing the filename with `-`.
+The testing options `--parseast` and `--minast` output the source as parsed into the AST, before transformation and the minimal AST (without position information) respectively. The option `--pretty` outputs the source formatted by nodent before any syntax transformation. You can read the Javascript or JSON from stdin (i.e. piped) by omitting or replacing the filename with `-`.
+
+The full list of options is:
+|option|Description|
+|-------------------|--------------------------------------|
+| --fromast 		| Input is a JSON representation of an ESTree
+| --parseast 		| Parse the input and output the ES7 specification ESTree as JSON
+| --pretty 			| Parse the input and output the JS un-transformed
+| --out 			| Parse the input and output the transformed ES5/6 JS
+| --ast 			| Parse the input and output the transformed ES5/6 ESTree as JSON
+| --minast 			| Same as --ast, but omit all the source-mapping and location information from the tree 
+| --exec 			| Execute the transformed code
+| --sourcemap 		| Produce a source-map in the transformed code
+
+Code generation options:
+|option|Description|
+| --use==<mode> 	| Ignore any "use nodent" directive in the source file, and force <mode> = es7|promises|generators|default
+| --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#await-with-a-non-promise)
+| --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 
 Use within your Node scripts
 ============================
@@ -167,6 +185,7 @@ The currently supported options are:
 		generators:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
 		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
 		wrapAwait:<boolean>		// Allow 'await' on non-Promise expressions
+		lazyThenables:<boolean>	// Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
@@ -762,7 +781,7 @@ Changelog
 04-Feb-16 v2.4.0
 
 - Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148)
-- Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager), this means that you can invoke an async function _without_ an `await` (simply by calling it as normal), but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This brings the semantics of all modes into compliance with the specification, but changes those of 'ES7' mode compared to versions prior to 2.3.x. Specifically calls to `myAsyncFunction()` in ES7 without an `await` _wouldn't actually execute the function body_, but would provide a Thenable that would. As of v2.4.0, the body is executed in any case, but without the `await` the result is not available.
+- Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager). This means that you can invoke an async function _without_ a preceding `await` (simply by calling it as normal), but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This brings the semantics of all modes into compliance with the specification, but changes those of 'ES7' mode compared to versions prior to 2.3.x. Specifically calls to `myAsyncFunction()` without an `await` in v2.3.13 or earlier  _wouldn't actually execute the function body_, but would provide a Thenable that would. As of v2.4.0, the body is executed in any case, but without the `await` the result is not available. v2.4.0 will behave as earlier versions if you specify the code-generation option `lazyThenables`.
 
 02-Feb-16 v2.3.11-v2.3.13
 
