@@ -4,6 +4,7 @@
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
+  	"cover": "istanbul cover ./nodent.js tests -- --quick --quiet --syntax --generators --forceStrict ; open ./coverage/lcov-report/index.html",
     "test": "./nodent.js tests --syntax --quick --quiet --generators",
     "start": "./nodent.js"
   },
