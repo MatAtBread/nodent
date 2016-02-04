@@ -14,7 +14,8 @@ async function otherHalf(x) {
 async function test() {
     var a = half(10) ;
     var b = otherHalf(10) ;
-    return (await a + await a)===10 && (await b + await b)===10 ;
+    var f = (await a + await a)===10 && (await b + await b)===10 ;
+    return f ;
 }
 
 module.exports = test ;
