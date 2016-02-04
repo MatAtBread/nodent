@@ -780,7 +780,7 @@ Changelog
 
 04-Feb-16 v2.4.0
 
-- Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148)
+- Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148). This tightens up the parsing of some ES6 edge cases and could possibly [break](https://github.com/ternjs/acorn/pull/317) old ES5 sloppy mode code  
 - Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager). This means that you can invoke an async function _without_ a preceding `await` (simply by calling it as normal), but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This brings the semantics of all modes into compliance with the specification, but changes those of 'ES7' mode compared to versions prior to 2.3.x. Specifically calls to `myAsyncFunction()` without an `await` in v2.3.13 or earlier  _wouldn't actually execute the function body_, but would provide a Thenable that would. As of v2.4.0, the body is executed in any case, but without the `await` the result is not available. v2.4.0 will behave as earlier versions if you specify the code-generation option `lazyThenables`.
 
 02-Feb-16 v2.3.11-v2.3.13
