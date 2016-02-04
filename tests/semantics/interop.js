@@ -8,10 +8,15 @@ async function inter(i,j) {
 }
 
 async function test() {
-	return (await inter(0,0) +
+    var a = [inter(0,0),inter(0,1),inter(1,0),inter(1,1)] ;
+    
+    var multi = await a[0]+await a[0]+await a[1]+await a[1]+await a[2]+await a[2]+await a[3]+await a[3] ;
+	var single = (await inter(0,0) +
 		await inter(0,1) +
 		await inter(1,0) +
-		await inter(1,1)) == 4 ;
+		await inter(1,1)) ;
+
+	return single===4 && multi===8  ;
 }
 
 module.exports = test ;
