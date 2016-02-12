@@ -35,6 +35,7 @@ var providers = [] ;
 
 providers.push({name:'sample',p:null});
 providers.push({name:'nodent-es7',p:null});
+providers.push({name:'nodent.Eager',p:nodent.EagerThenable});
 providers.push({name:'nodent.Thenable',p:nodent.Thenable});
 if (global.Promise) {
     providers.push({name:'native',p:global.Promise}) ;

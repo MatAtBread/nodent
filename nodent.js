@@ -357,6 +357,46 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
+function EagerThenable(resolver) {
+    var state = function then(a,b) {
+        return settler.call(null,a,b) ;
+    } ;
+    state.valueOf = function(){
+        return "EagerThenable{"+('result' in state?((state.reject?"rejected":"resolved")+" "+state.result):"pending")+"}";
+     }
+    state.then = settler ;
+    state._thens = [[],[]] ;
+    resolver.call(null,resolveThen,rejectThen) ;
+    return state ;
+    
+    function release(f) { f(this.result) }
+    function resolveThen(x){
+        state.result = x ;
+        var c = state._thens[0] ;
+        delete state._thens ;
+        c.forEach(release,state) ;
+    }
+    function rejectThen(x){
+        state.reject = true ;
+        state.result = x ;
+        var c = state._thens[1] ;
+        delete state._thens ;
+        c.forEach(release,state) ;
+    }
+    function settler(resolver,rejecter){
+        if ('result' in state) {
+            (state.reject?rejecter:resolver)(state.result);    
+        } else {
+            state._thens[0].push(resolver) ;
+            state._thens[1].push(rejecter) ;
+        }
+    }
+}
+
+EagerThenable.resolve = function(v){
+    return ((v instanceof Object) && ('then' in v) && typeof v.then==="function")?v:{then:function(resolve){return resolve(v)}};
+};
+
 function $asyncbind(self,catcher) {
 	var resolver = this ;
 	if (catcher && catcher !== true) {
@@ -374,7 +414,11 @@ function $asyncbind(self,catcher) {
 		return thenable ;
 	} else {
 		if (catcher===true) {
-		    var state = {then:settler,_thens:[[],[]]} ;
+		    var state = function(a,b) {
+		        return settler.call(self,a,b) ;
+		    } ;
+		    state.then = settler ;
+		    state._thens = [[],[]] ;
             resolver.call(self,resolveThen,rejectThen) ;
             return state ;
 		} else {
@@ -607,6 +651,7 @@ NodentCompiler.prototype.setOptions = function(members){
 };
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
+NodentCompiler.prototype.EagerThenable =  EagerThenable ;
 NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
@@ -901,6 +946,7 @@ initialize.setCompileOptions = function(set,compiler) {
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
+initialize.EagerThenable = EagerThenable ;
 
 module.exports = initialize ;
 
