@@ -778,6 +778,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+01-Mar-16 v2.4.1
+
+- Significant improvement in compilation speed by re-factoring output.js (thanks to [@davidbonnet](https://github.com/davidbonnet) for pointing it out)
+- Update to acorn v3.0.4
+
 04-Feb-16 v2.4.0
 
 - Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148). This tightens up the parsing of some ES6 edge cases and could possibly [break](https://github.com/ternjs/acorn/pull/317) old ES5 sloppy mode code  
