@@ -358,18 +358,9 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 }
 
 function EagerThenable(resolver) {
-    var state = {} ;
-		function then(a,b) {
-        return settler.call(null,a,b) ;
-    } ;
-    state.valueOf = function(){
-        return "EagerThenable{"+('result' in state?((state.reject?"rejected":"resolved")+" "+state.result):"pending")+"}";
-     }
-    state.then = settler ;
-    state._thens = [[],[]] ;
-    resolver.call(null,resolveThen,rejectThen) ;
-    return state ;
-
+		function valueOfState(){
+        return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
+    }
     function release(f) { f(this.result) }
     function resolveThen(x){
         if (isThenable(x)){
@@ -398,6 +389,14 @@ function EagerThenable(resolver) {
             state._thens[1].push(rejecter) ;
         }
     }
+
+		var state = {
+			then:settler,
+			_thens:[[],[]],
+			valueOf:valueOfState
+		} ;
+    resolver.call(null,resolveThen,rejectThen) ;
+    return state ;
 }
 
 EagerThenable.resolve = function(v){
@@ -414,54 +413,50 @@ function $asyncbind(self,catcher) {
 		} catch (ex) {
 			return (error||catcher)(ex);
 		}
-	} ;
+	}
+	function lazyThen(result,error) {
+	  return resolver.call(self,result,error) ;
+  }
+	function release(f) { f(this.result) }
+	function resolveThen(x){
+			state.result = x ;
+			var c = state._thens[0] ;
+			delete state._thens ;
+			c.forEach(release,state) ;
+	}
+	function rejectThen(x){
+			state.reject = true ;
+			state.result = x ;
+			var c = state._thens[1] ;
+			delete state._thens ;
+			c.forEach(release,state) ;
+	}
+	function settler(resolver,rejecter){
+			if ('result' in state) {
+					(state.reject?rejecter:resolver)(state.result);
+			} else {
+					state._thens[0].push(resolver) ;
+					state._thens[1].push(rejecter) ;
+			}
+	}
 
 	if (catcher && catcher !== true) {
 		if ($asyncbind.wrapAsyncStack)
 			catcher = $asyncbind.wrapAsyncStack(catcher) ;
-//		var thenable = then ;
-//		thenable.then = then ;
-		return then ; //thenable ;//{then:then} ;
-	} else {
-		if (catcher===true) {
-		    var state = {};//function(a,b) {
-		        //return settler.call(self,a,b) ;
-		    //} ;
-		    state.then = settler ;
-		    state._thens = [[],[]] ;
-        resolver.call(self,resolveThen,rejectThen) ;
-        return state ;
-		} else {
-	      var then = function(result,error) {
-	            return resolver.call(self,result,error) ;
-	        } ;
-	        then.then = then ;
-	        return then ;
-		}
+		return then ;
 	}
 
-    function release(f) { f(this.result) }
-    function resolveThen(x){
-        state.result = x ;
-        var c = state._thens[0] ;
-        delete state._thens ;
-        c.forEach(release,state) ;
-    }
-    function rejectThen(x){
-        state.reject = true ;
-        state.result = x ;
-        var c = state._thens[1] ;
-        delete state._thens ;
-        c.forEach(release,state) ;
-    }
-    function settler(resolver,rejecter){
-        if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);
-        } else {
-            state._thens[0].push(resolver) ;
-            state._thens[1].push(rejecter) ;
-        }
-    }
+	if (catcher===true) {
+	    var state = {
+				then:settler,
+				_thens:[[],[]]
+			};
+      resolver.call(self,resolveThen,rejectThen) ;
+      return state ;
+	}
+
+	lazyThen.then = lazyThen ;
+  return lazyThen ;
 }
 
 function wrapAsyncStack(catcher) {
