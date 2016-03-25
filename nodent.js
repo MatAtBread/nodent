@@ -373,8 +373,8 @@ function EagerThenable(resolver) {
     function release(f) { f(this.result) }
     function resolveThen(x){
         if (isThenable(x)){
-	    return x.then(resolveThen,rejectThen) ;
-	}
+	        return x.then(resolveThen,rejectThen) ;
+	      }
         state.result = x ;
         var c = state._thens[0] ;
         delete state._thens ;
@@ -424,15 +424,15 @@ function $asyncbind(self,catcher) {
 		return then ; //thenable ;//{then:then} ;
 	} else {
 		if (catcher===true) {
-		    var state = function(a,b) {
-		        return settler.call(self,a,b) ;
-		    } ;
+		    var state = {};//function(a,b) {
+		        //return settler.call(self,a,b) ;
+		    //} ;
 		    state.then = settler ;
 		    state._thens = [[],[]] ;
-            resolver.call(self,resolveThen,rejectThen) ;
-            return state ;
+        resolver.call(self,resolveThen,rejectThen) ;
+        return state ;
 		} else {
-	        var then = function(result,error) {
+	      var then = function(result,error) {
 	            return resolver.call(self,result,error) ;
 	        } ;
 	        then.then = then ;
