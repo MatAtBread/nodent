@@ -68,7 +68,7 @@ function copyObj(a){
 	return o ;
 };
 
-var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ; 
+var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ;
 var optionSets = {
 	default:defaultCodeGenOpts,
 	es7:Object.create(defaultCodeGenOpts),
@@ -93,8 +93,8 @@ var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
 function noLogger(){}
 
 function isDirective(node){
-    return node.type === 'ExpressionStatement' && 
-        (node.expression.type === 'StringLiteral' || 
+    return node.type === 'ExpressionStatement' &&
+        (node.expression.type === 'StringLiteral' ||
             (node.expression.type === 'Literal' && typeof node.expression.value === 'string')) ;
 }
 
@@ -358,7 +358,8 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 }
 
 function EagerThenable(resolver) {
-    var state = function then(a,b) {
+    var state = {} ;
+		function then(a,b) {
         return settler.call(null,a,b) ;
     } ;
     state.valueOf = function(){
@@ -368,15 +369,21 @@ function EagerThenable(resolver) {
     state._thens = [[],[]] ;
     resolver.call(null,resolveThen,rejectThen) ;
     return state ;
-    
+
     function release(f) { f(this.result) }
     function resolveThen(x){
+        if (isThenable(x)){
+	    return x.then(resolveThen,rejectThen) ;
+	}
         state.result = x ;
         var c = state._thens[0] ;
         delete state._thens ;
         c.forEach(release,state) ;
     }
     function rejectThen(x){
+        if (isThenable(x)){
+            return x.then(resolveThen,rejectThen) ;
+        }
         state.reject = true ;
         state.result = x ;
         var c = state._thens[1] ;
@@ -385,7 +392,7 @@ function EagerThenable(resolver) {
     }
     function settler(resolver,rejecter){
         if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);    
+            (state.reject?rejecter:resolver)(state.result);
         } else {
             state._thens[0].push(resolver) ;
             state._thens[1].push(rejecter) ;
@@ -399,19 +406,22 @@ EagerThenable.resolve = function(v){
 
 function $asyncbind(self,catcher) {
 	var resolver = this ;
+
+	function then(result,error){
+		try {
+			return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
+				? result.then(then,catcher) : resolver.call(self,result,error||catcher);
+		} catch (ex) {
+			return (error||catcher)(ex);
+		}
+	} ;
+
 	if (catcher && catcher !== true) {
 		if ($asyncbind.wrapAsyncStack)
 			catcher = $asyncbind.wrapAsyncStack(catcher) ;
-		var thenable = function thenable(result,error){
-			try {
-				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
-					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
-			} catch (ex) {
-				return (error||catcher)(ex);
-			}
-		} ;
-		thenable.then = thenable ;
-		return thenable ;
+//		var thenable = then ;
+//		thenable.then = then ;
+		return then ; //thenable ;//{then:then} ;
 	} else {
 		if (catcher===true) {
 		    var state = function(a,b) {
@@ -446,7 +456,7 @@ function $asyncbind(self,catcher) {
     }
     function settler(resolver,rejecter){
         if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);    
+            (state.reject?rejecter:resolver)(state.result);
         } else {
             state._thens[0].push(resolver) ;
             state._thens[1].push(rejecter) ;
@@ -883,7 +893,7 @@ function initialize(initOpts){
         }
     	require.extensions[extension] = compileNodentedFile(compiler,initOpts.log) ;
     }
-        
+
     if (!initOpts.dontInstallRequireHook) {
 		if (!stdJSLoader) {
 			stdJSLoader = require.extensions['.js'] ;
@@ -964,7 +974,7 @@ function runFromCLI(){
             stream.on('error',$error) ;
         }.$asyncbind(this));
     }
-    
+
     function getCLIOpts(start) {
         var o = [] ;
         for (var i=start || 2; i<process.argv.length; i++) {
@@ -977,11 +987,11 @@ function runFromCLI(){
         }
         return o ;
     }
-    
+
     function processInput(content){
         var pr ;
         var parseOpts ;
-    
+
         // Input options
         cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
         if (cli.fromast) {
@@ -1001,11 +1011,11 @@ function runFromCLI(){
             }
             pr = nodent.parse(content,filename,parseOpts);
         }
-    
+
         // Processing options
         if (!cli.parseast && !cli.pretty)
             nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-    
+
         // Output options
         nodent.prettyPrint(pr,parseOpts) ;
         if (cli.out || cli.pretty) {
@@ -1027,7 +1037,7 @@ function runFromCLI(){
             (new Function(pr.code))() ;
         }
     }
-    
+
 	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
@@ -1065,4 +1075,3 @@ function runFromCLI(){
 
 if (require.main===module && process.argv.length>=3)
     runFromCLI() ;
-

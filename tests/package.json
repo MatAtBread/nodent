@@ -8,9 +8,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bluebird": "^3.0.6",
+    "bluebird": "^3.3.4",
     "colors": "^1.1.2",
-    "rsvp": "^3.1.0",
-    "when": "^3.7.5"
+    "rsvp": "^3.2.1",
+    "when": "^3.7.7"
   }
 }
