@@ -358,9 +358,6 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 }
 
 function EagerThenable(resolver) {
-		function valueOfState(){
-        return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
-    }
     function release(f) { f(this.result) }
 		function done(){
 			var c = state._thens[state.reject?1:0] ;
@@ -382,27 +379,28 @@ function EagerThenable(resolver) {
 				if (!state._sync)
 					done() ;
     }
-    function settler(resolver,rejecter){
-        if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);
-        } else {
-            state._thens[0].push(resolver) ;
-            state._thens[1].push(rejecter) ;
-        }
-    }
 
 		var state = this ;
-		state.then = settler,
-		state._thens = [[],[]] ;
-		state.valueOf = valueOfState ;
-		state._sync = true ;
+		this._thens = [[],[]] ;
+		this._sync = true ;
 
     resolver.call(null,resolveThen,rejectThen) ;
-		state._sync = false ;
-		if ('result' in state)
+		this._sync = this ;
+		if ('result' in this)
 				done() ;
-    return state ;
 }
+
+EagerThenable.prototype.then = function settler(resolver,rejecter){
+		if ('result' in this) {
+				(this.reject?rejecter:resolver)(this.result);
+		} else {
+				this._thens[0].push(resolver) ;
+				this._thens[1].push(rejecter) ;
+		}
+} ;
+EagerThenable.prototype.valueOf = function valueOf(){
+		return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
+} ;
 
 EagerThenable.resolve = function(v){
     return isThenable(v) ? v : {then:function(resolve,reject){return resolve(v)}};
@@ -549,13 +547,15 @@ function isThenable(obj) {
 
 /* NodentCompiler prototypes, that refer to 'this' */
 function requireCover(cover,opts) {
-	if (!this.covers[cover]) {
+	opts = opts || {} ;
+	var key = cover+'|'+Object.keys(opts).sort().reduce(function(a,k){ return a+k+JSON.stringify(opts[k])},"") ;
+	if (!this.covers[key]) {
 		if (cover.indexOf("/")>=0)
-			this.covers[cover] = require(cover) ;
+			this.covers[key] = require(cover) ;
 		else
-			this.covers[cover] = require("./covers/"+cover);
+			this.covers[key] = require("./covers/"+cover);
 	}
-	return this.covers[cover](this,opts) ;
+	return this.covers[key](this,opts) ;
 }
 
 function compile(code,origFilename,__sourceMapping,opts) {
@@ -1000,12 +1000,12 @@ function runFromCLI(){
         var parseOpts ;
 
         // Input options
-        cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
         if (cli.fromast) {
             content = JSON.parse(content) ;
             pr = { origCode:"", filename:filename, ast: content } ;
             parseOpts = parseCompilerOptions(content,nodent.log) ;
             if (!parseOpts) {
+							  cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
                 parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
                 console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
             }
