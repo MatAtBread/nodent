@@ -358,17 +358,20 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 }
 
 function EagerThenable(resolver) {
+		function valueOfState(){
+        return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
+    }
     function release(f) { f(this.result) }
 		function done(){
-			var c = state._thens[state.reject?1:0] ;
-			delete state._thens ;
+			var c = _thens[state.reject?1:0] ;
+			_thens = null ;
 			c.forEach(release,state) ;
 		}
     function resolveThen(x){
         if (isThenable(x))
 	        return x.then(resolveThen,rejectThen) ;
         state.result = x ;
-				if (!state._sync)
+				if (!_sync)
 					done() ;
     }
     function rejectThen(x){
@@ -376,31 +379,29 @@ function EagerThenable(resolver) {
             return x.then(resolveThen,rejectThen) ;
         state.reject = true ;
         state.result = x ;
-				if (!state._sync)
+				if (!_sync)
 					done() ;
     }
+    function settler(resolver,rejecter){
+        if ('result' in state) {
+            (state.reject?rejecter:resolver)(state.result);
+        } else {
+            _thens[0].push(resolver) ;
+            _thens[1].push(rejecter) ;
+        }
+    }
+
+		this.then = settler ;
 
 		var state = this ;
-		this._thens = [[],[]] ;
-		this._sync = true ;
-
+		var _thens = [[],[]] ;
+//		this.valueOf = valueOfState ;
+		var _sync = true ;
     resolver.call(null,resolveThen,rejectThen) ;
-		this._sync = this ;
+		_sync = false ;
 		if ('result' in this)
 				done() ;
 }
-
-EagerThenable.prototype.then = function settler(resolver,rejecter){
-		if ('result' in this) {
-				(this.reject?rejecter:resolver)(this.result);
-		} else {
-				this._thens[0].push(resolver) ;
-				this._thens[1].push(rejecter) ;
-		}
-} ;
-EagerThenable.prototype.valueOf = function valueOf(){
-		return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
-} ;
 
 EagerThenable.resolve = function(v){
     return isThenable(v) ? v : {then:function(resolve,reject){return resolve(v)}};
