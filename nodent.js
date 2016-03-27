@@ -393,10 +393,7 @@ function EagerThenable(resolver) {
 
 		this.then = settler ;
 
-		var state = this ;
-		var _thens = [[],[]] ;
-//		this.valueOf = valueOfState ;
-		var _sync = true ;
+		var state = this, _thens = [[],[]], _sync = true ;
     resolver.call(null,resolveThen,rejectThen) ;
 		_sync = false ;
 		if ('result' in this)
