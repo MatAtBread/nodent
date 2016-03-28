@@ -54,6 +54,7 @@ try {
 } catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
 try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
+try { providers.push({name:'promiscuous',p:require('promiscuous').Promise}) } catch (ex) { }
 
 var targetSamples = -1 ;
 var wrapAwait = false, showOutput = false, saveOutput = false,
@@ -150,7 +151,7 @@ var tests = process.argv.length>idx ?
 async function runTests() {
     for (var j=0; j<tests.length; j++) {
         var test = tests[j] ;
-        if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
+        if (!test.match(/.*\.js$/))
             continue ;
         if (notES6 && test.match(/es6-.*/)) {
             console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;

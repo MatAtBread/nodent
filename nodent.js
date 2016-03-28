@@ -357,53 +357,16 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
-function EagerThenable(resolver) {
-		function valueOfState(){
-        return "EagerThenable{"+('result' in this?((this.reject?"rejected":"resolved")+" "+this.result):"pending")+"}";
-    }
-    function release(f) { f(this.result) }
-		function done(){
-			var c = _thens[state.reject?1:0] ;
-			_thens = null ;
-			c.forEach(release,state) ;
-		}
-    function resolveThen(x){
-        if (isThenable(x))
-	        return x.then(resolveThen,rejectThen) ;
-        state.result = x ;
-				if (!_sync)
-					done() ;
-    }
-    function rejectThen(x){
-        if (isThenable(x))
-            return x.then(resolveThen,rejectThen) ;
-        state.reject = true ;
-        state.result = x ;
-				if (!_sync)
-					done() ;
-    }
-    function settler(resolver,rejecter){
-        if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);
-        } else {
-            _thens[0].push(resolver) ;
-            _thens[1].push(rejecter) ;
-        }
-    }
+/*
+$asyncbind has multple execution paths, determined by the arguments, to fulfil all runtime requirements in a single function
+so it can be serialized via toString() for transport to a browser. It is always called with this=Function (ie. it is attached
+to Function.prototype)
 
-		this.then = settler ;
-
-		var state = this, _thens = [[],[]], _sync = true ;
-    resolver.call(null,resolveThen,rejectThen) ;
-		_sync = false ;
-		if ('result' in this)
-				done() ;
-}
-
-EagerThenable.resolve = function(v){
-    return isThenable(v) ? v : {then:function(resolve,reject){return resolve(v)}};
-};
-
+The paths are:
+	$asyncbind(obj)												// Simply return this function bound to obj
+	$asyncbind(obj,true) 									// Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
+	$asyncbind(obj,function(exception){}) // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
+*/
 function $asyncbind(self,catcher) {
 	var resolver = this ;
 
@@ -666,7 +629,7 @@ NodentCompiler.prototype.setOptions = function(members){
 };
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable =  Thenable ;
-NodentCompiler.prototype.EagerThenable =  EagerThenable ;
+NodentCompiler.prototype.EagerThenable =  require('./lib/eager.js') ;
 NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
@@ -961,7 +924,7 @@ initialize.setCompileOptions = function(set,compiler) {
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
-initialize.EagerThenable = EagerThenable ;
+initialize.EagerThenable = require('./lib/eager.js') ;
 
 module.exports = initialize ;
 
