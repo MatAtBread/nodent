@@ -7,7 +7,8 @@ var msgs = [] ;
 var nodent = require('../nodent')({
     log:function(msg){ msgs.push(msg) }
 }) ;
-var Promise = nodent.Thenable ;
+var map = nodent.require('map');
+var Promise = global.Promise || nodent.EagerThenable() ;
 
 global.sleep = async function sleep(t) {
     setTimeout(function(){
@@ -34,7 +35,7 @@ var providers = [] ;
 
 providers.push({name:'nodent-es7',p:null});
 providers.push({name:'nodent.Thenable',p:nodent.Thenable});
-providers.push({name:'nodent.Eager',p:nodent.EagerThenable});
+providers.push({name:'nodent.Eager',p:nodent.EagerThenable()});
 if (global.Promise) {
     providers.push({name:'native',p:global.Promise}) ;
 }
@@ -56,8 +57,8 @@ try { providers.push({name:'promiscuous',p:require('promiscuous')}) } catch (ex)
 
 var targetSamples = -1 ;
 var wrapAwait = false, showOutput = false, saveOutput = false,
-    quiet = false, useGenerators = false, useGenOnly = false,
-    notES6 = false, syntaxTest = 0, forceStrict = "" ;
+quiet = false, useGenerators = false, useGenOnly = false,
+notES6 = false, syntaxTest = 0, forceStrict = "" ;
 var idx ;
 
 try {
@@ -124,66 +125,95 @@ if (syntaxTest) {
 }
 
 var files = (process.argv.length>idx ?
-        process.argv.slice(idx):
+    process.argv.slice(idx):
         fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn})).filter(function(n){ return n.match(/.*\.js$/)}) ;
 
 if (notES6) {
-  files = files.filter(function(n){
-    if (n.match(/es6-.*/)) {
-      console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
-      return false ;
-    }
-    return true ;
-  }) ;
+    files = files.filter(function(n){
+        if (n.match(/es6-.*/)) {
+            console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
+            return false ;
+        }
+        return true ;
+    }) ;
 }
 
+console.log("Compiling...");
 var tTotalCompilerTime = 0 ;
 var test = [] ;
 var i = 0 ;
 function time(hr) {
-  var t = process.hrtime(hr) ;
-  return (t[0]*1e9+t[1])/1e6 ;
+    var t = process.hrtime(hr) ;
+    return (t[0]*1e9+t[1])/1e6 ;
 }
+
+var types = ['es7','es7-wrapAwait','promises','promises-wrapAwait','generators','generators-wrapAwait']
+
 files.forEach(function(n){
-  test[i] = {name:n.split("/").pop().replace(/\.js$/,""),fn:[]} ;
-  var code = fs.readFileSync(n).toString() ;
-  for (var type=0; type<6; type++) {
-    var tCompiler = process.hrtime() ;
-    var pr = nodent.compile(forceStrict+code,n,showOutput?2:3,{
-        wrapAwait:type & 1,
-        es7:true,
-        promises:type & 2,
-        generators:type & 4
-    }).code ;
-    tTotalCompilerTime += time(tCompiler) ;
-    test[i].fn[type] = new Function("module","require","Promise","es7","nodent",pr) ;
-  }
-  i += 1 ;
-  if (showOutput)
-      console.log(pr) ;
+    test[i] = {name:n.split("/").pop().replace(/\.js$/,""),fn:[]} ;
+    var code = fs.readFileSync(n).toString() ;
+    for (var type=0; type<6; type++) {
+        var tCompiler = process.hrtime() ;
+        var pr = nodent.compile(forceStrict+code,n,showOutput?2:3,{
+            wrapAwait:type & 1,
+            es7:true,
+            promises:type & 2,
+            generators:type & 4
+        }).code ;
+        tTotalCompilerTime += time(tCompiler) ;
+        test[i].fn[type] = new Function("module","require","Promise","es7","nodent",pr) ;
+    }
+    i += 1 ;
+    if (showOutput)
+        console.log(pr) ;
 }) ;
+console.log("Total compile time:",tTotalCompilerTime,"ms");
 
 async function runTest(test,provider,type) {
-  var m = {}, result ;
-  test.fn[type](m,require,provider.p || nodent.Thenable,!(type & 2),nodent) ;
-  var t = process.hrtime() ;
-  try {
-    result = await m.exports() ;
-    if (result!=true) throw result;
-  } catch (ex) {
-    result = ex;
-  }
-  return {t:time(t),result:result} ;
+    var m = {}, result ;
+    test.fn[type](m,require,provider.p || nodent.Thenable,!(type & 2),nodent) ;
+    var t = process.hrtime() ;
+    try {
+        result = await m.exports() ;
+        if (result!=true) throw result;
+    } catch (ex) {
+        result = ex;
+    }
+    return {t:time(t),result:result} ;
 }
 
+var result, byType = {}, byProvider = {}, byTest = {} ;
 for (var i=0; i<test.length; i++) {
-  for (var j=0; j<providers.length; j++) {
-    for (var type=0; type<6; type++) {
-      var result = await runTest(test[i],providers[j],type) ;
-      console.log(test[i].name,i,j,type,providers[j].name,result) ;
+    for (var j=0; j<providers.length; j++) {
+        for (var type=(useGenOnly?4:0); type<(useGenerators?6:4); type++) {            
+            var t = 0, ticks = [] ;
+            // Warm up V8
+            result = await runTest(test[i],providers[j],type) ;
+            result = await runTest(test[i],providers[j],type) ;
+            while (t<100 || ticks.length<12) {
+                result = await runTest(test[i],providers[j],type) ;
+                ticks.push(result.t) ;
+                t += result.t ;
+            }
+            ticks = ticks.sort() ;
+            var median = ticks[ticks.length/2|0] ;
+            var metrics = [1000/median|0,median,ticks.length] ;
+
+            byType[types[type]] = byType[types[type]] || [] ;
+            byType[types[type]].push(metrics) ;
+
+            byProvider[providers[j].name] = byProvider[providers[j].name] || [] ;
+            byProvider[providers[j].name].push(metrics) ;
+
+            byTest[test[i].name] = byTest[test[i].name] || [] ;
+            byTest[test[i].name].push(metrics) ;
+        }
     }
-  }
 }
+
+console.log(byType);
+console.log(byProvider);
+
 /*
 var totalTime = providers.map(function(){ return 0 }) ;
 async function run(fn) {
@@ -297,5 +327,4 @@ async function runTests() {
 }
 
 console.log(pad("Implementation times:"),providers.map(function(p,i){ return pad(totalTime[i]+"ms")}).join(""));
-*/
-console.log("Total compile time:",tTotalCompilerTime,"ms");
+ */
