@@ -4,7 +4,6 @@
 var fs = require('fs') ;
 var path = require('path') ;
 var msgs = [] ;
-var tTotalCompilerTime = 0 ;
 var nodent = require('../nodent')({
     log:function(msg){ msgs.push(msg) }
 }) ;
@@ -33,10 +32,9 @@ global.breathe = async function breathe() {
 
 var providers = [] ;
 
-providers.push({name:'sample',p:null});
 providers.push({name:'nodent-es7',p:null});
-providers.push({name:'nodent.Eager',p:nodent.EagerThenable});
 providers.push({name:'nodent.Thenable',p:nodent.Thenable});
+providers.push({name:'nodent.Eager',p:nodent.EagerThenable});
 if (global.Promise) {
     providers.push({name:'native',p:global.Promise}) ;
 }
@@ -54,7 +52,7 @@ try {
 } catch (ex) { }
 try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
 try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
-try { providers.push({name:'promiscuous',p:require('promiscuous').Promise}) } catch (ex) { }
+try { providers.push({name:'promiscuous',p:require('promiscuous')}) } catch (ex) { }
 
 var targetSamples = -1 ;
 var wrapAwait = false, showOutput = false, saveOutput = false,
@@ -119,6 +117,75 @@ function pad(s) {
     return (s+"                        ").substring(0,24)
 }
 
+if (syntaxTest) {
+    require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):[__dirname+"/.."],true) ;
+    if (syntaxTest==1)
+        return ;
+}
+
+var files = (process.argv.length>idx ?
+        process.argv.slice(idx):
+        fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn})).filter(function(n){ return n.match(/.*\.js$/)}) ;
+
+if (notES6) {
+  files = files.filter(function(n){
+    if (n.match(/es6-.*/)) {
+      console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
+      return false ;
+    }
+    return true ;
+  }) ;
+}
+
+var tTotalCompilerTime = 0 ;
+var test = [] ;
+var i = 0 ;
+function time(hr) {
+  var t = process.hrtime(hr) ;
+  return (t[0]*1e9+t[1])/1e6 ;
+}
+files.forEach(function(n){
+  test[i] = {name:n.split("/").pop().replace(/\.js$/,""),fn:[]} ;
+  var code = fs.readFileSync(n).toString() ;
+  for (var type=0; type<6; type++) {
+    var tCompiler = process.hrtime() ;
+    var pr = nodent.compile(forceStrict+code,n,showOutput?2:3,{
+        wrapAwait:type & 1,
+        es7:true,
+        promises:type & 2,
+        generators:type & 4
+    }).code ;
+    tTotalCompilerTime += time(tCompiler) ;
+    test[i].fn[type] = new Function("module","require","Promise","es7","nodent",pr) ;
+  }
+  i += 1 ;
+  if (showOutput)
+      console.log(pr) ;
+}) ;
+
+async function runTest(test,provider,type) {
+  var m = {}, result ;
+  test.fn[type](m,require,provider.p || nodent.Thenable,!(type & 2),nodent) ;
+  var t = process.hrtime() ;
+  try {
+    result = await m.exports() ;
+    if (result!=true) throw result;
+  } catch (ex) {
+    result = ex;
+  }
+  return {t:time(t),result:result} ;
+}
+
+for (var i=0; i<test.length; i++) {
+  for (var j=0; j<providers.length; j++) {
+    for (var type=0; type<6; type++) {
+      var result = await runTest(test[i],providers[j],type) ;
+      console.log(test[i].name,i,j,type,providers[j].name,result) ;
+    }
+  }
+}
+/*
+var totalTime = providers.map(function(){ return 0 }) ;
 async function run(fn) {
     var tid = setTimeout(function(){
         var x = $error ;
@@ -136,27 +203,9 @@ async function run(fn) {
     })
 }
 
-if (syntaxTest) {
-    require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):[__dirname+"/.."],true) ;
-    if (syntaxTest==1)
-        return ;
-}
-
-var totalTime = providers.map(function(){ return 0 }) ;
-
-var tests = process.argv.length>idx ?
-        process.argv.slice(idx):
-        fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
-
 async function runTests() {
-    for (var j=0; j<tests.length; j++) {
-        var test = tests[j] ;
-        if (!test.match(/.*\.js$/))
-            continue ;
-        if (notES6 && test.match(/es6-.*/)) {
-            console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
-            continue ;
-        }
+    for (var j=0; j<files.length; j++) {
+        var test = files[j] ;
         var samples = targetSamples ;
         var timeBase = 0 ;
         var failed = false ;
@@ -247,6 +296,6 @@ async function runTests() {
     }
 }
 
-await runTests() ;
 console.log(pad("Implementation times:"),providers.map(function(p,i){ return pad(totalTime[i]+"ms")}).join(""));
+*/
 console.log("Total compile time:",tTotalCompilerTime,"ms");
