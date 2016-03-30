@@ -3,6 +3,7 @@
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs') ;
 var path = require('path') ;
+var color = require('colors') ;
 var msgs = [] ;
 var nodent = require('../nodent')({
     log:function(msg){ msgs.push(msg) }
@@ -147,19 +148,20 @@ function time(hr) {
     return (t[0]*1e9+t[1])/1e6 ;
 }
 
-var types = ['es7','es7-wrapAwait','promises','promises-wrapAwait','generators','generators-wrapAwait']
+var types = [] ;
 
 files.forEach(function(n){
     test[i] = {name:n.split("/").pop().replace(/\.js$/,""),fn:[]} ;
     var code = fs.readFileSync(n).toString() ;
-    for (var type=0; type<6; type++) {
+    for (var type=0; type<10; type++) {
+        var opts = { es7:true } ;
+        if (type & 1) opts.wrapAwait = true ;
+        if (type & 2) opts.lazyThenables = true ;
+        if (type & 4) opts.promises = true ;
+        if (type & 8) opts.generators = true ;
+        types[type] = Object.keys(opts).toString() ;
         var tCompiler = process.hrtime() ;
-        var pr = nodent.compile(forceStrict+code,n,showOutput?2:3,{
-            wrapAwait:type & 1,
-            es7:true,
-            promises:type & 2,
-            generators:type & 4
-        }).code ;
+        var pr = nodent.compile(forceStrict+code,n,showOutput?2:3,opts).code ;
         tTotalCompilerTime += time(tCompiler) ;
         test[i].fn[type] = new Function("module","require","Promise","es7","nodent",pr) ;
     }
@@ -171,7 +173,7 @@ console.log("Total compile time:",tTotalCompilerTime,"ms");
 
 async function runTest(test,provider,type) {
     var m = {}, result ;
-    test.fn[type](m,require,provider.p || nodent.Thenable,!(type & 2),nodent) ;
+    test.fn[type](m,require,provider.p,!(type & 2),nodent) ;
     var t = process.hrtime() ;
     try {
         result = await m.exports() ;
@@ -182,37 +184,68 @@ async function runTest(test,provider,type) {
     return {t:time(t),result:result} ;
 }
 
-var result, byType = {}, byProvider = {}, byTest = {} ;
-for (var i=0; i<test.length; i++) {
-    for (var j=0; j<providers.length; j++) {
-        for (var type=(useGenOnly?4:0); type<(useGenerators?6:4); type++) {            
-            var t = 0, ticks = [] ;
-            // Warm up V8
-            result = await runTest(test[i],providers[j],type) ;
-            result = await runTest(test[i],providers[j],type) ;
-            while (t<100 || ticks.length<12) {
-                result = await runTest(test[i],providers[j],type) ;
-                ticks.push(result.t) ;
-                t += result.t ;
-            }
-            ticks = ticks.sort() ;
-            var median = ticks[ticks.length/2|0] ;
-            var metrics = [1000/median|0,median,ticks.length] ;
+try {
+  var result, byType = {}, byProvider = {}, byTest = {}, table = [] ;
+  for (var i=0; i<test.length; i++) {
+      var benchmark = null ;
+      console.log(test[i].name) ;
+      for (var j=0; j<providers.length; j++) {
+          for (var type=(useGenOnly?8:0); type<(useGenerators?10:8); type++) {
+              var t = 0, ticks = [] ;
+              // Warm up V8
+              result = await runTest(test[i],providers[j],type) ;
+              if (result.result !== true) {
+                console.log(providers[j].name, types[type], test[i].name, result.result) ;
+                continue ;
+              }
+              result = await runTest(test[i],providers[j],type) ;
+              if (targetSamples===1)
+                continue ;
+              while (t<200 || ticks.length<21) {
+                  result = await runTest(test[i],providers[j],type) ;
+                  ticks.push(result.t) ;
+                  t += result.t ;
+              }
+              ticks = ticks.sort() ;
+              var median = ticks[ticks.length/2|0] ;
+              var metric = median ;
+              if (!benchmark) benchmark = metric ;
+              metric = metric/benchmark*100 ;
 
-            byType[types[type]] = byType[types[type]] || [] ;
-            byType[types[type]].push(metrics) ;
+              result = {value:result.result, metric:metric, provider:providers[j].name, type:types[type], test:test[i].name} ;
+              table.push(result) ;
 
-            byProvider[providers[j].name] = byProvider[providers[j].name] || [] ;
-            byProvider[providers[j].name].push(metrics) ;
+              byType[types[type]] = byType[types[type]] || [] ;
+              byType[types[type]].push(result) ;
 
-            byTest[test[i].name] = byTest[test[i].name] || [] ;
-            byTest[test[i].name].push(metrics) ;
-        }
-    }
+              byProvider[providers[j].name] = byProvider[providers[j].name] || [] ;
+              byProvider[providers[j].name].push(result) ;
+          }
+      }
+  }
+} catch (ex) {
+  console.error(ex.stack || ex) ;
 }
 
-console.log(byType);
-console.log(byProvider);
+function avg(by) {
+  return by.reduce(function(a,b){ return a+b.metric },0)/by.length;
+}
+
+function traffic(n) {
+  if (n<120) return (''+(n|0)).green ;
+  if (n<150) return (''+(n|0)).white ;
+  if (n<200) return (''+(n|0)).yellow ;
+  return (''+(n|0)).red ;
+}
+
+console.log('Compiler flags'.underline) ;
+Object.keys(byType).forEach(function(k){
+  console.log(k,traffic(avg(byType[k]))) ;
+}) ;
+console.log('Promise providers'.underline) ;
+Object.keys(byProvider).forEach(function(k){
+  console.log(k,traffic(avg(byProvider[k]))) ;
+}) ;
 
 /*
 var totalTime = providers.map(function(){ return 0 }) ;
