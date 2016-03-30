@@ -628,8 +628,8 @@ NodentCompiler.prototype.setOptions = function(members){
 	return this ;
 };
 NodentCompiler.prototype.version =  require("./package.json").version ;
-NodentCompiler.prototype.Thenable =  Thenable ;
-NodentCompiler.prototype.EagerThenable =  require('./lib/eager.js') ;
+NodentCompiler.prototype.Thenable = Thenable ;
+NodentCompiler.prototype.EagerThenable = require('./lib/eager.js') ;
 NodentCompiler.prototype.isThenable =  isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
