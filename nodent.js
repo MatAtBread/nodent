@@ -966,14 +966,14 @@ function runFromCLI(){
             pr = { origCode:"", filename:filename, ast: content } ;
             parseOpts = parseCompilerOptions(content,nodent.log) ;
             if (!parseOpts) {
-							  cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+				cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
                 parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
                 console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
             }
         } else {
             parseOpts = parseCompilerOptions(cli.use?cli.use:content,nodent.log) ;
             if (!parseOpts) {
-                cli.use = "use nodent" ;
+                cli.use = '"use nodent";' ;
                 parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
                 console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
             }
