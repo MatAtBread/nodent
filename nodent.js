@@ -12,6 +12,8 @@ var fs = require('fs') ;
 var outputCode = require('./lib/output') ;
 var parser = require('./lib/parser') ;
 var treeSurgeon = require('./lib/arboriculture') ;
+var Thenable = require('./lib/thenable') ;
+var isThenable = require('./lib/isThenable') ;
 
 // Config options used to control the run-time behaviour of the compiler
 var config = {
@@ -473,17 +475,6 @@ function $asyncspawn(promiseProvider,self) {
         }
         step(gen.next);
     });
-}
-
-function Thenable(thenable) {
-	return thenable.then = thenable ;
-};
-Thenable.resolve = function(v){
-	return ((v instanceof Object) && ('then' in v) && typeof v.then==="function")?v:{then:function(resolve){return resolve(v)}};
-};
-
-function isThenable(obj) {
-	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
 }
 
 /* NodentCompiler prototypes, that refer to 'this' */
