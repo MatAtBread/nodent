@@ -1,5 +1,5 @@
 if (!__nodent.wrapAwait)
-	module.exports = async function() { return 'n/a' ;}
+	module.exports = async function() { DoNotTest() }
 else {
 	async function inc(x) { return x+1 ; } 
 
