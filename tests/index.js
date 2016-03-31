@@ -185,7 +185,7 @@ files.forEach(function (n) {
 });
 console.log("Total compile time:", ((tTotalCompilerTime | 0) + "ms").yellow);
 if (useQuick) 
-    console.log('Timings with', '--quick'.yellow, 'are subject to significant GC jitter. Remove', '--quick'.yellow, 'for accurate timing comparison');
+    console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison'));
 if (promiseImpls == providers.length) 
     console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
 function DoNotTest() {

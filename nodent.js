@@ -495,16 +495,7 @@ function $asyncspawn(promiseProvider,self) {
     });
 }
 
-function Thenable(thenable) {
-	return thenable.then = thenable ;
-};
-Thenable.resolve = function(v){
-	return (v && (v instanceof Object) && ('then' in v) && typeof v.then==="function")?v:{then:function(resolve){return resolve(v)}};
-};
-
-function isThenable(obj) {
-	return obj && (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
-}
+var Thenable = require('./lib/thenable') ;
 
 /* NodentCompiler prototypes, that refer to 'this' */
 function requireCover(cover,opts) {
@@ -630,7 +621,7 @@ NodentCompiler.prototype.setOptions = function(members){
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable = Thenable ;
 NodentCompiler.prototype.EagerThenable = require('./lib/eager.js') ;
-NodentCompiler.prototype.isThenable =  isThenable ;
+NodentCompiler.prototype.isThenable = Thenable.isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
 NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
@@ -733,7 +724,7 @@ function setGlobalEnvironment(initOpts) {
 				configurable:true
 			},
 			"isThenable":{
-				value:function(){ return isThenable(this) },
+				value:function(){ return Thenable.isThenable(this) },
 				writable:true,
 				configurable:true
 			}
