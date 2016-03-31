@@ -1,4 +1,4 @@
-var fs = require('../../nodent').asyncify(Promise)(require('fs')) ;
+var fs = require('../../nodent').asyncify(Promise===DoNotTest?null:Promise)(require('fs')) ;
 
 var n = fs.readdirSync('.').length ;
 

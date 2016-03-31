@@ -98,8 +98,6 @@ for (; idx < process.argv.length; idx++) {
     var arg = process.argv[idx];
     if (arg == '--syntaxonly') 
         syntaxTest = 1;
-    //    else if (arg.match(/--await=/))
-    //        wrapAwait = arg.split("=")[1] ;
      else if (arg == '--syntax') {
         syntaxTest = 2;
     } else if (arg == '--generators' || arg == '--genonly') {
@@ -114,14 +112,8 @@ for (; idx < process.argv.length; idx++) {
             if (useGenOnly) 
                 process.exit(-1);
         }
-    /*    } else if (arg=='--output') {
-        showOutput = true ;
-        providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
-    } else if (arg=='--es7') {
-        showOutput = true ;
-        providers = [{name:'nodent-es7',p:null}] ;
-    } else if (arg=='--save') {
-        saveOutput = true ; */
+    } else if (arg == '--output' || arg == '--es7' || arg == '--save') {
+        console.log('Option '.grey+arg+' is deprecated and will be ignored.'.grey)
     } else if (arg == '--quiet') {
         quiet = true;
     } else if (arg == '--quick') {
@@ -133,7 +125,7 @@ for (; idx < process.argv.length; idx++) {
     }
 }
 function pad(s, n) {
-    return ("                        " + s).substr(-(n || 24));
+    return ("                                " + s).substr(-(n || 32));
 }
 
 if (syntaxTest) {
@@ -171,17 +163,19 @@ files.forEach(function (n) {
     };
     process.stdout.write('\r- Compiling ' + test[i].name + '                         \r');
     var code = fs.readFileSync(n).toString();
-    for (var type = 0;type < (useGenerators ? 10 : 8); type++) {
+    for (var type = 0;type < (useGenerators ? 12 : 8); type++) {
         var opts = {}; //  es7:true } ;
-        if (type & 1) 
-            opts.wrapAwait = true;
-        if (type & 2) 
+        if (!(type & 1)) 
             opts.lazyThenables = true;
+        if (type & 2) 
+            opts.wrapAwait = true;
         if (type & 4) 
             opts.promises = true;
         if (type & 8) 
             opts.generators = true;
-        types[type] = type ? Object.keys(opts).toString() : 'es7';
+        if (!(type & (4|8)))
+            opts.es7 = true;
+        types[type] = Object.keys(opts).toString() ;
         var tCompiler = process.hrtime();
         var pr = nodent.compile(forceStrict + code, n, opts).code;
         tTotalCompilerTime += time(tCompiler);
@@ -226,7 +220,7 @@ try {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
             process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + '                           \r');
-            for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 10 : 8); type++) {
+            for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
                 var ticks = [];
                 table[type] = table[type] || [];
                 table[type][j] = table[type][j] || [];
@@ -244,7 +238,7 @@ try {
                 var cond = useQuick ? function () {
                     return ticks.length < 2;
                 } : function () {
-                    return t < 80 || ticks.length < 12;
+                    return t < 100 || ticks.length < 20;
                 };
                 while (cond()) {
                     result = await runTest(test[i], providers[j], type);
@@ -273,6 +267,9 @@ try {
         }
     }
     function extract(a, field) {
+        if (!Array.isArray(a)) {
+            return NaN;
+        }
         return a.map(function (n) {
             return n[field];
         });
@@ -291,35 +288,37 @@ try {
     function traffic(n) {
         if (isNaN(n)) 
             return pad('-', 16).blue;
-        if (n < 60) 
-            return pad('' + (n | 0), 16).cyan;
         if (n < 120) 
             return pad('' + (n | 0), 16).green;
-        if (n < 150) 
-            return pad('' + (n | 0), 16).white;
         if (n < 200) 
+            return pad('' + (n | 0), 16).white;
+        if (n < 300) 
             return pad('' + (n | 0), 16).yellow;
         return pad('' + (n | 0), 16).red;
     }
     
+    debugger ;
     var n;
+    var fidx = Object.keys(table)[0] ;
     n = pad('') + pad('', 16);
-    for (i = 0; i < table[0].length; i++) {
+    for (i = 0; i < table[fidx].length; i++) {
         n += pad(providers[i].name, 16);
     }
     console.log(n);
     n = pad('Compiler flags') + pad('Mean', 16);
-    for (i = 0; i < table[0].length; i++) {
+    for (i = 0; i < table[fidx].length; i++) {
         n += traffic(avg(extract(byProvider[providers[i].name], 'metric')));
     }
     console.log(n.underline);
     for (i = 0; i < table.length; i++) {
         var typed = table[i];
-        n = pad(types[i]) + traffic(avg(extract(byType[types[i]], 'metric')));
-        for (j = 0; j < typed.length; j++) {
-            n += traffic(avg(typed[j]));
+        if (typed) {
+            n = pad(types[i]) + traffic(avg(extract(byType[types[i]], 'metric')));
+            for (j = 0; j < typed.length; j++) {
+                n += traffic(avg(typed[j]));
+            }
+            console.log(n);
         }
-        console.log(n);
     }
     console.log('');
 } catch (ex) {
