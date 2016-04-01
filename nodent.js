@@ -367,31 +367,31 @@ The paths are:
 	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
 	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
 */
-var $asyncbind = eval(("(function $asyncbind(self,catcher){                                             \n"+
-"   if (catcher===true) {                                                                               \n"+
-"       if (!Function.prototype.$asyncbind.EagerThenable)                                               \n"+
-"           Function.prototype.$asyncbind.EagerThenable = "+require('./lib/eager.js').toString()+"();   \n"+
-"       return new (Function.prototype.$asyncbind.EagerThenable)(this);                             \n"+
-"   }                                                                                               \n"+
-"   var resolver = this;                                                                            \n"+
-"   if (catcher) {                                                                                  \n"+
-"       if (Function.prototype.$asyncbind.wrapAsyncStack)                                           \n"+
-"           catcher = Function.prototype.$asyncbind.wrapAsyncStack(catcher);                        \n"+
-"       return then;                                                                                \n"+
-"   }                                                                                               \n"+
-"   function then(result,error){                                                                    \n"+
-"       try {                                                                                       \n"+
-"           return result && (result instanceof Object) && typeof result.then==='function'          \n"+
-"               ? result.then(then,catcher) : resolver.call(self,result,error||catcher);            \n"+
-"       } catch (ex) {                                                                              \n"+
-"           return (error||catcher)(ex);                                                            \n"+
-"       }                                                                                           \n"+
-"   }                                                                                               \n"+
-"   function boundThen(result,error) {                                                              \n"+
-"       return resolver.call(self,result,error);                                                    \n"+
-"   }                                                                                               \n"+
-"   boundThen.then = boundThen;                                                                     \n"+
-"   return boundThen;                                                                               \n"+
+var $asyncbind = eval(("(function $asyncbind(self,catcher){                                           \n"+
+"   var resolver = this;                                                                              \n"+
+"   if (catcher===true) {                                                                             \n"+
+"       if (!Function.prototype.$asyncbind.EagerThenable)                                             \n"+
+"           Function.prototype.$asyncbind.EagerThenable = "+require('./lib/eager.js').toString()+"(); \n"+
+"       return new (Function.prototype.$asyncbind.EagerThenable)(boundThen);                          \n"+
+"   }                                                                                                 \n"+
+"   if (catcher) {                                                                                    \n"+
+"       if (Function.prototype.$asyncbind.wrapAsyncStack)                                             \n"+
+"           catcher = Function.prototype.$asyncbind.wrapAsyncStack(catcher);                          \n"+
+"       return then;                                                                                  \n"+
+"   }                                                                                                 \n"+
+"   function then(result,error){                                                                      \n"+
+"       try {                                                                                         \n"+
+"           return result && (result instanceof Object) && typeof result.then==='function'            \n"+
+"               ? result.then(then,catcher) : resolver.call(self,result,error||catcher);              \n"+
+"       } catch (ex) {                                                                                \n"+
+"           return (error||catcher)(ex);                                                              \n"+
+"       }                                                                                             \n"+
+"   }                                                                                                 \n"+
+"   function boundThen(result,error) {                                                                \n"+
+"       return resolver.call(self,result,error);                                                      \n"+
+"   }                                                                                                 \n"+
+"   boundThen.then = boundThen;                                                                       \n"+
+"   return boundThen;                                                                                 \n"+
 "})").replace(/\s+/g,' ')) ;
 
 function wrapAsyncStack(catcher) {
