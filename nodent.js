@@ -394,7 +394,6 @@ var $asyncbind = eval(("(function $asyncbind(self,catcher){                     
 "   return boundThen;                                                                               \n"+
 "})").replace(/\s+/g,' ')) ;
 
-console.log($asyncbind.toString()) ;
 function wrapAsyncStack(catcher) {
 	var context = {} ;
 	Error.captureStackTrace(context,$asyncbind) ;
