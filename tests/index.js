@@ -209,6 +209,7 @@ async function runTest(test, provider, type) {
         result = ex;
     }
     return {
+        alwaysQuick: m.exports.alwaysQuick,
         t: time(t),
         result: result
     };
@@ -235,7 +236,7 @@ try {
                     continue;
                 }
                 var t = 0;
-                var cond = useQuick ? function () {
+                var cond = (result.alwaysQuick || useQuick) ? function () {
                     return ticks.length < 2;
                 } : function () {
                     return t < 100 || ticks.length < 20;

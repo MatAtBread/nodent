@@ -1,18 +1,15 @@
-
-/**
- * Create an instance of noDent friendly http with the API:
- * 		res <<== nodent.http.get(opts) ;
- * 			... set up some stuff with res...
- * 		undefined <<= res.wait('end') ;
- */
-
-module.exports = function(nodent) {
+module.exports = function(nodent,config) {
 	nodent.require('events') ;
-	var http = require('https') ;
+
+    if (!config) config = {} ;
+    if (!config.Promise)
+        config.Promise = global.Promise || require('../lib/thenable') ;
+    
+    var http = require('https') ;
 	var cover = Object.create(http) ;
 
 	cover.request = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (config.Promise)(function($return,$error){
 			var request = http.request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
@@ -26,7 +23,7 @@ module.exports = function(nodent) {
 	};
 	
 	cover.getBody = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (config.Promise)(function($return,$error){
 			http.get(opts,function(res){
 				try {
 					res.setEncoding('utf8');

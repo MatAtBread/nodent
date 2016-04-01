@@ -120,7 +120,7 @@ Code generation options:
 |option|Description|
 |-------|----------|
 | --use=_mode_ 		| Ignore any "use nodent" directive in the source file, and force compilation _mode_ to be `es7`,`promises`,`generators` or `default`
-| --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#await-with-a-non-promise)
+| --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#differences-from-the-es7-specification)
 | --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 
 Use within your Node scripts
@@ -193,7 +193,7 @@ At runtime (i.e. in the browser), you'll need to provide some support routines:
 
 * `Function.prototype.$asyncbind`
 * `Function.prototype.$asyncspawn` if you're using generators
-* `Object.$makeThenable` if you're using the `wrapAwait` option (see [await with a non-Promise](#await-with-a-non-promise)
+* `Object.$makeThenable` if you're using the `wrapAwait` option (see [await with a non-Promise](#differences-from-the-es7-specification)
 *  `wndow.$error` if you use await outside of an async function, to catch unhandled errors, for example:
 
 This are generated automatically in the transpiled files when you set the `runtime` option, and declared when Nodent is loaded (so they are already avaiable for use within Node).
@@ -450,7 +450,7 @@ The second set is defined per-file for each file that Nodent loads and compiles.
 |es7|boolean|set by the directive `use nodent-es7`
 |promises|boolean|set by the directive `use nodent-promises`
 |generators|boolean|set by the directive `use nodent-generators`
-|wrapAwait|boolean|default: false [more info...](#await-with-a-non-promise)
+|wrapAwait|boolean|default: false [more info...](#differences-from-the-es7-specification)
 |sourcemap|boolean|default:true - generate a source-map in the output JS
 |parser|object|default:{sourceType:'script'} - passed to [Acorn](https://github.com/ternjs/acorn) to control the parser
 |mapStartLine|int|default:0 - initial line number for the source-map
@@ -796,7 +796,8 @@ Changelog
 01-Apr-16 v2.5.0
 
 - Implement `nodent.EagerThenable()` to provide Promise-like (but unchainable) execution semantics (eager evaluation, asynchronous resolution)
-- Implement new test harness to collate performance by mode and Promise implemenation
+- Implement new test harness to collate performance by mode and Promise implementation
+- Allow optional passing of a Promise type to the covers http, https, map, events and movre Thenable to it's own fix to ease integration with Browserify or Webpack (specifically, these covers can be required directly as there is no hard dependancy on the 'nodent' parameter, and so no need to require the entire library into thebrowser). The default behaviour is now to use the global.Promise if present, or nodent.Thenable if not. 
 - Update README
 
 01-Mar-16 v2.4.1
