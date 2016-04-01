@@ -1,5 +1,5 @@
-"use nodent-es7";
-"use strict";
+'use nodent-es7 {"lazyThenables":true}';
+'use strict';
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs');
 var path = require('path');
@@ -8,6 +8,7 @@ var nodent = require('../nodent')({
     log: function (msg) {}
 });
 var map = nodent.require('map');
+var spaces = '                                                                 ' ;
 global.sleep = async function sleep(t) {
     setTimeout(function () {
         try {
@@ -220,7 +221,8 @@ try {
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
-            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + '                           \r');
+            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\r');
+            
             for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
                 var ticks = [];
                 table[type] = table[type] || [];
@@ -229,7 +231,7 @@ try {
                 result = await runTest(test[i], providers[j], type);
                 if (result.result !== true) {
                     if (result.result !== DoNotTest) {
-                        console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red);
+                        console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
                         type = 32767;
                         j = providers.length;
                     }
@@ -264,64 +266,83 @@ try {
                 byType[types[type]].push(result);
                 byProvider[providers[j].name] = byProvider[providers[j].name] || [];
                 byProvider[providers[j].name].push(result);
+
+            }
+            console.log(spaces+'\n') ;
+            var lines = 2+showPerformanceTable() ;
+            while (lines--) {
+                process.stdout.write('\u001B[1A') ;
             }
         }
     }
-    function extract(a, field) {
-        if (!Array.isArray(a)) {
-            return NaN;
+
+    process.stdout.write('\u001B['+type+'B') ;
+    console.log('\n\n\n\n') ;
+//    console.log(spaces+'\n') ;
+//    showPerformanceTable()
+
+    function showPerformanceTable() {
+        var i,j,lines = 0 ;
+        function log() {
+            console.log.apply(console,arguments) ;
+            lines++ ;
         }
-        return a.map(function (n) {
-            return n[field];
-        });
-    }
-    
-    function avg(by) {
-        if (!Array.isArray(by)) 
-            return NaN;
-        return by.filter(function (n) {
-            return typeof n === 'number';
-        }).reduce(function (a, b) {
-            return a + b;
-        }, 0) / by.length;
-    }
-    
-    function traffic(n) {
-        if (isNaN(n)) 
-            return pad('-', 16).blue;
-        if (n < 120) 
-            return pad('' + (n | 0), 16).green;
-        if (n < 200) 
-            return pad('' + (n | 0), 16).white;
-        if (n < 300) 
-            return pad('' + (n | 0), 16).yellow;
-        return pad('' + (n | 0), 16).red;
-    }
-    
-    debugger ;
-    var n;
-    var fidx = Object.keys(table)[0] ;
-    n = pad('') + pad('', 16);
-    for (i = 0; i < table[fidx].length; i++) {
-        n += pad(providers[i].name, 16);
-    }
-    console.log(n);
-    n = pad('Compiler flags') + pad('Mean', 16);
-    for (i = 0; i < table[fidx].length; i++) {
-        n += traffic(avg(extract(byProvider[providers[i].name], 'metric')));
-    }
-    console.log(n.underline);
-    for (i = 0; i < table.length; i++) {
-        var typed = table[i];
-        if (typed) {
-            n = pad(types[i]) + traffic(avg(extract(byType[types[i]], 'metric')));
-            for (j = 0; j < typed.length; j++) {
-                n += traffic(avg(typed[j]));
+        function extract(a, field) {
+            if (!Array.isArray(a)) {
+                return NaN;
             }
-            console.log(n);
+            return a.map(function (n) {
+                return n[field];
+            });
         }
+        
+        function avg(by) {
+            if (!Array.isArray(by)) 
+                return NaN;
+            return by.filter(function (n) {
+                return typeof n === 'number';
+            }).reduce(function (a, b) {
+                return a + b;
+            }, 0) / by.length;
+        }
+        
+        function traffic(n) {
+            if (isNaN(n)) 
+                return pad('-', 16).blue;
+            if (n < 120) 
+                return pad('' + (n | 0), 16).green;
+            if (n < 200) 
+                return pad('' + (n | 0), 16).white;
+            if (n < 300) 
+                return pad('' + (n | 0), 16).yellow;
+            return pad('' + (n | 0), 16).red;
+        }
+        
+        var n;
+        var fidx = Object.keys(table)[0] ;
+        n = pad('') + pad('', 16);
+        for (i = 0; i < table[fidx].length; i++) {
+            n += pad(providers[i].name, 16);
+        }
+        log(n);
+        n = pad('Compiler flags') + pad('Mean', 16);
+        for (i = 0; i < table[fidx].length; i++) {
+            n += traffic(avg(extract(byProvider[providers[i].name], 'metric')));
+        }
+        log(n.underline);
+        for (i = 0; i < table.length; i++) {
+            var typed = table[i];
+            if (typed) {
+                n = pad(types[i]) + traffic(avg(extract(byType[types[i]], 'metric')));
+                for (j = 0; j < typed.length; j++) {
+                    n += traffic(avg(typed[j]));
+                }
+                log(n);
+            }
+        }
+        log('');
+        return lines ;
     }
-    console.log('');
 } catch (ex) {
     console.error(ex.stack || ex);
 }
