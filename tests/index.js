@@ -236,11 +236,11 @@ try {
                     continue;
                 }
                 var t = 0;
-                var cond = (result.alwaysQuick || useQuick) ? function () {
+                var cond = result.alwaysQuick?function(){ return ticks.length < result.alwaysQuick } : ( useQuick ? function () {
                     return ticks.length < 2;
                 } : function () {
                     return t < 100 || ticks.length < 20;
-                };
+                });
                 while (cond()) {
                     result = await runTest(test[i], providers[j], type);
                     ticks.push(result.t);

@@ -4,4 +4,4 @@ module.exports = async function() {
     var s = await http.getBody('http://nodent.mailed.me.uk/echo?ok') ;
 	return s==="ok";
 }
-module.exports.alwaysQuick = true ;
+module.exports.alwaysQuick = 2 ;

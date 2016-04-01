@@ -363,73 +363,38 @@ so it can be serialized via toString() for transport to a browser. It is always 
 to Function.prototype)
 
 The paths are:
-	$asyncbind(obj)												// Simply return this function bound to obj
-	$asyncbind(obj,true) 									// Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
-	$asyncbind(obj,function(exception){}) // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
+	$asyncbind(obj)							 // Simply return this function bound to obj
+	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
+	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
 */
-function $asyncbind(self,catcher) {
-	var resolver = this ;
+var $asyncbind = eval(("(function $asyncbind(self,catcher){                                             \n"+
+"   if (catcher===true) {                                                                               \n"+
+"       if (!Function.prototype.$asyncbind.EagerThenable)                                               \n"+
+"           Function.prototype.$asyncbind.EagerThenable = "+require('./lib/eager.js').toString()+"();   \n"+
+"       return new (Function.prototype.$asyncbind.EagerThenable)(this);                             \n"+
+"   }                                                                                               \n"+
+"   var resolver = this;                                                                            \n"+
+"   if (catcher) {                                                                                  \n"+
+"       if (Function.prototype.$asyncbind.wrapAsyncStack)                                           \n"+
+"           catcher = Function.prototype.$asyncbind.wrapAsyncStack(catcher);                        \n"+
+"       return then;                                                                                \n"+
+"   }                                                                                               \n"+
+"   function then(result,error){                                                                    \n"+
+"       try {                                                                                       \n"+
+"           return result && (result instanceof Object) && typeof result.then==='function'          \n"+
+"               ? result.then(then,catcher) : resolver.call(self,result,error||catcher);            \n"+
+"       } catch (ex) {                                                                              \n"+
+"           return (error||catcher)(ex);                                                            \n"+
+"       }                                                                                           \n"+
+"   }                                                                                               \n"+
+"   function boundThen(result,error) {                                                              \n"+
+"       return resolver.call(self,result,error);                                                    \n"+
+"   }                                                                                               \n"+
+"   boundThen.then = boundThen;                                                                     \n"+
+"   return boundThen;                                                                               \n"+
+"})").replace(/\s+/g,' ')) ;
 
-	function then(result,error){
-		try {
-			return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
-				? result.then(then,catcher) : resolver.call(self,result,error||catcher);
-		} catch (ex) {
-			return (error||catcher)(ex);
-		}
-	}
-	function boundThen(result,error) {
-	  return resolver.call(self,result,error) ;
-  }
-	function release(f) { f(this.result) }
-	function done(){
-		var c = state._thens[state.reject?1:0] ;
-		delete state._thens ;
-		c.forEach(release,state) ;
-	}
-	function resolveThen(x){
-			state.result = x ;
-			if (!state._sync)
-				done() ;
-	}
-	function rejectThen(x){
-			state.reject = true ;
-			state.result = x ;
-			if (!state._sync)
-				done() ;
-	}
-	function settler(resolver,rejecter){
-			if ('result' in state) {
-					(state.reject?rejecter:resolver)(state.result);
-			} else {
-					state._thens[0].push(resolver) ;
-					state._thens[1].push(rejecter) ;
-			}
-	}
-
-	if (catcher) {
-		if (catcher===true) {
-		    var state = {
-					then:settler,
-					_thens:[[],[]],
-					_sync:true
-				};
-	      resolver.call(self,resolveThen,rejectThen) ;
-				state._sync = false ;
-				if ('result' in state)
-					done() ;
-	      return state ;
-		}
-
-		if ($asyncbind.wrapAsyncStack)
-			catcher = $asyncbind.wrapAsyncStack(catcher) ;
-		return then ;
-	}
-
-	boundThen.then = boundThen ;
-  return boundThen ;
-}
-
+console.log($asyncbind.toString()) ;
 function wrapAsyncStack(catcher) {
 	var context = {} ;
 	Error.captureStackTrace(context,$asyncbind) ;
