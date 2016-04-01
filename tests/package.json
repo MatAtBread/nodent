@@ -1,16 +1,23 @@
 {
   "name": "nodent-tests",
-  "description": "",
+  "description": "A suite of tests to check the syntax (parser & out), semantics (operation & execution) and performance of nodent",
   "main": "index.js",
   "scripts": {
     "test": "cd .. && npm test"
   },
+  "repository": {
+      "type": "git",
+      "url": "https://github.com/MatAtBread/nodent.git"
+    },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bluebird": "^3.0.6",
-    "colors": "^1.1.2",
-    "rsvp": "^3.1.0",
-    "when": "^3.7.5"
+      "colors": "^1.1.2"
+  },
+  "devDependencies": {
+    "bluebird": "^3.3.4",
+    "promiscuous": "^0.6.0",
+    "rsvp": "^3.2.1",
+    "when": "^3.7.7"
   }
 }

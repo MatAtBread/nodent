@@ -1,11 +1,11 @@
 {
   "name": "nodent",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
     "cover": "istanbul cover ./nodent.js tests -- --quick --quiet --syntax --generators --forceStrict ; open ./coverage/lcov-report/index.html",
-    "test": "./nodent.js tests --syntax --quick --quiet --generators",
+    "test": "cd tests && npm i --prod && cd .. && ./nodent.js tests --syntax --quick --quiet --generators",
     "start": "./nodent.js"
   },
   "dependencies": {

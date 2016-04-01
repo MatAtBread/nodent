@@ -1,8 +1,8 @@
 /**
  * Create an instance of noDent friendly http with the API:
- * 		res <<== nodent.http.get(opts) ;
+ * 		res = await nodent.http.get(opts) ;
  * 			... set up some stuff with res...
- * 		undefined <<= res.wait('end') ;
+ * 		await res.wait('end') ;
  */
 
 module.exports = function(nodent,config) {
@@ -10,7 +10,12 @@ module.exports = function(nodent,config) {
 	var protos = {http:require('http')} ;
 	var cover = Object.create(protos.http) ;
 	var protocol ;
-	if (config && config.autoProtocol) {
+	
+    if (!config) config = {} ;
+    if (!config.Promise)
+        config.Promise = global.Promise || require('../lib/thenable') ;
+
+	if (config.autoProtocol) {
 		protos.https = require('https') ;
 		protocol = function(opts){
 			var p ;
@@ -27,7 +32,7 @@ module.exports = function(nodent,config) {
 	}
 
 	cover.request = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (opts.Promise)(function($return,$error){
 			var request = protocol(opts).request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
@@ -35,13 +40,13 @@ module.exports = function(nodent,config) {
 	};
 
 	cover.get = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (config.Promise)(function($return,$error){
 			protocol(opts).get(opts,$return).on('error',$error) ;
 		}) ;
 	};
 
 	cover.getBody = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (config.Promise)(function($return,$error){
 			protocol(opts).get(opts,function(res){
 				try {
 					var enc = "utf8" ;

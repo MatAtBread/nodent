@@ -1,14 +1,14 @@
 async function test(doThrow) {
 	var s = "" ;
 	try {
-		await sleep(10) ;
+		await sleep(1) ;
 		s = "A" ;
-		await sleep(20) ;
+		await sleep(2) ;
 		s = "B" ;
 		if (doThrow) {
 			JSON.parse("*");
 		}
-		await sleep(30) ;
+		await sleep(3) ;
 		s = "C" ;
 	} catch (ex) {
 		return "X" ;

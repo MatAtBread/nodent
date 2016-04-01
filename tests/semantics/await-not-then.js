@@ -4,5 +4,5 @@ if (__nodent.wrapAwait) {
 		return 'abc' === await 'abc' ;
 	} ;
 } else {
-	module.exports = async function() { return 'n/a' } ;
+	module.exports = async function() { DoNotTest() } ;
 }

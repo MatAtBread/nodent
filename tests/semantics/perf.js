@@ -4,10 +4,7 @@ async function add(a,b) {
 
 async function test() {
   var x = 0 ;
-  for (var n=0;n<10000;n++) {
-    if (!(n&511)) {
-        await breathe() ;
-    }
+  for (var n=0;n<1000;n++) {
     x = await add(x,1) ;
   }
   return n-x ;

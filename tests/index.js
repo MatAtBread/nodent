@@ -1,244 +1,349 @@
-"use nodent-promise";
-
+'use nodent-es7 {"lazyThenables":true}';
+'use strict';
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
-var fs = require('fs') ;
-var path = require('path') ;
-var msgs = [] ;
-var tTotalCompilerTime = 0 ;
+var fs = require('fs');
+var path = require('path');
+var color = require('colors');
 var nodent = require('../nodent')({
-    log:function(msg){ msgs.push(msg) }
-}) ;
-var Promise = nodent.Thenable ;
-
+    log: function (msg) {}
+});
+var map = nodent.require('map');
+var spaces = '                                                                 ' ;
 global.sleep = async function sleep(t) {
-    setTimeout(function(){
+    setTimeout(function () {
         try {
-            async return undefined ;
+             async return undefined;
         } catch (ex) {
-            async throw ex ;
+             async throw ex;
         }
-    },t) ;
-}
-
+    }, t);
+};
 global.breathe = async function breathe() {
-    var t = Date.now() ;
-    setImmediate(function(){
+    var t = Date.now();
+    setImmediate(function () {
         try {
-            async return (Date.now()-t) ;
+             async return Date.now() - t;
         } catch (ex) {
-            async throw (ex) ;
+             async throw ex;
         }
-    }) ;
-}
-
-var providers = [] ;
-
-providers.push({name:'sample',p:null});
-providers.push({name:'nodent-es7',p:null});
-providers.push({name:'nodent.Thenable',p:nodent.Thenable});
+    });
+};
+var providers = [];
+providers.push({
+    name: '(none)',
+    p: null
+});
+providers.push({
+    name: 'nodent.Thenable',
+    p: nodent.Thenable
+});
+providers.push({
+    name: 'nodent.Eager',
+    p: nodent.EagerThenable()
+});
 if (global.Promise) {
-    providers.push({name:'native',p:global.Promise}) ;
+    providers.push({
+        name: 'native',
+        p: global.Promise
+    });
+}
+function makePromiseCompliant(module, promise, resolve) {
+    var p = module[promise];
+    p.resolve = module[resolve];
+    return p;
 }
 
-function makePromiseCompliant(module,promise,resolve) {
-    var p = module[promise] ;
-    p.resolve = module[resolve] ;
-    return p ;
-}
-
+var promiseImpls = providers.length;
 try {
     var bluebird = require('bluebird');
-    bluebird.config({ warnings: false });
-    providers.push({name:'bluebird',p:bluebird});
-} catch (ex) { }
-try { providers.push({name:'rsvp',p:require('rsvp').Promise}) } catch (ex) { }
-try { providers.push({name:'when',p:makePromiseCompliant(require('when'),'promise','resolve')}) } catch (ex) { }
-
-var targetSamples = -1 ;
-var wrapAwait = false, showOutput = false, saveOutput = false, 
-    quiet = false, useGenerators = false, useGenOnly = false, 
-    notES6 = false, syntaxTest = 0, forceStrict = "" ;
-var idx ;
-
+    bluebird.config({
+        warnings: false
+    });
+    providers.push({
+        name: 'bluebird',
+        p: bluebird
+    });
+} catch (ex) {}
 try {
-    eval("x=>0") ;
+    providers.push({
+        name: 'rsvp',
+        p: require('rsvp').Promise
+    });
+} catch (ex) {}
+try {
+    providers.push({
+        name: 'when',
+        p: makePromiseCompliant(require('when'), 'promise', 'resolve')
+    });
+} catch (ex) {}
+try {
+    providers.push({
+        name: 'promiscuous',
+        p: require('promiscuous')
+    });
+} catch (ex) {}
+var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0, forceStrict = "";
+var idx;
+try {
+    eval("x=>0");
 } catch (ex) {
-    notES6 = true ;
+    notES6 = true;
 }
-
-for (idx=0; idx<process.argv.length; idx++) {
-    var fqPath = path.resolve(process.argv[idx]) ; 
-    if (fqPath == __filename || fqPath == __dirname)
-        break ;
+for (idx = 0; idx < process.argv.length; idx++) {
+    var fqPath = path.resolve(process.argv[idx]);
+    if (fqPath == __filename || fqPath == __dirname) 
+        break;
 }
-
-idx += 1 ;
-
-for (;idx < process.argv.length; idx++) {
-    var arg = process.argv[idx] ;
-    if (arg=='--syntaxonly')
-        syntaxTest = 1 ;
-    else if (arg.match(/--await=/))
-        wrapAwait = arg.split("=")[1] ;
-    else if (arg=='--syntax') {
-        syntaxTest = 2 ;
-    } else if (arg=='--generators' || arg=='--genonly') {
+idx += 1;
+for (; idx < process.argv.length; idx++) {
+    var arg = process.argv[idx];
+    if (arg == '--syntaxonly') 
+        syntaxTest = 1;
+     else if (arg == '--syntax') {
+        syntaxTest = 2;
+    } else if (arg == '--generators' || arg == '--genonly') {
         try {
-            useGenOnly = arg=='--genonly' ;
-            eval("var temp = new Promise(function(){}) ; function* x(){ return }") ;
-            useGenerators = true ;
-            if (useGenOnly)
-                providers.splice(1,1) ;
+            useGenOnly = arg == '--genonly';
+            eval("var temp = new Promise(function(){}) ; function* x(){ return }");
+            useGenerators = true;
+            if (useGenOnly) 
+                providers.splice(1, 1);
         } catch (ex) {
-            console.warn("OOPS! Installed platform does not support Promises or Generators - skipping some tests") ;
-            if (useGenOnly)
+            console.warn("OOPS! Installed platform does not support Promises or Generators - skipping some tests");
+            if (useGenOnly) 
                 process.exit(-1);
         }
-    } else if (arg=='--output') {
-        showOutput = true ;
-        providers = [{name:'nodent.Thenable',p:nodent.Thenable}] ;
-    } else if (arg=='--es7') {
-        showOutput = true ;
-        providers = [{name:'nodent-es7',p:null}] ;
-    } else if (arg=='--save') {
-        saveOutput = true ;
-    } else if (arg=='--quiet') {
-        quiet = true ;
-    } else if (arg=='--quick') {
-        targetSamples = 1 ;
-    } else if (arg=='--forceStrict') {
-        forceStrict = "'use strict';\n" ;
+    } else if (arg == '--output' || arg == '--es7' || arg == '--save') {
+        console.log('Option '.grey+arg+' is deprecated and will be ignored.'.grey)
+    } else if (arg == '--quiet') {
+        quiet = true;
+    } else if (arg == '--quick') {
+        useQuick = true;
+    } else if (arg == '--forceStrict') {
+        forceStrict = "'use strict';\n";
     } else {
-        break ;
+        break;
     }
 }
-
-function pad(s) {
-    return (s+"                        ").substring(0,24)
-}
-
-async function run(fn) {
-    var tid = setTimeout(function(){
-        var x = $error ;
-        $return = null ;
-        $error = null ;
-        return x(new Error("timeout")) ;
-    },5000) ;
-
-    fn.then(function(r){
-        tid && clearTimeout(tid) ;
-        return $return && $return(r) ;
-    },function(ex){
-        tid && clearTimeout(tid) ;
-        return $error && $error(ex) ;
-    })
+function pad(s, n) {
+    return ("                                " + s).substr(-(n || 32));
 }
 
 if (syntaxTest) {
-    require('./test-syntax').testFiles(process.argv.length>idx ? process.argv.slice(idx):[__dirname+"/.."],true) ;
-    if (syntaxTest==1)
-        return ;
+    require('./test-syntax').testFiles(process.argv.length > idx ? process.argv.slice(idx) : [__dirname + "/.."], true);
+    if (syntaxTest == 1) 
+        return;
 }
-var tests = process.argv.length>idx ?
-        process.argv.slice(idx):
-            fs.readdirSync('./tests/semantics').map(function(fn){ return './tests/semantics/'+fn}) ;
+var files = (process.argv.length > idx ? process.argv.slice(idx) : fs.readdirSync('./tests/semantics').map(function (fn) {
+    return './tests/semantics/' + fn;
+})).filter(function (n) {
+    return n.match(/.*\.js$/);
+});
+if (notES6) {
+    files = files.filter(function (n) {
+        if (n.match(/es6-.*/)) {
+            console.log(n.split("/").pop() + " (skipped - ES6 platform not installed)".yellow);
+            return false;
+        }
+        return true;
+    });
+}
+var tTotalCompilerTime = 0;
+var test = [];
+var i = 0;
+function time(hr) {
+    var t = process.hrtime(hr);
+    return t[0] * 1000 + t[1] / 1e6;
+}
 
-        async function runTests() {
-            for (var j=0; j<tests.length; j++) {
-                var test = tests[j] ;
-                if (test.match(/tests\/index.js$/) || !test.match(/.*\.js$/))
-                    continue ;
-                if (notES6 && test.match(/es6-.*/)) {
-                    console.log(pad(test.split("/").pop())+" (skipped - ES6 platform not installed)") ;
-                    continue ;
+var types = [];
+files.forEach(function (n) {
+    test[i] = {
+        name: n.split("/").pop().replace(/\.js$/, ""),
+        fn: []
+    };
+    process.stdout.write('\r- Compiling ' + test[i].name + '                         \r');
+    var code = fs.readFileSync(n).toString();
+    for (var type = 0;type < (useGenerators ? 12 : 8); type++) {
+        var opts = {}; //  es7:true } ;
+        if (!(type & 1)) 
+            opts.lazyThenables = true;
+        if (type & 2) 
+            opts.wrapAwait = true;
+        if (type & 4) 
+            opts.promises = true;
+        if (type & 8) 
+            opts.generators = true;
+        if (!(type & (4|8)))
+            opts.es7 = true;
+        types[type] = Object.keys(opts).toString() ;
+        var tCompiler = process.hrtime();
+        var pr = nodent.compile(forceStrict + code, n, opts).code;
+        tTotalCompilerTime += time(tCompiler);
+        test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+    }
+    i += 1;
+});
+console.log("Total compile time:", ((tTotalCompilerTime | 0) + "ms").yellow);
+if (useQuick) 
+    console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison'));
+if (promiseImpls == providers.length) 
+    console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
+function DoNotTest() {
+    throw DoNotTest;
+}
+
+async function runTest(test, provider, type) {
+    if (provider.p && !(type & (4 | 8))) 
+        return {
+        result: DoNotTest
+    };
+    await breathe();
+    var m = {}, result;
+    test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
+    var t = process.hrtime();
+    try {
+        result = await m.exports();
+        if (result != true) 
+            throw result;
+    } catch (ex) {
+        result = ex;
+    }
+    return {
+        alwaysQuick: m.exports.alwaysQuick,
+        t: time(t),
+        result: result
+    };
+}
+
+try {
+    var result, byType = {}, byProvider = {}, byTest = {}, table = [];
+    for (var i = 0;i < test.length; i++) {
+        var benchmark = null;
+        for (var j = 0;j < providers.length; j++) {
+            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\r');
+            
+            for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
+                var ticks = [];
+                table[type] = table[type] || [];
+                table[type][j] = table[type][j] || [];
+                // Warm up V8
+                result = await runTest(test[i], providers[j], type);
+                if (result.result !== true) {
+                    if (result.result !== DoNotTest) {
+                        console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
+                        type = 32767;
+                        j = providers.length;
+                    }
+                    continue;
                 }
-                var samples = targetSamples ;
-                var timeBase = 0 ;
-                var failed = false ;
-                msgs = [] ;
-                for (var g=(useGenOnly?1:0);g<(useGenerators?2:1);g++) {
-                    for (var wrapAwait=0;wrapAwait<2;wrapAwait++) {
-                        if (g && wrapAwait) continue ;
-                        var info = [pad(test.split('/').pop())] ;
-                        if ((g>0 || wrapAwait>0))
-                            info.push("("+(g>0?"generators":"")+(wrapAwait>0?"wrapAwait":"")+")") ;
-                        for (var i=0; i<providers.length; i++) {
-                            var promise = providers[i] ;
-                            if ((wrapAwait>0 && i==0) || (g>0 && !promise.p)) {
-                                if (i>0)
-                                    info.push(["(skip "+promise.name+")"]) ;
-                                continue ;
-                            }
+                var t = 0;
+                var cond = result.alwaysQuick?function(){ return ticks.length < result.alwaysQuick } : ( useQuick ? function () {
+                    return ticks.length < 2;
+                } : function () {
+                    return t < 100 || ticks.length < 20;
+                });
+                while (cond()) {
+                    result = await runTest(test[i], providers[j], type);
+                    ticks.push(result.t);
+                    t += result.t;
+                }
+                ticks = ticks.sort();
+                var median = ticks[ticks.length / 2 | 0];
+                var metric = median;
+                if (!benchmark) 
+                    benchmark = metric;
+                metric = metric / benchmark * 100;
+                result = {
+                    value: result.result,
+                    metric: metric,
+                    provider: providers[j].name,
+                    type: types[type],
+                    test: test[i].name
+                };
+                table[type][j].push(metric);
+                byType[types[type]] = byType[types[type]] || [];
+                byType[types[type]].push(result);
+                byProvider[providers[j].name] = byProvider[providers[j].name] || [];
+                byProvider[providers[j].name].push(result);
 
-                            try {
-                                var code = fs.readFileSync(test).toString() ;
-                                var tCompiler = Date.now() ;
-                                var pr = nodent.compile(forceStrict+code,test,showOutput?2:3,{
-                                    wrapAwait:wrapAwait>0,
-                                    es7:true,
-                                    promises:!!promise.p,
-                                    generators:g>0
-                                }) ;
-                                tTotalCompilerTime += Date.now()-tCompiler ;
-                                var m = {} ;
-                                if (showOutput)
-                                    console.log(pr.code) ;
-                                var fn = new Function("module","require","Promise","es7","nodent",pr.code) ;
-                                failed = fn.toString() ;
-                                if (showOutput && saveOutput) {
-                                    fs.writeFileSync(test+".out",pr.code) ;
-                                }
-
-                                fn(m,require,promise.p || nodent.Thenable,!promise.p,nodent) ;
-                                await breathe();
-
-                                var result,t = Date.now() ;
-                                if (samples<0) {
-                                    samples = 0 ;
-                                    while(1) {
-                                        result = await run(m.exports());
-                                        samples++ ;
-                                        if (!(samples&31)) {
-                                            t += await breathe() ;
-                                            if (Date.now()-t > 50 || samples>5000)
-                                                break ;
-                                        }
-                                    }
-                                    timeBase = Date.now()-t ;
-                                    info.push("x"+samples+", "+timeBase+"ms") ;
-                                } else {
-                                    for (var reSample=0; reSample<samples; reSample++){
-                                        result = await run(m.exports());
-                                        if (!(reSample&31))
-                                            t += await breathe() ;
-                                    }
-                                }
-
-                                t = Date.now()-t ;
-                                if (i==0 && targetSamples==1) {
-                                    info.push("x1, "+t+"ms") ;
-                                } else {
-                                    if (result!==true && result!=='n/a') {
-                                        info.push([promise.name+" \u2717",result]) ;
-                                    } else {
-                                        failed = null ;
-                                        if (targetSamples==1)
-                                            info.push([promise.name+" \u2713"]) ;
-                                        else if (reSample && i>0)
-                                            info.push([promise.name,((t*100/timeBase)|0)+"%"]) ;
-                                    }
-                                }
-                            } catch (ex) {
-                                info.push([promise.name+" \u2717","*error*"]) ;
-                                msgs.push(promise.name+" EX:"+ex.toString()+"\n"+ex.stack) ;
-                            }
-                        }
-                        console.log(info.map(pad).join(""));
-                    } }
-                if (!quiet && msgs.length)
-                    msgs.forEach(function(m){ console.log("  "+m)});
+            }
+            console.log(spaces+'\n') ;
+            var lines = 2+showPerformanceTable() ;
+            while (lines--) {
+                process.stdout.write('\u001B[1A') ;
             }
         }
+    }
 
-        await runTests() ;
-        console.log("Total compile time:",tTotalCompilerTime,"ms");
+    process.stdout.write('\u001B['+type+'B') ;
+    console.log('\n\n\n\n') ;
+//    console.log(spaces+'\n') ;
+//    showPerformanceTable()
+
+    function showPerformanceTable() {
+        var i,j,lines = 0 ;
+        function log() {
+            console.log.apply(console,arguments) ;
+            lines++ ;
+        }
+        function extract(a, field) {
+            if (!Array.isArray(a)) {
+                return NaN;
+            }
+            return a.map(function (n) {
+                return n[field];
+            });
+        }
+        
+        function avg(by) {
+            if (!Array.isArray(by)) 
+                return NaN;
+            return by.filter(function (n) {
+                return typeof n === 'number';
+            }).reduce(function (a, b) {
+                return a + b;
+            }, 0) / by.length;
+        }
+        
+        function traffic(n) {
+            if (isNaN(n)) 
+                return pad('-', 16).blue;
+            if (n < 120) 
+                return pad('' + (n | 0), 16).green;
+            if (n < 200) 
+                return pad('' + (n | 0), 16).white;
+            if (n < 300) 
+                return pad('' + (n | 0), 16).yellow;
+            return pad('' + (n | 0), 16).red;
+        }
+        
+        var n;
+        var fidx = Object.keys(table)[0] ;
+        n = pad('') + pad('', 16);
+        for (i = 0; i < table[fidx].length; i++) {
+            n += pad(providers[i].name, 16);
+        }
+        log(n);
+        n = pad('Compiler flags') + pad('Mean', 16);
+        for (i = 0; i < table[fidx].length; i++) {
+            n += traffic(avg(extract(byProvider[providers[i].name], 'metric')));
+        }
+        log(n.underline);
+        for (i = 0; i < table.length; i++) {
+            var typed = table[i];
+            if (typed) {
+                n = pad(types[i]) + traffic(avg(extract(byType[types[i]], 'metric')));
+                for (j = 0; j < typed.length; j++) {
+                    n += traffic(avg(typed[j]));
+                }
+                log(n);
+            }
+        }
+        log('');
+        return lines ;
+    }
+} catch (ex) {
+    console.error(ex.stack || ex);
+}
+

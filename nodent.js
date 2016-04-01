@@ -68,7 +68,7 @@ function copyObj(a){
 	return o ;
 };
 
-var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ; 
+var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ;
 var optionSets = {
 	default:defaultCodeGenOpts,
 	es7:Object.create(defaultCodeGenOpts),
@@ -93,8 +93,8 @@ var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
 function noLogger(){}
 
 function isDirective(node){
-    return node.type === 'ExpressionStatement' && 
-        (node.expression.type === 'StringLiteral' || 
+    return node.type === 'ExpressionStatement' &&
+        (node.expression.type === 'StringLiteral' ||
             (node.expression.type === 'Literal' && typeof node.expression.value === 'string')) ;
 }
 
@@ -357,58 +357,42 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
-function $asyncbind(self,catcher) {
-	var resolver = this ;
-	if (catcher && catcher !== true) {
-		if ($asyncbind.wrapAsyncStack)
-			catcher = $asyncbind.wrapAsyncStack(catcher) ;
-		var thenable = function thenable(result,error){
-			try {
-				return (result instanceof Object) && ('then' in result) && typeof result.then==="function"
-					? result.then(thenable,catcher) : resolver.call(self,result,error||catcher);
-			} catch (ex) {
-				return (error||catcher)(ex);
-			}
-		} ;
-		thenable.then = thenable ;
-		return thenable ;
-	} else {
-		if (catcher===true) {
-		    var state = {then:settler,_thens:[[],[]]} ;
-            resolver.call(self,resolveThen,rejectThen) ;
-            return state ;
-		} else {
-	        var then = function(result,error) {
-	            return resolver.call(self,result,error) ;
-	        } ;
-	        then.then = then ;
-	        return then ;
-		}
-	}
+/*
+$asyncbind has multple execution paths, determined by the arguments, to fulfil all runtime requirements in a single function
+so it can be serialized via toString() for transport to a browser. It is always called with this=Function (ie. it is attached
+to Function.prototype)
 
-    function release(f) { f(this.result) }
-    function resolveThen(x){
-        state.result = x ;
-        var c = state._thens[0] ;
-        delete state._thens ;
-        c.forEach(release,state) ;
-    }
-    function rejectThen(x){
-        state.reject = true ;
-        state.result = x ;
-        var c = state._thens[1] ;
-        delete state._thens ;
-        c.forEach(release,state) ;
-    }
-    function settler(resolver,rejecter){
-        if ('result' in state) {
-            (state.reject?rejecter:resolver)(state.result);    
-        } else {
-            state._thens[0].push(resolver) ;
-            state._thens[1].push(rejecter) ;
-        }
-    }
-}
+The paths are:
+	$asyncbind(obj)							 // Simply return this function bound to obj
+	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
+	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
+*/
+var $asyncbind = eval(("(function $asyncbind(self,catcher){                                           \n"+
+"   var resolver = this;                                                                              \n"+
+"   if (catcher===true) {                                                                             \n"+
+"       if (!Function.prototype.$asyncbind.EagerThenable)                                             \n"+
+"           Function.prototype.$asyncbind.EagerThenable = "+require('./lib/eager.js').toString()+"(); \n"+
+"       return new (Function.prototype.$asyncbind.EagerThenable)(boundThen);                          \n"+
+"   }                                                                                                 \n"+
+"   if (catcher) {                                                                                    \n"+
+"       if (Function.prototype.$asyncbind.wrapAsyncStack)                                             \n"+
+"           catcher = Function.prototype.$asyncbind.wrapAsyncStack(catcher);                          \n"+
+"       return then;                                                                                  \n"+
+"   }                                                                                                 \n"+
+"   function then(result,error){                                                                      \n"+
+"       try {                                                                                         \n"+
+"           return result && (result instanceof Object) && typeof result.then==='function'            \n"+
+"               ? result.then(then,catcher) : resolver.call(self,result,error||catcher);              \n"+
+"       } catch (ex) {                                                                                \n"+
+"           return (error||catcher)(ex);                                                              \n"+
+"       }                                                                                             \n"+
+"   }                                                                                                 \n"+
+"   function boundThen(result,error) {                                                                \n"+
+"       return resolver.call(self,result,error);                                                      \n"+
+"   }                                                                                                 \n"+
+"   boundThen.then = boundThen;                                                                       \n"+
+"   return boundThen;                                                                                 \n"+
+"})").replace(/\s+/g,' ')) ;
 
 function wrapAsyncStack(catcher) {
 	var context = {} ;
@@ -475,26 +459,19 @@ function $asyncspawn(promiseProvider,self) {
     });
 }
 
-function Thenable(thenable) {
-	return thenable.then = thenable ;
-};
-Thenable.resolve = function(v){
-	return ((v instanceof Object) && ('then' in v) && typeof v.then==="function")?v:{then:function(resolve){return resolve(v)}};
-};
-
-function isThenable(obj) {
-	return (obj instanceof Object) && ('then' in obj) && typeof obj.then==="function";
-}
+var Thenable = require('./lib/thenable') ;
 
 /* NodentCompiler prototypes, that refer to 'this' */
 function requireCover(cover,opts) {
-	if (!this.covers[cover]) {
+	opts = opts || {} ;
+	var key = cover+'|'+Object.keys(opts).sort().reduce(function(a,k){ return a+k+JSON.stringify(opts[k])},"") ;
+	if (!this.covers[key]) {
 		if (cover.indexOf("/")>=0)
-			this.covers[cover] = require(cover) ;
+			this.covers[key] = require(cover) ;
 		else
-			this.covers[cover] = require("./covers/"+cover);
+			this.covers[key] = require("./covers/"+cover);
 	}
-	return this.covers[cover](this,opts) ;
+	return this.covers[key](this,opts) ;
 }
 
 function compile(code,origFilename,__sourceMapping,opts) {
@@ -606,8 +583,9 @@ NodentCompiler.prototype.setOptions = function(members){
 	return this ;
 };
 NodentCompiler.prototype.version =  require("./package.json").version ;
-NodentCompiler.prototype.Thenable =  Thenable ;
-NodentCompiler.prototype.isThenable =  isThenable ;
+NodentCompiler.prototype.Thenable = Thenable ;
+NodentCompiler.prototype.EagerThenable = require('./lib/eager.js') ;
+NodentCompiler.prototype.isThenable = Thenable.isThenable ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
 NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
@@ -710,7 +688,7 @@ function setGlobalEnvironment(initOpts) {
 				configurable:true
 			},
 			"isThenable":{
-				value:function(){ return isThenable(this) },
+				value:function(){ return Thenable.isThenable(this) },
 				writable:true,
 				configurable:true
 			}
@@ -838,7 +816,7 @@ function initialize(initOpts){
         }
     	require.extensions[extension] = compileNodentedFile(compiler,initOpts.log) ;
     }
-        
+
     if (!initOpts.dontInstallRequireHook) {
 		if (!stdJSLoader) {
 			stdJSLoader = require.extensions['.js'] ;
@@ -901,6 +879,7 @@ initialize.setCompileOptions = function(set,compiler) {
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = Thenable ;
+initialize.EagerThenable = require('./lib/eager.js') ;
 
 module.exports = initialize ;
 
@@ -918,7 +897,7 @@ function runFromCLI(){
             stream.on('error',$error) ;
         }.$asyncbind(this));
     }
-    
+
     function getCLIOpts(start) {
         var o = [] ;
         for (var i=start || 2; i<process.argv.length; i++) {
@@ -931,35 +910,35 @@ function runFromCLI(){
         }
         return o ;
     }
-    
+
     function processInput(content){
         var pr ;
         var parseOpts ;
-    
+
         // Input options
-        cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
         if (cli.fromast) {
             content = JSON.parse(content) ;
             pr = { origCode:"", filename:filename, ast: content } ;
             parseOpts = parseCompilerOptions(content,nodent.log) ;
             if (!parseOpts) {
+				cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
                 parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
                 console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
             }
         } else {
             parseOpts = parseCompilerOptions(cli.use?cli.use:content,nodent.log) ;
             if (!parseOpts) {
-                cli.use = "use nodent" ;
+                cli.use = '"use nodent";' ;
                 parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
                 console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
             }
             pr = nodent.parse(content,filename,parseOpts);
         }
-    
+
         // Processing options
         if (!cli.parseast && !cli.pretty)
             nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-    
+
         // Output options
         nodent.prettyPrint(pr,parseOpts) ;
         if (cli.out || cli.pretty) {
@@ -981,7 +960,7 @@ function runFromCLI(){
             (new Function(pr.code))() ;
         }
     }
-    
+
 	var path = require('path') ;
 	var initOpts = (process.env.NODENT_OPTS && JSON.parse(process.env.NODENT_OPTS)) || {};
 	var filename, cli = getCLIOpts() ;
@@ -1019,4 +998,3 @@ function runFromCLI(){
 
 if (require.main===module && process.argv.length>=3)
     runFromCLI() ;
-
