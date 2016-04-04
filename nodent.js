@@ -98,7 +98,7 @@ function isDirective(node){
             (node.expression.type === 'Literal' && typeof node.expression.value === 'string')) ;
 }
 
-function parseCompilerOptions(code,log) {
+function parseCompilerOptions(code,log,filename) {
 	var regex, set, parseOpts = {} ;
 	if (typeof code=="string") {
 		if (regex = code.match(useDirective)) {
@@ -123,10 +123,16 @@ function parseCompilerOptions(code,log) {
 	    set = "default" ;
 	    regex = [null,null,"{}"] ;
 	}
-
 	if (set) {
 		try {
-			var packageOptions = JSON.parse(fs.readFileSync(__dirname+"/../../package.json")).nodent.directive[set] ;
+			if (!filename)
+				filename = require('path').resolve('.') ;
+  		var packagePath = require('resolve').sync('package.json',{
+				moduleDirectory:[''],
+				extensions:[''],
+				basedir:require('path').dirname(filename)
+			}) ;
+			var packageOptions = JSON.parse(fs.readFileSync(packagePath)).nodent.directive[set] ;
 		} catch(ex) {
 			// Meh
 		}
@@ -223,7 +229,7 @@ function compileNodentedFile(nodent,log) {
 	return function(mod, filename, parseOpts) {
 		var content = stripBOM(fs.readFileSync(filename, 'utf8'));
 		var pr = nodent.parse(content,filename,parseOpts);
-		parseOpts = parseOpts || parseCompilerOptions(pr.ast,log) ;
+		parseOpts = parseOpts || parseCompilerOptions(pr.ast,log, filename) ;
 		nodent.asynchronize(pr,undefined,parseOpts,log) ;
 		nodent.prettyPrint(pr,parseOpts) ;
 		mod._compile(pr.code, pr.filename);
@@ -364,7 +370,7 @@ to Function.prototype)
 
 The paths are:
 	$asyncbind(obj)							 // Simply return this function bound to obj
-	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion  
+	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion
 	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
 */
 
@@ -738,7 +744,7 @@ function initialize(initOpts){
             }
 
             var content = stripBOM(fs.readFileSync(filename, 'utf8'));
-            var parseOpts = parseCompilerOptions(content,initOpts.log) ;
+            var parseOpts = parseCompilerOptions(content,initOpts.log,filename) ;
             if (parseOpts) {
                 return stdCompiler(mod,filename,parseOpts) ;
             }
