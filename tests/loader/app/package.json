@@ -1,0 +1,15 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Test app using current Nodent version but depending on an ealier version",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm i && node ."
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "loader-module": "file:///home/matt/git/nodent/tests/loader/loader-module",
+    "nodent": "file:///home/matt/git/nodent"
+  }
+}
