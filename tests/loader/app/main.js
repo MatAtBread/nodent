@@ -6,7 +6,7 @@ module.exports = function(nodent) {
   if (self.version > loaded.version
     && loaded.version === "2.3.0"
     && loaded.options.generatedSymbolPrefix === "_early_nodent_") {
-      throw new Error('versionAwareLoader test PASSED') ;
+      console.log('versionAwareLoader test PASSED') ;
       return true ;
     } else {
       console.log(loaded) ;
