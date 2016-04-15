@@ -798,6 +798,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+08-Jun-16 v2.5.6
+
+- Fix command-line option `--use=(mode)` with text input
+
 06-Jun-16 v2.5.5
 
 - Correct hoisting of destructing var declarations (implemented in nodejs >6.0.0)
