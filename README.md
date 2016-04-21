@@ -797,6 +797,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+21-Apr-16 v2.5.1
+
+- Place runtimes ($asyncbind and $asyncspawn) in a separate file ('lib/runtime.js') so the dedicated Babler or other tool builder can extract them without having to include the entire compiler.
+
 01-Apr-16 v2.5.0
 
 - Implement `nodent.EagerThenable()` to provide Promise-like (but unchainable) execution semantics (eager evaluation, asynchronous resolution)
