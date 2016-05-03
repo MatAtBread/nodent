@@ -797,6 +797,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+03-May-16 v2.5.2
+
+- Update acorn-es7-plugin to correctly parse the statement `export async function name(){...}` as _async function name(){...}_ is a valid named declaration. 
+
 21-Apr-16 v2.5.1
 
 - Place runtimes ($asyncbind and $asyncspawn) in a separate file ('lib/runtime.js') so the dedicated Babler or other tool builder can extract them without having to include the entire compiler.
