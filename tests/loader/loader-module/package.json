@@ -1,0 +1,22 @@
+{
+  "name": "loader-module",
+  "version": "1.0.0",
+  "description": "Test module using an early version of Nodent",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "nodent": "2.3.0"
+  },
+  "nodent": {
+    "directive": {
+      "es7": {
+        "generatedSymbolPrefix": "_early_nodent_",
+        "sourcemap": "false"
+      }
+    }
+  }
+}
