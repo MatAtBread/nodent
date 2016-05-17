@@ -4,7 +4,7 @@
   "description": "Test app using current Nodent version but depending on an ealier version",
   "main": "index.js",
   "scripts": {
-    "test": "npm i && node ."
+    "test": "echo '### This test requires npm >2.x ###' && npm i && node ."
   },
   "author": "",
   "license": "ISC",

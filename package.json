@@ -5,7 +5,8 @@
   "main": "nodent.js",
   "scripts": {
     "cover": "istanbul cover ./nodent.js tests -- --quick --quiet --syntax --generators --forceStrict ; open ./coverage/lcov-report/index.html",
-    "test": "cd tests && npm i --prod && cd .. && ./nodent.js tests --syntax --quick --quiet --generators && cd tests/loader/app && npm test && cd ../../..",
+    "test": "cd tests && npm i --prod && cd .. && ./nodent.js tests --syntax --quick --quiet --generators",
+    "test-loader": "cd tests/loader/app && npm test && cd ../../..",
     "start": "./nodent.js"
   },
   "dependencies": {
