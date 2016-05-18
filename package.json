@@ -10,9 +10,9 @@
     "start": "./nodent.js"
   },
   "dependencies": {
-    "acorn": "^3.1.0",
-    "acorn-es7-plugin": "^1.0.13",
-    "resolve": "^1.1.7",
+    "acorn": "3.1.0",
+    "acorn-es7-plugin": ">=1.0.14",
+    "resolve": "1.1.7",
     "source-map": "0.5.3"
   },
   "repository": {
