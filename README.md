@@ -111,7 +111,7 @@ The full list of options is:
 | --pretty 			| Parse the input and output the JS un-transformed
 | --out 			| Parse the input and output the transformed ES5/6 JS
 | --ast 			| Parse the input and output the transformed ES5/6 ESTree as JSON
-| --minast 			| Same as --ast, but omit all the source-mapping and location information from the tree 
+| --minast 			| Same as --ast, but omit all the source-mapping and location information from the tree
 | --exec 			| Execute the transformed code
 | --sourcemap 		| Produce a source-map in the transformed code
 
@@ -139,12 +139,12 @@ Nodent can generate code that implements `async` and `await` using basic ES5 Jav
 The ES7 proposal for async and await specifies the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a Promise, and await should be followed by an expression that evaluates to a Promise. The proposal also contains an implementation based on generators.
 
 ### Which one should you use?
-All the implementations work with each other - you can mix and match. If you're unsure as to which will suit your application best, or want to try them all out `'use nodent';` will use a 'default' configuration you can determine in your application's package.json. See [Advanced Configuration](#advanced-configuration) for details. 
+All the implementations work with each other - you can mix and match. If you're unsure as to which will suit your application best, or want to try them all out `'use nodent';` will use a 'default' configuration you can determine in your application's package.json. See [Advanced Configuration](#advanced-configuration) for details.
 
 #### Shipping a self-contained app to a browser, Node <=0.10.x or other unknown environment
 `use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, and works on a wide range of desktop and mobile browsers.
 
-#### Shipping an app or module within Node, npm or [modern browsers supporting Promises](http://kangax.github.io/compat-table/es6/#test-Promise) 
+#### Shipping an app or module within Node, npm or [modern browsers supporting Promises](http://kangax.github.io/compat-table/es6/#test-Promise)
 `use nodent-promises` provides the most compatibility between modules and apps. If your module or library targets Node earlier than v4.1.x, you should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` or `nodent.EagerThenable()` to expose the Promise API.
 
 #### Generators
@@ -198,7 +198,7 @@ At runtime (i.e. in the browser), you'll need to provide some support routines:
 
 This are generated automatically in the transpiled files when you set the `runtime` option, and declared when Nodent is loaded (so they are already avaiable for use within Node).
 
-	// Called when an async function throws an exception during 
+	// Called when an async function throws an exception during
 	// asynchronous operations and the calling synchronous function has returned.
 	window.$error = function(exception) {
 		/* Maybe log the error somewhere */
@@ -274,7 +274,7 @@ This is both syntactically and semantically meaningful, but in the current imple
 
 	var nodent = require('nodent')() ;
 	var map = nodent.require('map') ;
-	
+
 	// Execute all the async functions at the same time
 	mapped = await map([as1(1),as2("hello"),as1(3)]) ;
 	// When they're done:
@@ -318,11 +318,11 @@ Async programming with Nodent (or ES7) is much easier and simpler to debug than 
 
 Differences from the ES7 specification
 --------------------------------------
-* **case without break** 
-	
-	As of the current version, `case` blocks without a `break;` that fall thorugh into the following `case` do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`. Nodent logs a warning when it detects this situation. 
+* **case without break**
 
-* **await outside async** 
+	As of the current version, `case` blocks without a `break;` that fall thorugh into the following `case` do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`. Nodent logs a warning when it detects this situation.
+
+* **await outside async**
 
 	The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent. In practice this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
 
@@ -332,15 +332,15 @@ Differences from the ES7 specification
 
 * **AsyncFunction**
 
-	The [`AsyncFunction`](#asyncfunction) type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. 
+	The [`AsyncFunction`](#asyncfunction) type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`.
 
-* **await non-Promise** 
+* **await non-Promise**
 
 	Although not explicitly allowed in the specification, the template implementation allows an application to `await` on a non-Promise value (this occurs because the template implementation wraps every generated value in a Promise). So the statement:
 
 		var x = await 100 ; // 100
-	
-	...is valid. Nodent, by default, does _not_ allow this behaviour (you'll get a run-time error about '100.then is not a function'. Generally, this is not a problem in that you obviously only want to wait on asynchronous things (and not numbers, strings or anything else). However, there is one unpleasant edge case, which is where an expression _might_ be a Promise (my advice is to never write code like this, and avoid code that does). 
+
+	...is valid. Nodent, by default, does _not_ allow this behaviour (you'll get a run-time error about '100.then is not a function'. Generally, this is not a problem in that you obviously only want to wait on asynchronous things (and not numbers, strings or anything else). However, there is one unpleasant edge case, which is where an expression _might_ be a Promise (my advice is to never write code like this, and avoid code that does).
 
 		var x = await maybeThisIsAPromise() ;
 
@@ -353,16 +353,16 @@ Differences from the ES7 specification
 * **lazyThenables**
 
 	Invoking an async function _without_ a preceding `await` (simply by calling it) executes the function body but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects (Note: this behaviour only applied to ES7-mode from version 2.4.0). This is in compliance with the ES7 specification.  
-	
+
 	However, this has a significant performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7` mode, or use the `nodent.Thenable` in place of Promises in other modes. In this case, if you call the async function the body _is not actually executedy_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
-	
+
 	In `use nodent-promises` mode, it is the implementation of the Promise that determines the execution semantics. The table below is a summary of modes and execution semantics. You can test the performance on your own hardware with the following command. Note the relative performance is a worst case, since the test does nothing other than make async calls in a loop.
-	
+
 		./nodent.js tests --generators tests/semantics/perf.js
-	
+
 | Mode | Flags / Implementation | Lazy / Eager | Possibly sync resolution | Performance (relative) |
 |------|----------|----|--------------------------|------------------------|
-| es7 | lazyThenable | Lazy | Yes | 1.0 
+| es7 | lazyThenable | Lazy | Yes | 1.0
 | es7 | (none)| Eager | Yes | 2.3x slower
 | promises | nodent.Thenable | Lazy | Yes | 1.0
 | promises | nodent.EagerThenable() | Eager | No | 2.4x slower
@@ -462,7 +462,7 @@ When determining what options to use when compiling an individual file, nodent f
 
 * Use the set specified after the 'use nodent-' directive. For example 'use nodent-promises' uses a predefined set called 'promises'. Other predefined sets are 'es7' and 'generators'. If the `use nodent` doesn't have a name, the internal name "default" is used.
 * Apply any modifications contained within the package.json two directories above where nodent is installed (typically the location of your application). The package.json can (optionally) contain a 'nodent' section to define your own sets of options. For example, to create a set to be used by files containing a `use nodent-myapp` directive:
-		
+
 		"nodent":{
 			"directive":{
 				"myapp":{
@@ -470,7 +470,7 @@ When determining what options to use when compiling an individual file, nodent f
 					"wrapAwait":true
 				}
 			}
-		}	
+		}
 
 	You can also set options for the pre-defined sets here (default,es7,promises,generators).
 
@@ -697,14 +697,14 @@ The `AsyncFunction` type is returned by requiring 'asyncfunction'. This creates 
 To access the type:
 
 	var AsyncFunction = nodent.require('asyncfunction',opts) ;
-	
+
 ...where the `opts` parameter is optional, but if supplied contains the compiler flags as specified in [Advanced Configuration](#advanced-configuration). By default AsyncFunction uses Promises if they are defined globally, and ES7 mode otherwise.
 
 Once defined, you can create async functions on the fly just like normal functions:
 
 	// Create a new async function
     var add = new AsyncFunction("i","j","return i+j") ;
-    
+
     console.log(add instanceof Function)		// true: An AsyncFunction is also a function
     console.log(add instanceof AsyncFunction)	// true
     console.log(add.toString())					// The original source "return i+j"
@@ -798,6 +798,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+18-May-16 v2.5.4
+
+- Bump acorn-es7-plugin (parses comments between async and function correctly)
+- Correct resolution of package.json for npm >v3.x to ensure modules using different nodent configurations read the 'nearest' one based on the location of the source, not the nodent installation directory
+
 03-May-16 v2.5.2, v2.5.3
 
 - Update to latest acorn (2.5.3)
@@ -811,7 +816,7 @@ Changelog
 
 - Implement `nodent.EagerThenable()` to provide Promise-like (but unchainable) execution semantics (eager evaluation, asynchronous resolution)
 - Implement new test harness to collate performance by mode and Promise implementation
-- Allow optional passing of a Promise type to the covers http, https, map, events and movre Thenable to it's own fix to ease integration with Browserify or Webpack (specifically, these covers can be required directly as there is no hard dependancy on the 'nodent' parameter, and so no need to require the entire library into thebrowser). The default behaviour is now to use the global.Promise if present, or nodent.Thenable if not. 
+- Allow optional passing of a Promise type to the covers http, https, map, events and movre Thenable to it's own fix to ease integration with Browserify or Webpack (specifically, these covers can be required directly as there is no hard dependancy on the 'nodent' parameter, and so no need to require the entire library into thebrowser). The default behaviour is now to use the global.Promise if present, or nodent.Thenable if not.
 - Update README
 
 01-Mar-16 v2.4.1
@@ -822,7 +827,7 @@ Changelog
 04-Feb-16 v2.4.0
 
 - Update to [Acorn v2.7.0](https://github.com/ternjs/acorn/commit/1405436064bff087f14af55a763396aa5c0ca148). This tightens up the parsing of some ES6 edge cases and could possibly [break](https://github.com/ternjs/acorn/pull/317) old ES5 sloppy mode code  
-- Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager). 
+- Implement 'eager' evaluation for 'ES7' mode (promises & generators always were eager).
 
 02-Feb-16 v2.3.11-v2.3.13
 
@@ -847,7 +852,7 @@ Changelog
 10-Dec-15 v2.3.7
 
 - Correctly asynchronize ES6 `for...in` loops.
-- Update the plugin code to remove 'async' and 'await' from the super-strict keyword tests introduced in acorn v2.6.x that generate parse errors before the plugin gets a chance to manage them. Also compatible with acorn v2.5.2 as used by previous versions of nodent. 
+- Update the plugin code to remove 'async' and 'await' from the super-strict keyword tests introduced in acorn v2.6.x that generate parse errors before the plugin gets a chance to manage them. Also compatible with acorn v2.5.2 as used by previous versions of nodent.
 - Remove spurious 'debugger' statement, fix case where for..in body is a single expression.
 
 09-Dec-15 v2.3.5
@@ -864,7 +869,7 @@ Changelog
 
 - Implement version-aware in-process JS compiler so modules built with different versions of nodent can co-exist
 - Implement wrapAwait option to allow for the `await nonPromise` edge-case enabled in the standard implementation
-- Implement 'optionSets' for each `use nodent` directive and allow their specification in the package.json to avoid use unnecessary use of setDefaultCompileOptions() and the consequent dependency between code and environment. 
+- Implement 'optionSets' for each `use nodent` directive and allow their specification in the package.json to avoid use unnecessary use of setDefaultCompileOptions() and the consequent dependency between code and environment.
 - Implement labeled `break` and `continue` containing `await`
 - Only suppress the automatic insertion of `return undefined` if a function uses `async return` or `async throw`. Other async functions now return `undefined` asynchronously if the run to completion.
 
@@ -879,7 +884,7 @@ Changelog
 
 23-Nov-15: v2.2.8
 
-- Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case. 
+- Fix case where `await` inside a non-async arrow function attempted to evaluate the await outside of the function body. Create the test case es6-object-arrow to catch this case.
 
 12-Nov-15: v2.2.7
 
@@ -890,7 +895,7 @@ Changelog
 06-Nov-15: v2.2.6
 
 - Fix incorrect 'async' value on AST Property and correctly use the Property.value.async for full compliance with the ESTree spec.
-- Update to acorn-es7-plugin 1.0.9 (fixes source location for async and await, and adds tests thanks to @jamestalmage) 
+- Update to acorn-es7-plugin 1.0.9 (fixes source location for async and await, and adds tests thanks to @jamestalmage)
 
 04-Nov-15: v2.2.4
 
