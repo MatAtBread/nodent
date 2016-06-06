@@ -82,13 +82,8 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, notES6 = false, syntaxTest = 0, forceStrict = "";
+var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, syntaxTest = 0, forceStrict = "";
 var idx;
-try {
-    eval("x=>0");
-} catch (ex) {
-    notES6 = true;
-}
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
     if (fqPath == __filename || fqPath == __dirname) 
@@ -109,7 +104,7 @@ for (; idx < process.argv.length; idx++) {
             if (useGenOnly) 
                 providers.splice(1, 1);
         } catch (ex) {
-            console.warn("OOPS! Installed platform does not support Promises or Generators - skipping some tests");
+            console.log(("v8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
             if (useGenOnly) 
                 process.exit(-1);
         }
@@ -139,21 +134,17 @@ var files = (process.argv.length > idx ? process.argv.slice(idx) : fs.readdirSyn
 })).filter(function (n) {
     return n.match(/.*\.js$/);
 });
-if (notES6) {
-    files = files.filter(function (n) {
-        if (n.match(/es6-.*/)) {
-            console.log(n.split("/").pop() + " (skipped - ES6 platform not installed)".yellow);
-            return false;
-        }
-        return true;
-    });
-}
+
 var tTotalCompilerTime = 0;
 var test = [];
 var i = 0;
 function time(hr) {
     var t = process.hrtime(hr);
     return t[0] * 1000 + t[1] / 1e6;
+}
+
+function DoNotTest() {
+    throw DoNotTest;
 }
 
 var types = [];
@@ -164,6 +155,7 @@ files.forEach(function (n) {
     };
     process.stdout.write('\r- Compiling ' + test[i].name + '                         \r');
     var code = fs.readFileSync(n).toString();
+    var compileException = false;
     for (var type = 0;type < (useGenerators ? 12 : 8); type++) {
         var opts = {}; //  es7:true } ;
         if (!(type & 1)) 
@@ -180,7 +172,17 @@ files.forEach(function (n) {
         var tCompiler = process.hrtime();
         var pr = nodent.compile(forceStrict + code, n, opts).code;
         tTotalCompilerTime += time(tCompiler);
-        test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+        try {
+            test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+        } catch (ex) {
+            if (!compileException) {
+                console.warn(test[i].name+(" not supported by v8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                compileException = true ;
+            }
+            test[i].fn[type] = function(m) {
+                m.exports = DoNotTest ;
+            }
+        }
     }
     i += 1;
 });
@@ -189,9 +191,6 @@ if (useQuick)
     console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison'));
 if (promiseImpls == providers.length) 
     console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
-function DoNotTest() {
-    throw DoNotTest;
-}
 
 async function runTest(test, provider, type) {
     if (provider.p && !(type & (4 | 8))) 
@@ -278,8 +277,6 @@ try {
 
     process.stdout.write('\u001B['+type+'B') ;
     console.log('\n\n\n\n') ;
-//    console.log(spaces+'\n') ;
-//    showPerformanceTable()
 
     function showPerformanceTable() {
         var i,j,lines = 0 ;
