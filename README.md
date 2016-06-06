@@ -798,6 +798,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+06-Jun-16 v2.5.5
+
+- Correct hoisting of destructing var declarations (implemented in nodejs >6.0.0)
+
 18-May-16 v2.5.4
 
 - Bump acorn-es7-plugin (parses comments between async and function correctly)
