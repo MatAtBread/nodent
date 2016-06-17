@@ -26,66 +26,19 @@ AClass.prototype.test5 = function(x) {
 	return this.test1(x) ;
 };
 
-AClass.prototype.testMethodsCalledOnThis = async function go() {
-  var i, fn;
-
-	var passes = 0 ;
-	for (i=1; i<6; i++) {
-		fn = "test"+i ;
-		
-		if (await this[fn]()===this.name)
-			passes += 1 ;
-	}
-	
-	for (i=1; i<6; i++) {
-		fn = "test"+i ;
-
-		try {
-			await this[fn](1) ;
-		} catch(ex) {
-			if (ex===this.fail)
-				passes += 1 ;
-		}
-	}
-
-  i=1;
-  while (i<6) {
-    fn = "test"+i ;
-
-    if (await this[fn]()===this.name)
-      passes += 1 ;
-  }
-
-  i=1;
-  while (i<6) {
-		fn = "test"+i ;
-
-		try {
-			await this[fn](1) ;
-		} catch(ex) {
-			if (ex===this.fail)
-				passes += 1 ;
-		}
-	}
-
-	return passes==20 ;
-}
-
-async function testMethods() {
+async function go() {
 	var a = new AClass("mat") ;
-  var i, fn;
 
 	var passes = 0 ;
-	for (i=1; i<6; i++) {
-		fn = "test"+i ;
+	for (var i=1; i<6; i++) {
+		var fn = "test"+i ;
 		
 		if (await a[fn]()===a.name)
 			passes += 1 ;
 	}
 	
-	for (i=1; i<6; i++) {
+	for (var i=1; i<6; i++) {
 		fn = "test"+i ;
-
 		try {
 			await a[fn](1) ;
 		} catch(ex) {
@@ -93,35 +46,7 @@ async function testMethods() {
 				passes += 1 ;
 		}
 	}
-
-  i=1;
-  while (i<6) {
-    fn = "test"+i ;
-
-    if (await this[fn]()===this.name)
-      passes += 1 ;
-  }
-
-  i=1;
-  while (i<6) {
-		fn = "test"+i ;
-
-		try {
-			await this[fn](1) ;
-		} catch(ex) {
-			if (ex===this.fail)
-				passes += 1 ;
-		}
-	}
-
-	return passes==20 ;
+	return passes==10 ;
 }
 
-async function testMethodsCalledOnThis() {
-  return await new AClass("mat").testMethodsCalledOnThis();
-}
-
-async function go() {
-  return await testMethods() && await testMethodsCalledOnThis();
-}
 module.exports = go ;
