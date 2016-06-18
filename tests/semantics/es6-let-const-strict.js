@@ -3,6 +3,7 @@ async function inc(m) {
 }
 
 module.exports = async function(){
+    "use strict";
     const p = await inc(0) ;
     var q = p ;
     if (true) {
