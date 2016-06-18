@@ -1,14 +1,13 @@
-"xxx-use strict";
-
 async function inc(m) {
     return m+1 ;
 }
 
 async function test(){
-    var x = await inc(0) ;
+    const p = await inc(0) ;
+    let q = p ;
     function y() {
-        return x ;
+        return p ;
     }
-    return y() === 1;
+    return y() === q;
 }
 module.exports = test ;
