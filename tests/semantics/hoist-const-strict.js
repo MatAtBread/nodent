@@ -2,7 +2,8 @@ async function inc(m) {
     return m+1 ;
 }
 
-async function sloppy(){
+async function strict(){
+    "use strict";
     const p = await inc(0) ;
     var a = p ;
     if (true) {
@@ -14,11 +15,12 @@ async function sloppy(){
         }
     }
 
-    return a==1 && b==2 && c==3 && p==3 ;
+    return a==1 && b==2 && c==3 && p==1 ;
 }
 
-if (+process.versions.v8.split('.')[0] != 4) {
-    module.exports = sloppy;
-} else {
+/* Sloppy mode consts can only be redefined in V8 3 */
+if (+process.versions.v8.split('.')[0] <= 3) {
     module.exports = async function() { return true } ;
+} else {
+    module.exports = strict;
 }
