@@ -17,8 +17,8 @@ async function sloppy(){
     return a==1 && b==2 && c==3 && p==3 ;
 }
 
-if (+process.versions.v8.split('.')[0] != 4) {
+//if (+process.versions.v8.split('.')[0] != 4) {
     module.exports = sloppy;
-} else {
-    module.exports = async function() { return true } ;
-}
+//} else {
+//    module.exports = async function() { return true } ;
+//}

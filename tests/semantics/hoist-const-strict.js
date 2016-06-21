@@ -18,9 +18,8 @@ async function strict(){
     return a==1 && b==2 && c==3 && p==1 ;
 }
 
-/* Sloppy mode consts can only be redefined in V8 3 */
-if (+process.versions.v8.split('.')[0] <= 3) {
-    module.exports = async function() { return true } ;
-} else {
+//if (+process.versions.v8.split('.')[0] != 4) {
     module.exports = strict;
-}
+//} else {
+//    module.exports = async function() { return true } ;
+//}
