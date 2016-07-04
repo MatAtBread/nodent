@@ -83,7 +83,7 @@ module.exports = function(nodent,opts) {
 			}) ;
 		});
 	}
-	map.MapError = mapError ;
+	map.MapError = MapError ;
 	return map ;
 }
 
