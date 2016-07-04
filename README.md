@@ -798,6 +798,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+04-Jul-16 v2.5.7
+
+- Correctly export MapError (for instanceof) as map.MapError
+
 27-Jun-16 v2.5.6
 
 - Correctly bind `this` inside loops if it is referenced (https://github.com/MatAtBread/nodent/issues/39). Many thanks to https://github.com/jeffreylin for the test case and fix.
