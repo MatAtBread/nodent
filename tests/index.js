@@ -193,10 +193,11 @@ if (promiseImpls == providers.length)
     console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
 
 async function runTest(test, provider, type) {
-    if (provider.p && !(type & (4 | 8))) 
+    if (provider.p && !(type & (4 | 8))) {
         return {
-        result: DoNotTest
-    };
+            result: DoNotTest
+        };
+    }
     await breathe();
     var m = {}, result;
     test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
