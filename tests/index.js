@@ -7,6 +7,7 @@ var color = require('colors');
 var nodent = require('../nodent')({
     log: function (msg) {}
 });
+var AsyncFunction = nodent.require('asyncfunction') ;
 var map = nodent.require('map');
 var spaces = '                                                                 ' ;
 global.sleep = async function sleep(t) {
@@ -173,7 +174,17 @@ files.forEach(function (n) {
         var pr = nodent.compile(forceStrict + code, n, opts).code;
         tTotalCompilerTime += time(tCompiler);
         try {
-            test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+            if (n.match(/\/dual-/)) {
+                var dual = 
+                    "var _a = function() { "+pr+"} ;\n"+
+//                    "var _s = function() { "+code.replace(/async|await/g,'')+"}\n"+
+                    "module.exports = async function() { await _a()===_s() } " ;
+                
+                test[i].fn[type] = new AsyncFunction("module", "require", "Promise", "__unused", "nodent", "DoNotTest", dual) ;
+                console.log(test[i].fn[type].toES5String()) ;
+            } else {
+                test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+            }
         } catch (ex) {
             if (!compileException) {
                 console.warn(test[i].name+(" not supported by v8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;

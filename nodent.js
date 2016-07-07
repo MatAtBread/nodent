@@ -68,16 +68,16 @@ function copyObj(a){
 	return o ;
 };
 
-var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writeable:true,enumerable:true}}) ;
+var defaultCodeGenOpts = Object.create(initialCodeGenOpts, {es7:{value:true,writable:true,enumerable:true}}) ;
 var optionSets = {
 	default:defaultCodeGenOpts,
 	es7:Object.create(defaultCodeGenOpts),
 	promise:Object.create(defaultCodeGenOpts,{
-		promises:{value:true,writeable:true,enumerable:true}
+		promises:{value:true,writable:true,enumerable:true}
 	}),
 	generator:Object.create(defaultCodeGenOpts,{
-		generators:{value:true,writeable:true,enumerable:true},
-		es7:{value:false,writeable:true,enumerable:true},
+		generators:{value:true,writable:true,enumerable:true},
+		es7:{value:false,writable:true,enumerable:true},
 	})
 };
 optionSets.promises = optionSets.promise ;
@@ -417,7 +417,7 @@ function requireCover(cover,opts) {
 		if (cover.indexOf("/")>=0)
 			this.covers[key] = require(cover) ;
 		else
-			this.covers[key] = require("./covers/"+cover);
+			this.covers[key] = require(__dirname+"/covers/"+cover);
 	}
 	return this.covers[key](this,opts) ;
 }
@@ -612,7 +612,11 @@ function setGlobalEnvironment(initOpts) {
 		enumerable:false,
 		writable:true
 	} ;
-	Object.defineProperties(Function.prototype,augmentFunction) ;
+	try {
+	    Object.defineProperties(Function.prototype,augmentFunction) ;
+	} catch (ex) {
+	    initOpts.log("Function prototypes already assigned: ",ex.messsage) ;
+	}
 
 	/**
 	 * We need a global to handle funcbacks for which no error handler has ever been defined.

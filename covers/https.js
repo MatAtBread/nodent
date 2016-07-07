@@ -17,7 +17,7 @@ module.exports = function(nodent,config) {
 	};
 	
 	cover.get = function(opts){
-		return new nodenr.Thenable(function($return,$error){
+		return new nodent.Thenable(function($return,$error){
 			http.get(opts,$return).on('error',$error) ;
 		}) ;
 	};
