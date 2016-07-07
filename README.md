@@ -798,10 +798,23 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-08-Jun-16 v2.5.6
+08-Jul-16 v2.5.8
+
+- Correctly hoist and implement block scoping for `let`, `const`, etc. Note: the actual mapping attempts to provide the most compatable code since pre-ES6 implementations of `const` differ between JS engines and strict/sloppy mode. It is possible some early code that works on non-standard JS implementations may execute differently or fail to compile.
+- Implement dual-mode test for const scoping
+- Fix typo in covers/https to prevented get() from working
+- Fix path resolution for nodent.require() built-ins
+- Fix typos when defining writable Object properties
+
+04-Jul-16 v2.5.7
+
+- Correctly export MapError (for instanceof) as map.MapError
+
+27-Jun-16 v2.5.6
 
 - Correctly bind `this` inside loops if it is referenced (https://github.com/MatAtBread/nodent/issues/39). Many thanks to https://github.com/jeffreylin for the test case and fix.
 - Fix command-line option `--use=(mode)` with text input
+- Bump acorn-es7-plugin to to 1.0.15
 
 06-Jun-16 v2.5.5
 

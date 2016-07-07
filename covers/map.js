@@ -12,7 +12,7 @@ module.exports = function(nodent,opts) {
     if (!opts.Promise)
         opts.Promise = global.Promise || Thenable ;
 
-	return (function map(what,result,asyncFn) {
+	function map(what,result,asyncFn) {
 		var hasError = false ;
 		if (typeof what=="number") {
 			var period = [] ;
@@ -82,7 +82,9 @@ module.exports = function(nodent,opts) {
 				}
 			}) ;
 		});
-	}) ;
+	}
+	map.MapError = MapError ;
+	return map ;
 }
 
 module.exports.MapError = MapError ;
