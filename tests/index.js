@@ -105,7 +105,7 @@ for (; idx < process.argv.length; idx++) {
             if (useGenOnly)
                 providers.splice(1, 1);
         } catch (ex) {
-            console.log(("v8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
+            console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
             if (useGenOnly)
                 process.exit(-1);
         }
@@ -184,7 +184,7 @@ files.forEach(function (n) {
             test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
         } catch (ex) {
             if (!compileException) {
-                console.warn(test[i].name+(" not supported by v8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
                 compileException = true ;
             }
             test[i].fn[type] = function(m) {
