@@ -7,6 +7,7 @@ var color = require('colors');
 var nodent = require('../nodent')({
     log: function (msg) {}
 });
+var AsyncFunction = nodent.require('asyncfunction') ;
 var map = nodent.require('map');
 var spaces = '                                                                 ' ;
 global.sleep = async function sleep(t) {
@@ -86,13 +87,13 @@ var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, 
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
-    if (fqPath == __filename || fqPath == __dirname) 
+    if (fqPath == __filename || fqPath == __dirname)
         break;
 }
 idx += 1;
 for (; idx < process.argv.length; idx++) {
     var arg = process.argv[idx];
-    if (arg == '--syntaxonly') 
+    if (arg == '--syntaxonly')
         syntaxTest = 1;
      else if (arg == '--syntax') {
         syntaxTest = 2;
@@ -101,11 +102,11 @@ for (; idx < process.argv.length; idx++) {
             useGenOnly = arg == '--genonly';
             eval("var temp = new Promise(function(){}) ; function* x(){ return }");
             useGenerators = true;
-            if (useGenOnly) 
+            if (useGenOnly)
                 providers.splice(1, 1);
         } catch (ex) {
-            console.log(("v8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
-            if (useGenOnly) 
+            console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
+            if (useGenOnly)
                 process.exit(-1);
         }
     } else if (arg == '--output' || arg == '--es7' || arg == '--save') {
@@ -126,7 +127,7 @@ function pad(s, n) {
 
 if (syntaxTest) {
     require('./test-syntax').testFiles(process.argv.length > idx ? process.argv.slice(idx) : [__dirname + "/.."], true);
-    if (syntaxTest == 1) 
+    if (syntaxTest == 1)
         return;
 }
 var files = (process.argv.length > idx ? process.argv.slice(idx) : fs.readdirSync('./tests/semantics').map(function (fn) {
@@ -155,28 +156,35 @@ files.forEach(function (n) {
     };
     process.stdout.write('\r- Compiling ' + test[i].name + '                         \r');
     var code = fs.readFileSync(n).toString();
+    var dualMode = n.match(/\/dual-/) ;
+    if (dualMode) {
+        code = "module.exports = async function() { return _s() === await _a() }\n"+
+            "function _s() { "+code.replace(/async|await/g,"")+" }\n"+
+            "async function _a() { "+forceStrict + code+" }" ;
+    }
     var compileException = false;
     for (var type = 0;type < (useGenerators ? 12 : 8); type++) {
         var opts = {}; //  es7:true } ;
-        if (!(type & 1)) 
+        if (!(type & 1))
             opts.lazyThenables = true;
-        if (type & 2) 
+        if (type & 2)
             opts.wrapAwait = true;
-        if (type & 4) 
+        if (type & 4)
             opts.promises = true;
-        if (type & 8) 
+        if (type & 8)
             opts.generators = true;
         if (!(type & (4|8)))
             opts.es7 = true;
         types[type] = Object.keys(opts).toString() ;
-        var tCompiler = process.hrtime();
-        var pr = nodent.compile(forceStrict + code, n, opts).code;
+        var pr, tCompiler = process.hrtime();
+        pr = nodent.compile(forceStrict + code, n, opts).code;
+
         tTotalCompilerTime += time(tCompiler);
         try {
             test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
         } catch (ex) {
             if (!compileException) {
-                console.warn(test[i].name+(" not supported by v8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
                 compileException = true ;
             }
             test[i].fn[type] = function(m) {
@@ -187,23 +195,24 @@ files.forEach(function (n) {
     i += 1;
 });
 console.log("Total compile time:", ((tTotalCompilerTime | 0) + "ms").yellow);
-if (useQuick) 
-    console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison'));
-if (promiseImpls == providers.length) 
+if (useQuick)
+    console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparason'));
+if (promiseImpls == providers.length)
     console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
 
 async function runTest(test, provider, type) {
-    if (provider.p && !(type & (4 | 8))) 
+    if (provider.p && !(type & (4 | 8))) {
         return {
-        result: DoNotTest
-    };
+            result: DoNotTest
+        };
+    }
     await breathe();
     var m = {}, result;
     test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
     var t = process.hrtime();
     try {
         result = await m.exports();
-        if (result != true) 
+        if (result != true)
             throw result;
     } catch (ex) {
         result = ex;
@@ -221,7 +230,7 @@ try {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
             process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\r');
-            
+
             for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
                 var ticks = [];
                 table[type] = table[type] || [];
@@ -250,7 +259,7 @@ try {
                 ticks = ticks.sort();
                 var median = ticks[ticks.length / 2 | 0];
                 var metric = median;
-                if (!benchmark) 
+                if (!benchmark)
                     benchmark = metric;
                 metric = metric / benchmark * 100;
                 result = {
@@ -292,9 +301,9 @@ try {
                 return n[field];
             });
         }
-        
+
         function avg(by) {
-            if (!Array.isArray(by)) 
+            if (!Array.isArray(by))
                 return NaN;
             return by.filter(function (n) {
                 return typeof n === 'number';
@@ -302,19 +311,19 @@ try {
                 return a + b;
             }, 0) / by.length;
         }
-        
+
         function traffic(n) {
-            if (isNaN(n)) 
+            if (isNaN(n))
                 return pad('-', 16).blue;
-            if (n < 120) 
+            if (n < 120)
                 return pad('' + (n | 0), 16).green;
-            if (n < 200) 
+            if (n < 200)
                 return pad('' + (n | 0), 16).white;
-            if (n < 300) 
+            if (n < 300)
                 return pad('' + (n | 0), 16).yellow;
             return pad('' + (n | 0), 16).red;
         }
-        
+
         var n;
         var fidx = Object.keys(table)[0] ;
         n = pad('') + pad('', 16);
@@ -343,4 +352,3 @@ try {
 } catch (ex) {
     console.error(ex.stack || ex);
 }
-

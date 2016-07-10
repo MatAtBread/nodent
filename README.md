@@ -201,7 +201,7 @@ This are generated automatically in the transpiled files when you set the `runti
 	// Called when an async function throws an exception during
 	// asynchronous operations and the calling synchronous function has returned.
 	window.$error = function(exception) {
-		/* Maybe log the error somewhere */
+		// Maybe log the error somewhere
 		throw ex ;
 	};
 
@@ -287,10 +287,10 @@ Invoking async functions from ES5/6
 
 As described above, the return type from an async function is a Promise (or, to be accurate it's whatever type you assign the scoped variable `Promise` - if this is `nodent.Thenable`, then it has a `then()` member, and behaves enough like a Promise to work with Promises/A+-compliant libraries). So, to invoke an `async function` from a normal ES5 script you can use the code:
 
-	/* An async function defined somewhere */
+	// An async function defined somewhere
 	async function readFile() { ... }
 
-	/* Calling it using ES5 syntax in a non-nodented way */
+	// Calling it using ES5 syntax in a non-nodented way
 	readFile(filename).then(function(data){
 	    ...
 	},function(err){
@@ -348,13 +348,22 @@ Differences from the ES7 specification
 
 		'use nodent {"wrapAwait":true}';
 
-	Wrapping every value in a Promise (or Thenable for -es7 mode) increases the time taken to invoke an async function by about 20%.
+	Wrapping every value in a Promise (or Thenable for -es7 mode) increases the time taken to invoke an async function by about 20%. An alternative to
+  wrapping everything is to only wrap expression where this might be the case explicitly:
+
+    var x = await Promise.resolve(maybeThisIsAPromise()) ;
+
+  or
+
+    var x = maybeThisIsAPromise() ;
+    if (require('nodent').isThenable(x))
+      x = await x ;
 
 * **lazyThenables**
 
 	Invoking an async function _without_ a preceding `await` (simply by calling it) executes the function body but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects (Note: this behaviour only applied to ES7-mode from version 2.4.0). This is in compliance with the ES7 specification.  
 
-	However, this has a significant performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7` mode, or use the `nodent.Thenable` in place of Promises in other modes. In this case, if you call the async function the body _is not actually executedy_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
+	However, this has a significant performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7` mode, or use the `nodent.Thenable` in place of Promises in other modes. In this case, if you call the async function the body _is not actually executed_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
 
 	In `use nodent-promises` mode, it is the implementation of the Promise that determines the execution semantics. The table below is a summary of modes and execution semantics. You can test the performance on your own hardware with the following command. Note the relative performance is a worst case, since the test does nothing other than make async calls in a loop.
 
@@ -571,17 +580,17 @@ To make life even easier, the response is covered too, just before the first cal
 		...
 	var http = nodent.require('http') ;
 
-	/* Make a request. Nodent creates the callbacks, etc. for you
-	and so you can read the line as "wait for the response to be generated" */
+	// Make a request. Nodent creates the callbacks, etc. for you
+	// and so you can read the line as "wait for the response to be generated"
 	var response = await http.get("http://npmjs.org/~matatbread") ;
 
 	var body = "" ;
 	response.on('data',function(chunk){ body += chunk ;} ;
 
-	/* Wait for the "end" event */
+	// Wait for the "end" event
 	await response.wait('end') ;
 
-	/* The response is complete, print it out */
+	// The response is complete, print it out
 	console.log('The response is:\n"+body) ;
 
 http.request is similar, but not identical as you will need access to the request object to end it (amongst other things):
@@ -662,7 +671,7 @@ Example: execute arbitrary async functions in parallel and return when they are 
 
 	mapped = await map([asyncFn("abc"),asyncFn2("def")]) ;
 
-	/* All done - mapped is an new array containing the async-returns */
+	// All done - mapped is an new array containing the async-returns
 
 Example: execute arbitrary labelled async functions in parallel and return when they are all complete
 
@@ -672,7 +681,7 @@ Example: execute arbitrary labelled async functions in parallel and return when 
 	mapped = await map({for:asyncFn("abc"),bar:asyncFn2("def")}) ;
 	console.log(mapped.foo, mapped.bar) ;
 
-	/* All done - mapped is an new object containing the async-returns in each named member */
+	// All done - mapped is an new object containing the async-returns in each named member
 
 In the latter two cases, where there is only an single parameter, the async return value from `map` is a corresponding array or object to the parameter where each member has been resolved if Thenable (a Promise or async function value), or passed through unchanged if not Thenable.
 
@@ -702,7 +711,7 @@ To access the type:
 
 Once defined, you can create async functions on the fly just like normal functions:
 
-	// Create a new async function
+    // Create a new async function
     var add = new AsyncFunction("i","j","return i+j") ;
 
     console.log(add instanceof Function)		// true: An AsyncFunction is also a function
@@ -741,7 +750,7 @@ You can also supply an option third parameter to asyncify() to avoid name-clashe
 
 If you specifiy the environment option `augmentObject` as in `require('nodent')({augmentObject:true})` you can directly asyncify an API, for example:
 
-	/* Create a redis client from a library that can be used with await */
+	// Create a redis client from a library that can be used with await
 	var redis = require('redis').asyncify() ;
 
 Testing
@@ -797,6 +806,14 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+08-Jul-16 v2.5.8
+
+- Correctly hoist and implement block scoping for `let`, `const`, etc. Note: the actual mapping attempts to provide the most compatable code since pre-ES6 implementations of `const` differ between JS engines and strict/sloppy mode. It is possible some early code that works on non-standard JS implementations may execute differently or fail to compile. Additionally, use of `let` and `const` is slightly slower is it involves the creation of additional scopes in awaited callbacks.
+- Implement dual-mode test for const scoping
+- Fix typo in covers/https to prevented get() from working
+- Fix path resolution for nodent.require() built-ins
+- Fix typos when defining writable Object properties
 
 04-Jul-16 v2.5.7
 
