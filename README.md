@@ -807,8 +807,9 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-08-Jul-16 v2.5.8
+08-Jul-16 v2.5.9
 
+- Revert change to runtime inclusion in 2.5.8 as it breaks some live uses of browserify/webpack, and was only included to make istanbul work
 - Correctly hoist and implement block scoping for `let`, `const`, etc. Note: the actual mapping attempts to provide the most compatable code since pre-ES6 implementations of `const` differ between JS engines and strict/sloppy mode. It is possible some early code that works on non-standard JS implementations may execute differently or fail to compile. Additionally, use of `let` and `const` is slightly slower is it involves the creation of additional scopes in awaited callbacks.
 - Implement dual-mode test for const scoping
 - Fix typo in covers/https to prevented get() from working
