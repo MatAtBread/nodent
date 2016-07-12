@@ -83,7 +83,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, syntaxTest = 0, forceStrict = "";
+var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = false ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -97,7 +97,14 @@ for (; idx < process.argv.length; idx++) {
         syntaxTest = 1;
      else if (arg == '--syntax') {
         syntaxTest = 2;
-    } else if (arg == '--generators' || arg == '--genonly') {
+     } else if (arg == '--engine') {
+       try {
+           eval("async function x(){}");
+           useEngine = true;
+       } catch (ex) {
+           console.log(("V8 "+process.versions.v8+" does not support async/await (try a later version of nodejs). Skipping some tests. ").yellow) ;
+       }
+     } else if (arg == '--generators' || arg == '--genonly') {
         try {
             useGenOnly = arg == '--genonly';
             eval("var temp = new Promise(function(){}) ; function* x(){ return }");
@@ -163,18 +170,22 @@ files.forEach(function (n) {
             "async function _a() { "+forceStrict + code+" }" ;
     }
     var compileException = false;
-    for (var type = 0;type < (useGenerators ? 12 : 8); type++) {
+    for (var type = useEngine?-1:0;type < (useGenerators ? 12 : 8); type++) {
         var opts = {}; //  es7:true } ;
-        if (!(type & 1))
-            opts.lazyThenables = true;
-        if (type & 2)
-            opts.wrapAwait = true;
-        if (type & 4)
-            opts.promises = true;
-        if (type & 8)
-            opts.generators = true;
-        if (!(type & (4|8)))
-            opts.es7 = true;
+        if (type==-1)
+          opts.engine = true ;
+        else {
+          if (!(type & 1))
+              opts.lazyThenables = true;
+          if (type & 2)
+              opts.wrapAwait = true;
+          if (type & 4)
+              opts.promises = true;
+          if (type & 8)
+              opts.generators = true;
+          if (!(type & (4|8)))
+              opts.es7 = true;
+        }
         types[type] = Object.keys(opts).toString() ;
         var pr, tCompiler = process.hrtime();
         pr = nodent.compile(forceStrict + code, n, opts).code;
