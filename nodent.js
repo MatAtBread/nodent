@@ -43,8 +43,8 @@ var config = {
 //		set within the directive as a JSON-encoded extension
 
 var initialCodeGenOpts = {
-    lazyThenables:false,
-    noUseDirective:false,
+  lazyThenables:false,
+  noUseDirective:false,
 	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
@@ -77,7 +77,11 @@ var optionSets = {
 	}),
 	generator:Object.create(defaultCodeGenOpts,{
 		generators:{value:true,writable:true,enumerable:true},
-		es7:{value:false,writable:true,enumerable:true},
+		es7:{value:false,writable:true,enumerable:true}
+	}),
+	engine:Object.create(defaultCodeGenOpts,{
+		engine:{value:true,writable:true,enumerable:true},
+		promises:{value:true,writable:true,enumerable:true}
 	})
 };
 optionSets.promises = optionSets.promise ;
@@ -143,8 +147,8 @@ function parseCompilerOptions(code,log,filename) {
 		log("Invalid literal compiler option: "+((regex && regex[0]) || "<no options found>"));
 	}
 
-	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators) {
-		if ((parseOpts.promises || parseOpts.es7) && parseOpts.generators) {
+	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators || parseOpts.engine) {
+		if (/*!parseOpts.engine || */(((parseOpts.promises || parseOpts.es7) && parseOpts.generators))) {
 			log("No valid 'use nodent' directive, assumed -es7 mode") ;
 			parseOpts = optionSets.es7 ;
 		}
