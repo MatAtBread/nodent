@@ -832,6 +832,7 @@ Changelog
 14-Jul-16 v2.5.10
 
 - Add 'engine' mode that _only_ transpiles the nodent ES7 extensions (`async get x(){}`, `async throw x`, `async return` and `await` anywhere). Standard ES7 async/await constructs are passed through the compiler unchanged to be run by the underlying engine (e.g. Chrome v53 or Edge v14).
+- Implement parsing for proposed ES7 Object spread `var {a,b,...x} = y ;` used in Babel (see https://github.com/MatAtBread/fast-async/issues/6)
 
 08-Jul-16 v2.5.9
 
