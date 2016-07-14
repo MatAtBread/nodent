@@ -829,9 +829,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-15-Jul 16 v2.5.11
+15-Jul 16 v2.6.0
 
-- Optimize case where 'engine' generates an 'awaitAnywhere' Promise-style callback for an async function nested inside a sync function, and `await` is legal. 
+- Optimize case where 'engine' generates an 'awaitAnywhere' Promise-style callback for an async function nested inside a sync function, and `await` is legal.
+- Bump version to make support for 'engine' mode easier to detect in toolchains. 
 
 14-Jul-16 v2.5.10
 
