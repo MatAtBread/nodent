@@ -43,8 +43,8 @@ var config = {
 //		set within the directive as a JSON-encoded extension
 
 var initialCodeGenOpts = {
-  lazyThenables:false,
-  noUseDirective:false,
+    lazyThenables:false,
+    noUseDirective:false,
 	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
