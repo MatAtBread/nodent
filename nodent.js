@@ -148,7 +148,7 @@ function parseCompilerOptions(code,log,filename) {
 	}
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators || parseOpts.engine) {
-		if (/*!parseOpts.engine || */(((parseOpts.promises || parseOpts.es7) && parseOpts.generators))) {
+		if ((((parseOpts.promises || parseOpts.es7) && parseOpts.generators))) {
 			log("No valid 'use nodent' directive, assumed -es7 mode") ;
 			parseOpts = optionSets.es7 ;
 		}
