@@ -49,7 +49,7 @@ To use NoDent, you need to:
 
 	require('nodent')() ;
 
-This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a `use nodent...` directive at the top of a .js file.
+This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in ".njs" or containing a `use nodent` directive at the top of a .js file.
 
 You can't use the directive, or any other Nodent features in the file that initially `require("nodent")()`. If necessary, have a simple "loader.js" that requires Nodent and then requires your first Nodented file, or start your app with nodent from the command line:
 
@@ -119,22 +119,28 @@ Code generation options:
 
 |option|Description|
 |-------|----------|
-| --use=_mode_ 		| Ignore any "use nodent" directive in the source file, and force compilation _mode_ to be `es7`,`promises`,`generators` or `default`
+| --use=_mode_ 		| Ignore any "use nodent" directive in the source file, and force compilation _mode_ to be `es7`,`promises`,`generators`. `engine` or `default`
 | --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#differences-from-the-es7-specification)
 | --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 
 Use within your Node scripts
 ============================
-There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent...` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched and are loaded and executed unchanged.
+There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched and are loaded and executed unchanged.
 
 ES7 and Promises
 ----------------
-Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the one of directives:
+Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the directive:
 
 	'use nodent';
+	
+The `use nodent` directive uses a default set of compilation options called 'default', which can be modifed in your [package.json](#advanced-configuration).
+
+Within your package.json, you can have named sets of pre-defined options, which individual files can refer to if necessary. There are four pre-defined sets of options: promises, es7, generators and engine.
+	
 	'use nodent-promises';
 	'use nodent-es7';
 	'use nodent-generators';
+	'use nodent-engine';
 
 The ES7 proposal for async and await specifies the syntactic elements `async` and `await` (i.e. where they can be placed), the execution semantics (how they affect flow of execution), but also the types involved. In particular, `async` functions are specified to return a Promise, and await should be followed by an expression that evaluates to a Promise. The proposal also contains an implementation based on generators.
 
@@ -149,6 +155,9 @@ All the implementations work with each other - you can mix and match. If you're 
 
 #### Generators
 `use nodent-generators` generates code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x. The performance and memory overhead of generators is poor - currently (Node v5.9.1) averaging 4 times slower compared to the es7 with 'lazyThenables'.
+
+#### Engine
+`use nodent-engine` does _not_ transpile standard ES7 async/await constructs, but only transpiles the additional non-standard features provided by nodent - await anywhere, async getters, async return and throw. At the time of writing, not many runtimes implement async and await - Chrome v53 does with command line flags, and Edge 14 are examples. On Chrome, performance is better than generators, but not quite as good as Promises, and still 40% slower than ES7 mode.
 
 Use within a browser
 ====================
@@ -181,6 +190,7 @@ The currently supported options are:
 		es7:<boolean>,			// Compile in es7 mode (like 'use nodent-es7')
 		promises:<boolean>,		// Compile in Promises mode (like 'use nodent-promises')
 		generators:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
+		engine:<boolean>,		// Compile in engine mode (like 'use nodent-engine')
 		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
 		wrapAwait:<boolean>		// Allow 'await' on non-Promise expressions
 		lazyThenables:<boolean>	// Evaluate async bodies lazily in 'es7' mode. See the Changelog for 2.4.0 for more information
@@ -318,6 +328,22 @@ Async programming with Nodent (or ES7) is much easier and simpler to debug than 
 
 Differences from the ES7 specification
 --------------------------------------
+
+* **async getters**
+
+	Nodent permits a class or object definition to define async getters:
+	
+		async get data() { ... }
+		get async data() { ... }
+		
+	This syntax is currently not supported by any other ES7 parsers and must be substituted with something an internal async IIFE:
+	
+		get data() { return (async function(){ 
+			... 
+		})() }
+		
+	Nodent logs a warning when it detects this situation.
+
 * **case without break**
 
 	As of the current version, `case` blocks without a `break;` that fall thorugh into the following `case` do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`. Nodent logs a warning when it detects this situation.
@@ -459,6 +485,7 @@ The second set is defined per-file for each file that Nodent loads and compiles.
 |es7|boolean|set by the directive `use nodent-es7`
 |promises|boolean|set by the directive `use nodent-promises`
 |generators|boolean|set by the directive `use nodent-generators`
+|engine|boolean|set by the directive `use nodent-engine`
 |wrapAwait|boolean|default: false [more info...](#differences-from-the-es7-specification)
 |sourcemap|boolean|default:true - generate a source-map in the output JS
 |parser|object|default:{sourceType:'script'} - passed to [Acorn](https://github.com/ternjs/acorn) to control the parser
@@ -469,7 +496,7 @@ The members $return, $error, $arguments, $asyncspawn, $asyncbind, $makeThenable 
 
 When determining what options to use when compiling an individual file, nodent follows the sequence:
 
-* Use the set specified after the 'use nodent-' directive. For example 'use nodent-promises' uses a predefined set called 'promises'. Other predefined sets are 'es7' and 'generators'. If the `use nodent` doesn't have a name, the internal name "default" is used.
+* Use the set specified after the 'use nodent-' directive. For example 'use nodent-promises' uses a predefined set called 'promises'. Other predefined sets are 'es7', 'generators' and 'engine'. If the `use nodent` doesn't have a name, the internal name "default" is used.
 * Apply any modifications contained within the package.json two directories above where nodent is installed (typically the location of your application). The package.json can (optionally) contain a 'nodent' section to define your own sets of options. For example, to create a set to be used by files containing a `use nodent-myapp` directive:
 
 		"nodent":{
@@ -481,7 +508,7 @@ When determining what options to use when compiling an individual file, nodent f
 			}
 		}
 
-	You can also set options for the pre-defined sets here (default,es7,promises,generators).
+	You can also set options for the pre-defined sets here (default,es7,promises,generators,engine).
 
 * Finally, nodent applies any options specified _within_ the directive, but after the name. The options are strict JSON and cannot be an expression. This is useful for quickly testing options, but is probably a bad idea if applied to very many files. One exception is rare use of the `wrapAwait` options, which has a performance overhead and few genuine use-cases. For example, to create the same effect as the 'myapp' set above:
 
@@ -536,7 +563,7 @@ The available meta-properties are:
 |Thenable|function|Default thenable protocol implementation|
 |EagerThenable|function|EagerThenable() protocol factory|
 |asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Thenables|
-|setDefaultCompileOptions (compiler[,env])|function|Set the defaults for the compiler and environment. This should be called before the first compiler is created. The default environment options (`log augmentObject extension dontMapStackTraces asyncStackTrace`) will be used when the corresponding option is missing when the compiler is created. The compiler options (`sourcemap` and default symbol names) must be set before the first compiler is created. The other compilation options (`es7 promises generators`) are set by the corresponding directive|
+|setDefaultCompileOptions (compiler[,env])|function|Set the defaults for the compiler and environment. This should be called before the first compiler is created. The default environment options (`log augmentObject extension dontMapStackTraces asyncStackTrace`) will be used when the corresponding option is missing when the compiler is created. The compiler options (`sourcemap` and default symbol names) must be set before the first compiler is created. The other compilation options (`es7 promises generators engine`) are set by the corresponding directive|
 |setCompileOptions (name,compiler)|function|Set the compilation options for a named [directive](#advanced-configuration) for the compiler. This should be called before the first compiler is created.
 
 	// Turn off sourcemap generation:
@@ -775,22 +802,17 @@ The test runner in tests/index.js accepts the following options:
 	--quick      	Don't target a specific execute time, just run each test once
 	--generators 	Performance test syntax transformations (the default) and generators as well
 	--genonly	 	Only run the performance tests for generator mode
+	--engine		Performance test the underlying engine's support for async and await (e.g. Chrome v53 with flags)
 	--syntax	 	Check the parser/output code before running semantic tests
 	--syntaxonly	Only run syntax tests
 	--forceStrict	Run the tests with a 'use strict' inserted at the top of every test file
 
-Note, the following options were removed in v2.5.0. Use the [command-line options](#command-line-usage) `--out` and `--use` instead.
-
-	--output     	Show the generated ES5 code for Promises
-	--es7        	Show the generated ES5 code for ES7 mode
-	--save       	Save the output (must be used with --out or --es7)
-
 Performance
 -----------
 
-Run the test script without the `--quick` option to see how nodent code performs in ES7 mode, Promises and generators on your platform. The specific 'perf' test just calls and awaits in a tight loop:
+Run the test script without the `--quick` option to see how nodent code performs in ES7 mode, Promises, generators and engine on your platform. The specific 'perf' test just calls and awaits in a tight loop:
 
-	./nodent.js tests --generators tests/semantics/perf.js
+	./nodent.js tests --generators --engine tests/semantics/perf.js
 
 Additionally, a try the following links to test performance against Babel and Traceur.
 
@@ -806,6 +828,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 
 Changelog
 ==========
+
+14-Jul-16 v2.5.10
+
+- Add 'engine' mode that _only_ transpiles the nodent ES7 extensions (`async get x(){}`, `async throw x`, `async return` and `await` anywhere). Standard ES7 async/await constructs are passed through the compiler unchanged to be run by the underlying engine (e.g. Chrome v53 or Edge v14).
+- Implement parsing for proposed ES7 Object spread `var {a,b,...x} = y ;` used in Babel (see https://github.com/MatAtBread/fast-async/issues/6)
 
 08-Jul-16 v2.5.9
 
