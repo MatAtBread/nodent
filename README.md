@@ -829,6 +829,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+15-Jul 16 v2.5.11
+
+- Optimize case where 'engine' generates an 'awaitAnywhere' Promise-style callback for an async function nested inside a sync function, and `await` is legal. 
+
 14-Jul-16 v2.5.10
 
 - Add 'engine' mode that _only_ transpiles the nodent ES7 extensions (`async get x(){}`, `async throw x`, `async return` and `await` anywhere). Standard ES7 async/await constructs are passed through the compiler unchanged to be run by the underlying engine (e.g. Chrome v53 or Edge v14).
