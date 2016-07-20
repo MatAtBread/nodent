@@ -832,6 +832,7 @@ Changelog
 20-Jul 16 v2.6.2
 
 - Update acorn-es7-plugin to fix issue with `export async` in webpack
+- Fix edge case where a continuation function is treated as a block-scoped
 
 15-Jul 16 v2.6.0
 
