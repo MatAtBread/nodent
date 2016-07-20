@@ -829,6 +829,10 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+20-Jul 16 v2.6.2
+
+- Update acorn-es7-plugin to fix issue with `export async` in webpack
+
 15-Jul 16 v2.6.0
 
 - Optimize case where 'engine' generates an 'awaitAnywhere' Promise-style callback for an async function nested inside a sync function, and `await` is legal.
