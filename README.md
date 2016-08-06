@@ -831,9 +831,9 @@ Changelog
 
 06-Aug 16 v2.6.3
 
-- Fix issue with non-tivial destructuring assigments (fixes https://github.com/MatAtBread/fast-async/issues/8)
-- Fix case where empty "else" block throws an expcetion (fixes https://github.com/MatAtBread/nodent/issues/50)
-- Fix case where single line exported function was incorrectly hoisted with no reference (fixes https://github.com/MatAtBread/fast-async/issues/7)
+- Fix issue with non-tivial destructuring assigments (fixes https://github.com/MatAtBread/fast-async/issues/8 - thanks to @simonbuchan)
+- Fix case where empty "else" block throws an expcetion (fixes https://github.com/MatAtBread/nodent/issues/50 - thanks to @Antender)
+- Fix case where single line exported function was incorrectly hoisted with no reference (fixes https://github.com/MatAtBread/fast-async/issues/7 - thanks to @simonbuchan, @naturalethic and @nightwolfz)
 - Bump acorn to v3.3.0
 
 20-Jul 16 v2.6.2
