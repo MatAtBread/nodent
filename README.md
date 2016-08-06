@@ -132,11 +132,11 @@ ES7 and Promises
 Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the directive:
 
 	'use nodent';
-	
+
 The `use nodent` directive uses a default set of compilation options called 'default', which can be modifed in your [package.json](#advanced-configuration).
 
 Within your package.json, you can have named sets of pre-defined options, which individual files can refer to if necessary. There are four pre-defined sets of options: promises, es7, generators and engine.
-	
+
 	'use nodent-promises';
 	'use nodent-es7';
 	'use nodent-generators';
@@ -332,16 +332,16 @@ Differences from the ES7 specification
 * **async getters**
 
 	Nodent permits a class or object definition to define async getters:
-	
+
 		async get data() { ... }
 		get async data() { ... }
-		
+
 	This syntax is currently not supported by any other ES7 parsers and must be substituted with something an internal async IIFE:
-	
-		get data() { return (async function(){ 
-			... 
+
+		get data() { return (async function(){
+			...
 		})() }
-		
+
 	Nodent logs a warning when it detects this situation.
 
 * **case without break**
@@ -829,6 +829,13 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+06-Aug 16 v2.6.3
+
+- Fix issue with non-tivial destructuring assigments (fixes https://github.com/MatAtBread/fast-async/issues/8 - thanks to @simonbuchan)
+- Fix case where empty "else" block throws an expcetion (fixes https://github.com/MatAtBread/nodent/issues/50 - thanks to @Antender)
+- Fix case where single line exported function was incorrectly hoisted with no reference (fixes https://github.com/MatAtBread/fast-async/issues/7 - thanks to @simonbuchan, @naturalethic and @nightwolfz)
+- Bump acorn to v3.3.0
+
 20-Jul 16 v2.6.2
 
 - Update acorn-es7-plugin to fix issue with `export async` in webpack
@@ -837,7 +844,7 @@ Changelog
 15-Jul 16 v2.6.0
 
 - Optimize case where 'engine' generates an 'awaitAnywhere' Promise-style callback for an async function nested inside a sync function, and `await` is legal.
-- Bump version to make support for 'engine' mode easier to detect in toolchains. 
+- Bump version to make support for 'engine' mode easier to detect in toolchains.
 
 14-Jul-16 v2.5.10
 
