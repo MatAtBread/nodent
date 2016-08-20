@@ -829,6 +829,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+20-Aug-16 v2.6.4
+
+- Fix issue with `for..of` with a `const` or destructuring initializer
+- Optimize EagerThenable and guard multiple Promise resolutions
+
 06-Aug 16 v2.6.3
 
 - Fix issue with non-trivial destructuring assignments (fixes https://github.com/MatAtBread/fast-async/issues/8 - thanks to @simonbuchan)
