@@ -54,7 +54,8 @@ function testFiles(paths,recurse) {
 			
 			var opts = {parser:{sourceType:'script',allowImportExportEverywhere:true,onComment:null}} ;
 			try {
-				var ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
+			    var initialAST = nodent.parse(code,"",null,opts) ;
+				var ci = nodent.prettyPrint(initialAST,opts) ;
 			} catch(ex) {
 				opts.parser.sourceType = 'module' ;
 				ci = nodent.prettyPrint(nodent.parse(code,"",null,opts),opts) ;
@@ -70,7 +71,7 @@ function testFiles(paths,recurse) {
 				return  r ;
 			}
 		} catch (ex) {
-			if (!ci) {
+			if (!initialAST) {
 				n += 1 ;
 				r.error = "Not valid javascript (ignored "+opts.parser.sourceType+")" ;
 			} else {
