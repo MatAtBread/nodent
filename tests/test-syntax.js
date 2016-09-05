@@ -109,7 +109,7 @@ function eqTree(a,b,p) {
 		throw new Error("length("+ka.length+","+kb.length+") "+p) ;
 
 	for (var i=0;i<ka.length;i++)
-		if (ka[i] != kb[i] || typeof a[ka[i]] != typeof b[kb[i]])
+		if (ka[i] != kb[i] || typeof a[ka[i]] != typeof b[kb[i]] || (!(a[ka[i]] instanceof Object) && a[ka[i]] !== b[kb[i]]))
 			throw new Error("key("+ka[i]+","+kb[i]+") "+p) ;
 
 	for (var i=0;i<ka.length;i++)

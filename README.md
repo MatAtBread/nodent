@@ -829,6 +829,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+05-Sep-16 v2.6.6
+
+- Fix JS output routine which (incorrectly) removed the asterisk from `yield *`. 
+- Improve syntax testing to catch differences in primitive values in ASTs
+
 26-Aug-16 v2.6.5
 
 - Fix JS output routine which (incorrectly) removed parenthesis from `a || (()=>b)` causing a precedence problem.
