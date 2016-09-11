@@ -240,7 +240,7 @@ try {
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
-            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\r');
+            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
 
             for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
                 var ticks = [];
@@ -288,7 +288,7 @@ try {
 
             }
             console.log(spaces+'\n') ;
-            var lines = 2+showPerformanceTable() ;
+            var lines = 3+showPerformanceTable() ;
             while (lines--) {
                 process.stdout.write('\u001B[1A') ;
             }
