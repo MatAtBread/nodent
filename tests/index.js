@@ -240,57 +240,63 @@ try {
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
-            process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
+            try {
+              process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
 
-            for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
-                var ticks = [];
-                table[type] = table[type] || [];
-                table[type][j] = table[type][j] || [];
-                // Warm up V8
-                result = await runTest(test[i], providers[j], type);
-                if (result.result !== true) {
-                    if (result.result !== DoNotTest) {
-                        console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
-                        type = 32767;
-                        j = providers.length;
-                    }
-                    continue;
-                }
-                var t = 0;
-                var cond = result.alwaysQuick?function(){ return ticks.length < result.alwaysQuick } : ( useQuick ? function () {
-                    return ticks.length < 2;
-                } : function () {
-                    return t < 100 || ticks.length < 20;
-                });
-                while (cond()) {
-                    result = await runTest(test[i], providers[j], type);
-                    ticks.push(result.t);
-                    t += result.t;
-                }
-                ticks = ticks.sort();
-                var median = ticks[ticks.length / 2 | 0];
-                var metric = median;
-                if (!benchmark)
-                    benchmark = metric;
-                metric = metric / benchmark * 100;
-                result = {
-                    value: result.result,
-                    metric: metric,
-                    provider: providers[j].name,
-                    type: types[type],
-                    test: test[i].name
-                };
-                table[type][j].push(metric);
-                byType[types[type]] = byType[types[type]] || [];
-                byType[types[type]].push(result);
-                byProvider[providers[j].name] = byProvider[providers[j].name] || [];
-                byProvider[providers[j].name].push(result);
+              for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
+                  var ticks = [];
+                  table[type] = table[type] || [];
+                  table[type][j] = table[type][j] || [];
+                  // Warm up V8
+                  result = await runTest(test[i], providers[j], type);
+                  if (result.result !== true) {
+                      if (result.result !== DoNotTest) {
+                          console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
+                          type = 32767;
+                          j = providers.length;
+                      }
+                      continue;
+                  }
+                  var t = 0;
+                  var cond = result.alwaysQuick?function(){ return ticks.length < result.alwaysQuick } : ( useQuick ? function () {
+                      return ticks.length < 2;
+                  } : function () {
+                      return t < 100 || ticks.length < 20;
+                  });
+                  while (cond()) {
+                      result = await runTest(test[i], providers[j], type);
+                      ticks.push(result.t);
+                      t += result.t;
+                  }
+                  ticks = ticks.sort();
+                  var median = ticks[ticks.length / 2 | 0];
+                  var metric = median;
+                  if (!benchmark)
+                      benchmark = metric;
+                  metric = metric / benchmark * 100;
+                  result = {
+                      value: result.result,
+                      metric: metric,
+                      provider: providers[j].name,
+                      type: types[type],
+                      test: test[i].name
+                  };
+                  table[type][j].push(metric);
+                  byType[types[type]] = byType[types[type]] || [];
+                  byType[types[type]].push(result);
+                  byProvider[providers[j].name] = byProvider[providers[j].name] || [];
+                  byProvider[providers[j].name].push(result);
 
-            }
-            console.log(spaces+'\n') ;
-            var lines = 3+showPerformanceTable() ;
-            while (lines--) {
-                process.stdout.write('\u001B[1A') ;
+              }
+              console.log(spaces+'\n') ;
+              var lines = 2+showPerformanceTable() ;
+              while (lines--) {
+                  process.stdout.write('\u001B[1A') ;
+              }
+            } catch(ex) {
+              process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n'+ex.message.red+'\n\n');
+            } finally {
+              process.stdout.write('\u001B[1A') ;
             }
         }
     }
