@@ -218,21 +218,40 @@ async function runTest(test, provider, type) {
         };
     }
     await breathe();
-    var m = {}, result;
+    var m = {};
     test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
     var t = process.hrtime();
-    try {
-        result = await m.exports();
-        if (result != true)
-            throw result;
-    } catch (ex) {
-        result = ex;
+    var returned = false ;
+    function onResult(r) {
+        if (returned)
+            return ;
+        returned = true ;
+        async return {
+            alwaysQuick: m.exports.alwaysQuick,
+            t: time(t),
+            result: r
+        }            
     }
-    return {
-        alwaysQuick: m.exports.alwaysQuick,
-        t: time(t),
-        result: result
-    };
+    try {
+        var thenable = m.exports();
+        setTimeout(function(){
+            if (returned)
+                return ;
+            returned = true ;
+            async return {
+                alwaysQuick: m.exports.alwaysQuick,
+                t: time(t),
+                result: new Error("Timed out")
+            }
+        },10000) ;
+        thenable.then(onResult,onResult) ;
+    } catch (ex) {
+		return {
+            alwaysQuick: m.exports.alwaysQuick,
+            t: time(t),
+            result: ex
+        }
+    }
 }
 
 try {
@@ -294,7 +313,7 @@ try {
                   process.stdout.write('\u001B[1A') ;
               }
             } catch(ex) {
-              fails.push(test[i].name.magenta + ' using ' + providers[j].name.yellow + ': '+ex.message.red);
+              fails.push(test[i].name.magenta + ' using ' + providers[j].name.yellow + ': ',ex);
             } finally {
               process.stdout.write('\u001B[1A') ;
             }
