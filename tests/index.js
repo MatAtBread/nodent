@@ -42,6 +42,10 @@ providers.push({
     name: 'nodent.Eager',
     p: nodent.EagerThenable()
 });
+providers.push({
+    name: 'nodent.Eager*',
+    p: nodent.EagerThenable(function(x){x()})
+});
 if (global.Promise) {
     providers.push({
         name: 'native',
@@ -55,6 +59,19 @@ function makePromiseCompliant(module, promise, resolve) {
 }
 
 var promiseImpls = providers.length;
+
+try {
+    providers.push({
+        name: 'ayepromise',
+        p: require('ayepromise').promise
+    });
+} catch (ex) {}
+try {
+    providers.push({
+        name: 'pinkie',
+        p: require('pinkie')
+});
+} catch (ex) {}
 try {
     var bluebird = require('bluebird');
     bluebird.config({
