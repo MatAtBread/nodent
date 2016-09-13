@@ -34,14 +34,14 @@ providers.push({
     name: '(none)',
     p: null
 });
-providers.push({
+/*providers.push({
     name: 'nodent.Thenable',
     p: nodent.Thenable
 });
 providers.push({
     name: 'nodent.Eager',
     p: nodent.EagerThenable()
-});
+});*/
 if (global.Promise) {
     providers.push({
         name: 'native',
@@ -236,7 +236,7 @@ async function runTest(test, provider, type) {
 }
 
 try {
-    var result, byType = {}, byProvider = {}, byTest = {}, table = [];
+    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [];
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
@@ -294,7 +294,7 @@ try {
                   process.stdout.write('\u001B[1A') ;
               }
             } catch(ex) {
-              process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n'+ex.message.red+'\n\n');
+              fails.push(test[i].name.magenta + ' using ' + providers[j].name.yellow + ': '+ex.message.red);
             } finally {
               process.stdout.write('\u001B[1A') ;
             }
@@ -303,6 +303,7 @@ try {
 
     process.stdout.write('\u001B['+type+'B') ;
     console.log('\n\n\n\n') ;
+    console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
         var i,j,lines = 0 ;
