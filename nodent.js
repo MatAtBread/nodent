@@ -103,6 +103,7 @@ function isDirective(node){
 }
 
 function parseCompilerOptions(code,log,filename) {
+    if (!log) log = console.warn.bind(console) ;
 	var regex, set, parseOpts = {} ;
 	if (typeof code=="string") {
 		if (regex = code.match(useDirective)) {
