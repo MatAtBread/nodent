@@ -3,7 +3,7 @@ var map = nodent.require('map',{throwOnError:true}) ;
 Function.prototype.asAsync = function(){
 	var fn = this ;
 	var args = Array.prototype.slice.call(arguments) ;
-	return nodent.Thenable(function(ok,err){
+	return new nodent.Thenable(function(ok,err){
 		ok(fn.apply(this,await map(args))) ;
 	}) ;
 }
