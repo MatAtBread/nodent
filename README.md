@@ -829,8 +829,9 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
-18-Sep-16 v2.6.7
+18-Sep-16 v2.6.7, v2.6.8
 
+- Handle loops with no test condition `for(;;){}`
 - Don't attempt to hoist `export`ed named decalarations
 - Correctly identify Babel types Object/ClassMathod as scopes to avoid illegal mappings 
 
