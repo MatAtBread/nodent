@@ -829,6 +829,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+18-Sep-16 v2.6.7
+
+- Don't attempt to hoist `export`ed named decalarations
+- Correctly identify Babel types Object/ClassMathod as scopes to avoid illegal mappings 
+
 05-Sep-16 v2.6.6
 
 - Fix JS output routine which (incorrectly) removed the asterisk from `yield *`. 
