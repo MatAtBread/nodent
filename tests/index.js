@@ -1,6 +1,8 @@
 'use nodent-es7 {"lazyThenables":true}';
 'use strict';
+
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
+var nativePromise = global.Promise ;
 var fs = require('fs');
 var path = require('path');
 var color = require('colors');
@@ -46,10 +48,10 @@ providers.push({
     name: 'nodent.Eager*',
     p: nodent.EagerThenable(function(x){x()})
 });
-if (global.Promise) {
+if (nativePromise) {
     providers.push({
         name: 'native',
-        p: global.Promise
+        p: nativePromise
     });
 }
 function makePromiseCompliant(module, promise, resolve) {
@@ -237,7 +239,6 @@ async function runTest(test, provider, type) {
     await breathe();
     var m = {};
     test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
-    var t = process.hrtime();
     var returned = false ;
     function onResult(r) {
         if (returned)
@@ -261,6 +262,7 @@ async function runTest(test, provider, type) {
                 result: new Error("Timed out")
             }
         },10000) ;
+        var t = process.hrtime();
         thenable.then(onResult,onResult) ;
     } catch (ex) {
 		return {
@@ -280,6 +282,9 @@ try {
               process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
 
               for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
+                  if (!(type & 1) && (type&12))
+                      continue ;
+
                   var ticks = [];
                   table[type] = table[type] || [];
                   table[type][j] = table[type][j] || [];

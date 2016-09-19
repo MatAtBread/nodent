@@ -6,13 +6,13 @@
     "test": "cd .. && npm test"
   },
   "repository": {
-      "type": "git",
-      "url": "https://github.com/MatAtBread/nodent.git"
-    },
+    "type": "git",
+    "url": "https://github.com/MatAtBread/nodent.git"
+  },
   "author": "",
   "license": "ISC",
   "dependencies": {
-      "colors": "^1.1.2"
+    "colors": "^1.1.2"
   },
   "devDependencies": {
     "bluebird": "^3.3.4",
