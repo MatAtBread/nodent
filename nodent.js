@@ -19,7 +19,6 @@ var config = {
 	augmentObject:false,									// Only one has to say 'yes'
 	extension:'.njs',										// The 'default' extension
 	dontMapStackTraces:false,								// Only one has to say 'no'
-	asyncStackTrace:false,
 	babelTree:false,
 	dontInstallRequireHook:false
 } ;
@@ -93,7 +92,11 @@ function globalErrorHandler(err) {
 
 /* Extract compiler options from code (either a string or AST) */
 var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
-
+var runtimes = require('./lib/runtime') ;
+var $asyncbind = runtimes.$asyncbind ;
+var $asyncspawn = runtimes.$asyncspawn ;
+var Thenable = $asyncbind.Thenable ; 
+    
 function noLogger(){}
 
 function isDirective(node){
@@ -368,52 +371,6 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
-/*
-$asyncbind has multple execution paths, determined by the arguments, to fulfil all runtime requirements in a single function
-so it can be serialized via toString() for transport to a browser. It is always called with this=Function (ie. it is attached
-to Function.prototype)
-
-The paths are:
-	$asyncbind(obj)							 // Simply return this function bound to obj
-	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion
-	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
-*/
-
-var runtimes = require('./lib/runtime') ;
-var $asyncbind = runtimes.$asyncbind ;
-var $asyncspawn = runtimes.$asyncspawn ;
-
-function wrapAsyncStack(catcher) {
-    var context = {} ;
-    Error.captureStackTrace(context,$asyncbind) ;
-    return function wrappedCatch(ex){
-        if (ex instanceof Error && context) {
-            try {
-                ex.stack = //+= "\n\t...\n"+
-                    ex.stack.split("\n").slice(0,3)
-                    .filter(function(s){
-                        return !s.match(/^\s*at.*nodent\.js/) ;
-                    }).join("\n")+
-                    ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
-                    context.stack.split("\n").slice(2)
-                    .filter(function(s){
-                        return !s.match(/^\s*at.*nodent\.js/) ;
-                    })
-                    .map(function(s,idx){
-                        return idx?"\n"+s:s.replace(/^(\s*)at /g,"\n$1await ")
-                    }).join("") ;
-            } catch (stackError) {
-                // Just fall through and don't modify the stack
-            }
-            context = null ;
-        }
-        return catcher.call(this,ex) ;
-    } ;
-}
-
-
-var Thenable = require('./lib/thenable') ;
-
 /* NodentCompiler prototypes, that refer to 'this' */
 function requireCover(cover,opts) {
 	opts = opts || {} ;
@@ -535,10 +492,13 @@ NodentCompiler.prototype.setOptions = function(members){
 	delete this.options.log ;
 	return this ;
 };
+
+$asyncbind.call($asyncbind) ;
+
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable = Thenable ;
-NodentCompiler.prototype.EagerThenable = require('./lib/eager.js') ;
-NodentCompiler.prototype.isThenable = Thenable.isThenable ;
+NodentCompiler.prototype.EagerThenable = $asyncbind.EagerThenable ;
+NodentCompiler.prototype.isThenable = function(x) { return x && x instanceof Object && typeof x.then==="function"} ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
 NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
@@ -630,9 +590,6 @@ function setGlobalEnvironment(initOpts) {
 		global[defaultCodeGenOpts[defaultCodeGenOpts.$error]] = globalErrorHandler ;
 	}
 
-	if (initOpts.asyncStackTrace)
-		$asyncbind.wrapAsyncStack = wrapAsyncStack ;
-
 	// "Global" options:
 	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
 	if (initOpts.augmentObject) {
@@ -664,7 +621,6 @@ function initialize(initOpts){
  * 		augmentObject:boolean,
  * 		extension:string?
  * 		dontMapStackTraces:boolean
- * 		asyncStackTrace:boolean
  */
 	if (!initOpts)
 		initOpts = {} ;
@@ -835,8 +791,8 @@ initialize.setCompileOptions = function(set,compiler) {
 };
 
 initialize.asyncify = asyncify ;
-initialize.Thenable = Thenable ;
-initialize.EagerThenable = require('./lib/eager.js') ;
+initialize.Thenable = $asyncbind.Thenable ;
+initialize.EagerThenable = $asyncbind.EagerThenable ;
 
 module.exports = initialize ;
 
