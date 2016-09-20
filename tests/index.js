@@ -2,13 +2,14 @@
 'use strict';
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
-var nativePromise = global.Promise ;
 var fs = require('fs');
 var path = require('path');
 var color = require('colors');
 var nodent = require('../nodent')({
     log: function (msg) {}
 });
+var nativePromise = global.Promise ;
+var gc = global.gc || function(){} ;
 var AsyncFunction = nodent.require('asyncfunction') ;
 var map = nodent.require('map');
 var spaces = '                                                                 ' ;
@@ -33,20 +34,12 @@ global.breathe = async function breathe() {
 };
 var providers = [];
 providers.push({
-    name: '(none)',
+    name: '{es7:true}',
     p: null
 });
 providers.push({
-    name: 'nodent.Thenable',
+    name: 'nodent',
     p: nodent.Thenable
-});
-providers.push({
-    name: 'nodent.Eager',
-    p: nodent.EagerThenable()
-});
-providers.push({
-    name: 'nodent.Eager*',
-    p: nodent.EagerThenable(function(x){x()})
 });
 if (nativePromise) {
     providers.push({
@@ -62,18 +55,6 @@ function makePromiseCompliant(module, promise, resolve) {
 
 var promiseImpls = providers.length;
 
-try {
-    providers.push({
-        name: 'ayepromise',
-        p: require('ayepromise').promise
-    });
-} catch (ex) {}
-try {
-    providers.push({
-        name: 'pinkie',
-        p: require('pinkie')
-});
-} catch (ex) {}
 try {
     var bluebird = require('bluebird');
     bluebird.config({
@@ -102,7 +83,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = false, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = false ;
+var useQuick = false, quiet = false, useGenerators = undefined, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = false ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -123,6 +104,8 @@ for (; idx < process.argv.length; idx++) {
        } catch (ex) {
            console.log(("V8 "+process.versions.v8+" does not support async/await (try a later version of nodejs). Skipping some tests. ").yellow) ;
        }
+     } else if (arg == '--nogenerators') {
+         useGenerators = false;
      } else if (arg == '--generators' || arg == '--genonly') {
         try {
             useGenOnly = arg == '--genonly';
@@ -147,6 +130,9 @@ for (; idx < process.argv.length; idx++) {
         break;
     }
 }
+
+if (useGenerators !== false) useGenerators = true ;
+
 function pad(s, n) {
     return ("                                " + s).substr(-(n || 32));
 }
@@ -226,21 +212,32 @@ files.forEach(function (n) {
 });
 console.log("Total compile time:", ((tTotalCompilerTime | 0) + "ms").yellow);
 if (useQuick)
-    console.log(('Note: Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison'));
+    console.log('Note:'.cyan,'Timings with '+'--quick'.underline+' are subject to significant GC jitter. Remove '+'--quick'.underline+' for accurate timing comparison');
 if (promiseImpls == providers.length)
     console.log('To test against some popular Promise implementations,', 'cd tests && npm i && cd ..'.yellow);
 
+var testCache = {} ;
 async function runTest(test, provider, type) {
     if (provider.p && !(type & (4 | 8))) {
         return {
             result: DoNotTest
         };
     }
-    await breathe();
+    await sleep(1);
+    var key = [test.name,provider.name,type].join();
     var m = {};
-    test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
+    if (!testCache[key]) {
+        test.fn[type](m, require, provider.p || DoNotTest, undefined, nodent, DoNotTest);
+        testCache[key] = m ;
+    } else {
+        m = testCache[key] ;
+    }
     var returned = false ;
     function onResult(r) {
+        if (tID) {
+            clearTimeout(tID) ;
+            tID = null ;
+        }
         if (returned)
             return ;
         returned = true ;
@@ -252,40 +249,37 @@ async function runTest(test, provider, type) {
     }
     try {
         var thenable = m.exports();
-        setTimeout(function(){
+        var tID = setTimeout(function(){
+            tID = null ;
             if (returned)
                 return ;
-            returned = true ;
-            async return {
-                alwaysQuick: m.exports.alwaysQuick,
-                t: time(t),
-                result: new Error("Timed out")
-            }
+            console.log("Timeout".red,test,provider)
+            onResult(new Error("Timed out")) ;
         },10000) ;
         var t = process.hrtime();
         thenable.then(onResult,onResult) ;
     } catch (ex) {
 		return {
             alwaysQuick: m.exports.alwaysQuick,
-            t: time(t),
+            t: t?time(t):10000,
             result: ex
         }
     }
 }
 
 try {
-    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [];
+    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0 ;
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
             try {
               process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
+              gc() ;
 
               for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
                   if (!(type & 1) && (type&12))
                       continue ;
 
-                  var ticks = [];
                   table[type] = table[type] || [];
                   table[type][j] = table[type][j] || [];
                   // Warm up V8
@@ -299,10 +293,11 @@ try {
                       continue;
                   }
                   var t = 0;
+                  var ticks = [];
                   var cond = result.alwaysQuick?function(){ return ticks.length < result.alwaysQuick } : ( useQuick ? function () {
                       return ticks.length < 2;
                   } : function () {
-                      return t < 100 || ticks.length < 20;
+                      return (t < 100 || ticks.length < 20) && ticks.length < 100;
                   });
                   while (cond()) {
                       result = await runTest(test[i], providers[j], type);
@@ -311,6 +306,7 @@ try {
                   }
                   ticks = ticks.sort();
                   var median = ticks[ticks.length / 2 | 0];
+                  tMedian += median ;
                   var metric = median;
                   if (!benchmark)
                       benchmark = metric;
@@ -327,7 +323,6 @@ try {
                   byType[types[type]].push(result);
                   byProvider[providers[j].name] = byProvider[providers[j].name] || [];
                   byProvider[providers[j].name].push(result);
-
               }
               console.log(spaces+'\n') ;
               var lines = 2+showPerformanceTable() ;
@@ -335,15 +330,15 @@ try {
                   process.stdout.write('\u001B[1A') ;
               }
             } catch(ex) {
-              fails.push(test[i].name.magenta + ' using ' + providers[j].name.yellow + ': ',ex);
+              fails.push(test[i].name.yellow + ' using ' + providers[j].name.yellow + ': ',ex.toString().red);
             } finally {
               process.stdout.write('\u001B[1A') ;
             }
         }
     }
 
-    process.stdout.write('\u001B['+type+'B') ;
-    console.log('\n\n\n\n') ;
+    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n') ;
+    console.log("Median execution time:",tMedian,"ms");
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
