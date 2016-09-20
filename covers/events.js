@@ -1,7 +1,7 @@
 module.exports = function(nodent,opts) {
     if (!opts) opts = {} ;
     if (!opts.Promise)
-        opts.Promise = global.Promise || require('../lib/thenable') ;
+        opts.Promise = global.Promise || nodent.Thenable ;
 
 	var events = require('events');
 	if (!events.EventEmitter.prototype.wait) {

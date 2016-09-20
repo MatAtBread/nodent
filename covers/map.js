@@ -5,12 +5,10 @@ function MapError(message) {
 MapError.prototype = Object.create(Error.prototype);
 MapError.prototype.constructor = MapError;
 
-var Thenable = require('../lib/thenable') ;
-
 module.exports = function(nodent,opts) {
     if (!opts) opts = {} ;
     if (!opts.Promise)
-        opts.Promise = global.Promise || Thenable ;
+        opts.Promise = global.Promise || nodent.Thenable ;
 
 	function map(what,result,asyncFn) {
 		var hasError = false ;
@@ -75,7 +73,7 @@ module.exports = function(nodent,opts) {
 					asyncFn.apply(this,arguments).then(complete,completeError);	
 				} else {
 					var f = isArray?e:what[e] ; 
-					if (Thenable.isThenable(f))
+					if (nodent.isThenable(f))
 						f.then(complete,completeError);
 					else 
 						complete(f) ;

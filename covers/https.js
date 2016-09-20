@@ -3,7 +3,7 @@ module.exports = function(nodent,config) {
 
     if (!config) config = {} ;
     if (!config.Promise)
-        config.Promise = global.Promise || require('../lib/thenable') ;
+        config.Promise = global.Promise || nodent.Thenable ;
     
     var http = require('https') ;
 	var cover = Object.create(http) ;
@@ -17,7 +17,7 @@ module.exports = function(nodent,config) {
 	};
 	
 	cover.get = function(opts){
-		return new nodent.Thenable(function($return,$error){
+		return new (config.Promise)(function($return,$error){
 			http.get(opts,$return).on('error',$error) ;
 		}) ;
 	};

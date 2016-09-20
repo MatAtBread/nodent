@@ -13,7 +13,7 @@ module.exports = function(nodent,config) {
 	
     if (!config) config = {} ;
     if (!config.Promise)
-        config.Promise = global.Promise || require('../lib/thenable') ;
+        config.Promise = global.Promise || nodent.Thenable ;
 
 	if (config.autoProtocol) {
 		protos.https = require('https') ;
