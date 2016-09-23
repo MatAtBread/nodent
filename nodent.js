@@ -670,8 +670,8 @@ function initialize(initOpts){
 	}
 
     function versionAwareNodentJSLoader(mod,filename) {
-        if (filename.match(/nodent\/nodent.js$/)) {
-            var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent.js$/,"")} ;
+        if (filename.match(/nodent\/nodent\.js$/)) {
+            var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent\.js$/,"")} ;
             if (downLevel.path) {
                 downLevel.version = JSON.parse(fs.readFileSync(filename.replace(/nodent\.js$/,"package.json"))).version ;
                 // Load the specified nodent
@@ -699,12 +699,17 @@ function initialize(initOpts){
                     }) ;
                 }
             }
+        } else if (filename.match(/node_modules\/nodent\/.*\.js$/)) {
+            // Things inside nodent always use the standard loader            
+            return stdJSLoader(mod,filename) ;
         } else {
             // The the appropriate loader for this file
             for (var n=0; n<nodentLoaders.length; n++) {
                 if (filename.slice(0,nodentLoaders[n].path.length)==nodentLoaders[n].path) {
-                    //console.log("Using nodent@",nodentLoaders[n].version,"to load",filename) ;
-                    return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
+                    console.log("Using nodent@"+nodentLoaders[n].version,"to load",filename) ;
+                    // Only use this parser if it's actually been instantiated
+                    if (nodentLoaders[n].jsCompiler)
+                        return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
                 }
             }
 
