@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "acorn": "~4.0.3",
+    "acorn-es7-plugin": "^1.1.0",
     "resolve": "1.1.7",
     "source-map": "^0.5.6"
   },
