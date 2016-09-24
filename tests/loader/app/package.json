@@ -4,12 +4,8 @@
   "description": "Test app using current Nodent version but depending on an ealier version",
   "main": "index.js",
   "scripts": {
-    "test": "echo '### This test requires npm >2.x ###' && npm i && node ."
+    "test": "echo '### This test requires npm >2.x ###' && cd ../loader-module && npm i && cd ../app && npm i && node ."
   },
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "loader-module": "file:../loader-module",
-    "nodent": "../../../../nodent"
-  }
+  "license": "ISC"
 }
