@@ -61,4 +61,10 @@ function syntax() {
 	a = {await:0};
 	{await:0};
 	await: await;
+
+	// An async arrow
+	async(b)=>0 ;
+
+	// A call to 'async'
+	async((b)=>0) ;
 }
