@@ -1,6 +1,6 @@
 {
   "name": "nodent",
-  "version": "2.6.8",
+  "version": "2.6.9",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "acorn": "3.3.0",
-    "acorn-es7-plugin": ">=1.0.17",
+    "acorn-es7-plugin": "^1.0.18",
     "resolve": "1.1.7",
     "source-map": "0.5.3"
   },
