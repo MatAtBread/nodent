@@ -245,7 +245,7 @@ async function runTest(test, provider, type) {
             alwaysQuick: m.exports.alwaysQuick,
             t: time(t),
             result: r
-        }            
+        }
     }
     try {
         var thenable = m.exports();
@@ -268,7 +268,7 @@ async function runTest(test, provider, type) {
 }
 
 try {
-    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0 ;
+    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = {}, nMedian = {} ;
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
@@ -306,7 +306,8 @@ try {
                   }
                   ticks = ticks.sort();
                   var median = ticks[ticks.length / 2 | 0];
-                  tMedian += median ;
+                  tMedian[providers[j].name] = (tMedian[providers[j].name] || 0)+median ;
+                  nMedian[providers[j].name] = (nMedian[providers[j].name] || 0)+1 ;
                   var metric = median;
                   if (!benchmark)
                       benchmark = metric;
@@ -337,8 +338,8 @@ try {
         }
     }
 
-    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n') ;
-    console.log("Median execution time:",tMedian,"ms");
+    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\nMedian execution times:') ;
+    console.log(Object.keys(tMedian).map(function(type){ return '  '+type.cyan+':\t'+tMedian[type]/nMedian[type]}).join('\n')) ;
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
