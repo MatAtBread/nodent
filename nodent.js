@@ -747,7 +747,15 @@ function initialize(initOpts){
             for (var n=0; n<nodentLoaders.length; n++) {
                 if (filename.slice(0,nodentLoaders[n].path.length)==nodentLoaders[n].path) {
                     //console.log("Using nodent@",nodentLoaders[n].version,"to load",filename) ;
-                    return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
+                    if (!nodentLoaders[n].jsCompiler) {
+                        // The client app loaded, but never initialised nodent (so it can only
+                        // be using library/runtime functions, not the require-hook compiler)
+                        return stdJSLoader(mod,filename) ;
+                    } else {
+                        if (nodentLoaders[n].jsCompiler === versionAwareNodentJSLoader)
+                            break ;
+                        return nodentLoaders[n].jsCompiler.apply(this,arguments) ;
+                    }
                 }
             }
 
