@@ -23,10 +23,12 @@ global.sleep = async function sleep(t) {
     }, t);
 };
 global.breathe = async function breathe() {
-    var t = Date.now();
+    var hr = process.hrtime();
     setImmediate(function () {
         try {
-             async return Date.now() - t;
+            var t = process.hrtime(hr);
+            t = t[0] * 1000 + t[1] / 1e6 ;
+            async return t;
         } catch (ex) {
              async throw ex;
         }
@@ -268,7 +270,7 @@ async function runTest(test, provider, type) {
 }
 
 try {
-    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = {}, nMedian = {} ;
+    var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0, nMedian = 0 ;
     for (var i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
@@ -306,11 +308,12 @@ try {
                   }
                   ticks = ticks.sort();
                   var median = ticks[ticks.length / 2 | 0];
-                  tMedian[providers[j].name] = (tMedian[providers[j].name] || 0)+median ;
-                  nMedian[providers[j].name] = (nMedian[providers[j].name] || 0)+1 ;
                   var metric = median;
-                  if (!benchmark)
+                  if (!benchmark) {
                       benchmark = metric;
+                      tMedian = tMedian+benchmark ;
+                      nMedian += 1 ;
+                  }
                   metric = metric / benchmark * 100;
                   result = {
                       value: result.result,
@@ -338,8 +341,7 @@ try {
         }
     }
 
-    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\nMedian execution times:') ;
-    console.log(Object.keys(tMedian).map(function(type){ return '  '+type.cyan+':\t'+tMedian[type]/nMedian[type]}).join('\n')) ;
+    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
