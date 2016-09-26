@@ -109,17 +109,8 @@ for (; idx < process.argv.length; idx++) {
      } else if (arg == '--nogenerators') {
          useGenerators = false;
      } else if (arg == '--generators' || arg == '--genonly') {
-        try {
-            useGenOnly = arg == '--genonly';
-            eval("var temp = new Promise(function(){}) ; function* x(){ return }");
-            useGenerators = true;
-            if (useGenOnly)
-                providers.splice(1, 1);
-        } catch (ex) {
-            console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
-            if (useGenOnly)
-                process.exit(-1);
-        }
+         useGenOnly = arg == '--genonly';
+         useGenerators = true;
     } else if (arg == '--output' || arg == '--es7' || arg == '--save') {
         console.log('Option '.grey+arg+' is deprecated and will be ignored.'.grey)
     } else if (arg == '--quiet') {
@@ -134,6 +125,16 @@ for (; idx < process.argv.length; idx++) {
 }
 
 if (useGenerators !== false) useGenerators = true ;
+if (useGenerators) {
+    try {
+        eval("var temp = new Promise(function(){}) ; function* x(){ return }");
+    } catch (ex) {
+        console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
+        if (useGenOnly)
+            process.exit(-1);
+        useGenerators = false ;
+    }
+}
 
 function pad(s, n) {
     return ("                                " + s).substr(-(n || 32));
