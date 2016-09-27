@@ -132,18 +132,21 @@ function parseCompilerOptions(code,log,filename) {
 	    regex = [null,null,"{}"] ;
 	}
 	if (set) {
-		try {
-			if (!filename)
-				filename = require('path').resolve('.') ;
-  		var packagePath = require('resolve').sync('package.json',{
-				moduleDirectory:[''],
-				extensions:[''],
-				basedir:require('path').dirname(filename)
-			}) ;
-			var packageOptions = JSON.parse(fs.readFileSync(packagePath)).nodent.directive[set] ;
-		} catch(ex) {
-			// Meh
-		}
+	    try {
+	        if (!filename)
+	            filename = require('path').resolve('.') ;
+	        else  if (require('fs').lstatSync(filename).isDirectory())
+	            filename = require('path').dirname(filename) ;
+
+	        var packagePath = require('resolve').sync('package.json',{
+	            moduleDirectory:[''],
+	            extensions:[''],
+	            basedir:filename
+	        }) ;
+	        var packageOptions = JSON.parse(fs.readFileSync(packagePath)).nodent.directive[set] ;
+	    } catch(ex) {
+	        // Meh
+	    }
 	}
 	try {
 		parseOpts = copyObj([optionSets[set],packageOptions,regex[2] && JSON.parse(regex[2])]);
