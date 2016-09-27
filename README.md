@@ -25,6 +25,7 @@ Contents
   * [API](#api)
   * [Built\-in conversions and helpers](#built-in-conversions-and-helpers)
   * [Testing](#testing)
+  * [Upgrading](#upgrading)
   * [Changelog](#changelog)
 
 Online demo
@@ -551,10 +552,6 @@ Changelog
 ==========
 
 27-Sep-16 v3.0.0 [see above](#upgrading)
-
-27-Sep-16 v2.6.10
-
-- Remove unecessary global declaration of printNode
 
 25-Sep-16 v2.6.9
 
