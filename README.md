@@ -558,5 +558,5 @@ Changelog
 - Update acorn-es7-plugin to handle `async(()=>0)`
 - Fix case where generator mode generated an illegal anonymous FunctionDefintion from an ArrowFunctionExpression that was never in an expression
 
-(Older changes...)[./docs/changelog-2.md)
+[Older changes...](./docs/changelog-2.md)
 
