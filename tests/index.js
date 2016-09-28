@@ -237,7 +237,7 @@ async function runTest(test, provider, type) {
 
 try {
     var result, byType = {}, byProvider = {}, byTest = {}, table = [];
-    for (var i = 0;i < test.length; i++) {
+    for (i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
             process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\r');

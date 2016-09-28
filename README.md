@@ -829,6 +829,12 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+28-Sep-16 v2.6.10
+
+- Fix issue with scoping on let/const declarations in for-loop initializers
+- Maintain location information when replacing/appending nodes
+- Add tests for dual-loop-scope and dual-while-throw
+
 25-Sep-16 v.2.6.9
 
 - Update acorn-es7-plugin to handle `async(()=>0)`
