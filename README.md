@@ -52,7 +52,7 @@ To use NoDent, you need to:
 
 	require('nodent')() ;
 
-This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in `use nodent` directive at the top of a .js file. 
+This must take place early in your app, and need only happen once per app - there is no need to `require('nodent')` in more than one file, once it is loaded it will process any files ending in `use nodent` directive at the top of a .js file.
 
 > **v2.x** users, the '.njs' extension is still supported, but not recommended
 
@@ -197,8 +197,9 @@ The currently supported options are:
 		generators:<boolean>,	// Compile in generator mode (like 'use nodent-generators')
 		engine:<boolean>,		// Compile in engine mode (like 'use nodent-engine')
 		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
-		wrapAwait:<boolean>		// Allow 'await' on non-Promise expressions
-		lazyThenables:<boolean>	// Evaluate async bodies lazily in 'es7' mode. See the Changelog for 2.4.0 for more information
+		wrapAwait:<boolean>,		// Allow 'await' on non-Promise expressions
+		lazyThenables:<boolean>,	// Evaluate async bodies lazily in 'es7' mode. See the Changelog for 2.4.0 for more information
+    inlineTrampoline:<boolean>  // Generate the loop trampoline inline if true, otherwise call the runtime to execute the trampoline. Default is false.
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
@@ -296,13 +297,13 @@ Known differences from the specification:
 		var x = await Promise.resolve(maybeThisIsAPromise()) ;
 
   or
-  
+
 		var isThenable = require('nodent').isThenable ;
 			...
     	var x = maybeThisIsAPromise() ;
     	if (isThenable(x))
       		x = await x ;
-      		
+
   The second implementation avoid the expense (20%) of wrapping every return value in a Promise, with the expense of testing if it is a Promise before awaiting on it.
 
 * **lazyThenables**
@@ -393,7 +394,7 @@ When determining what options to use when compiling an individual file, nodent f
 		}
 
 	You can also set options for the pre-defined sets here (default, es7, promises, generators, engine).
-	
+
 	> **v2.x** users - Until v2.5.4, Nodent would typically look for your application's package.json. All later versions use the installation location of the calling code, so an application, module and sub-module can all have their own settings and defaults.
 
 * Finally, nodent applies any options specified _within_ the directive, but after the name. The options are strict JSON and cannot be an expression. This is useful for quickly testing options, but is probably a bad idea if applied to very many files. One exception is rare use of the `wrapAwait` options, which has a performance overhead and few genuine use-cases. For example, to create the same effect as the 'myapp' set above:
@@ -526,7 +527,7 @@ v3.0.0
 
 Nodent v3 is a significant update. Major changes are:
 
-* The Promise implementation used by Nodent by default is based on the most excellent [Zousan](https://github.com/bluejava/zousan) Promise implementation. After a lot of looking around and testing, Zousan proved to be one of the smallest and fastest around - small enough to fit 
+* The Promise implementation used by Nodent by default is based on the most excellent [Zousan](https://github.com/bluejava/zousan) Promise implementation. After a lot of looking around and testing, Zousan proved to be one of the smallest and fastest around - small enough to fit
 into Nodent's runtime and faster in many cases than Bluebird and when.
 
 * Promises are now the default execution mode. Only -es7 with lazyThenables uses the synchronous Thenable protocol. This is only retained for speed in exceptional cases. In almost all practical applications (i.e. using async functions to handle IO of some sort), the overhead is around 20% _per call_, meaning it is trivial compared to the IO operation. Nodent syntax-transformation remains around 3-4 times faster than both native generators and libraries like regenerator.
@@ -544,7 +545,7 @@ This loop would appear to run fine while the cache hadn't been emptied, or was n
 
 Nodent v3 doesn't use recursion (it uses a trampoline), but in doing so it requires Promise chaining, which was not supported by nodent Thenables.
 
-Nodent will still generate potentially recursive loops if you specify `use nodent-es7 {"lazyThenables":true}` since the basic lazy Thenable (while small and very fast) doesn't support chaining. 
+Nodent will still generate potentially recursive loops if you specify `use nodent-es7 {"lazyThenables":true}` since the basic lazy Thenable (while small and very fast) doesn't support chaining.
 
 This execution case was pointed out by https://github.com/jods4 - many thanks.
 
@@ -565,4 +566,3 @@ Changelog
 - Fix case where generator mode generated an illegal anonymous FunctionDefintion from an ArrowFunctionExpression that was never in an expression
 
 [Older changes...](./docs/changelog-2.md)
-
