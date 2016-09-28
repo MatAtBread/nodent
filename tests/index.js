@@ -195,17 +195,24 @@ files.forEach(function (n) {
               opts.es7 = true;
         }
         types[type] = Object.keys(opts).toString() ;
-        var pr, tCompiler = process.hrtime();
-        pr = nodent.compile(forceStrict + code, n, opts).code;
-
-        tTotalCompilerTime += time(tCompiler);
         try {
-            test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
-        } catch (ex) {
-            if (!compileException) {
-                console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
-                compileException = true ;
+            var pr, tCompiler = process.hrtime();
+            pr = nodent.compile(forceStrict + code, n, opts).code;
+            tTotalCompilerTime += time(tCompiler);
+            try {
+                test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+            } catch (ex) {
+                if (!compileException) {
+                    console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                    compileException = true ;
+                }
+                test[i].fn[type] = function(m) {
+                    m.exports = DoNotTest ;
+                }
             }
+        } catch (ex) {
+            console.warn(test[i].name+(" nodent failed to compile - FAIL ").yellow+ex.message.red) ;
+            compileException = true ;
             test[i].fn[type] = function(m) {
                 m.exports = DoNotTest ;
             }
@@ -272,7 +279,7 @@ async function runTest(test, provider, type) {
 
 try {
     var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0, nMedian = 0 ;
-    for (var i = 0;i < test.length; i++) {
+    for (i = 0;i < test.length; i++) {
         var benchmark = null;
         for (var j = 0;j < providers.length; j++) {
             try {
