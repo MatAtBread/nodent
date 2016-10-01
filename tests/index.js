@@ -178,22 +178,33 @@ files.forEach(function (n) {
             "async function _a() { "+forceStrict + code+" }" ;
     }
     var compileException = false;
-    for (var type = useEngine?-1:0;type < (useGenerators ? 12 : 8); type++) {
-        var opts = {}; //  es7:true } ;
+    for (var type = useEngine?-1:0;type < 16; type++) {
+        var opts = {}; 
         if (type==-1)
           opts.engine = true ;
         else {
-          if (!(type & 1))
+          if (!(type & 12) && !(type & 1))
               opts.lazyThenables = true;
           if (type & 2)
               opts.wrapAwait = true;
-          if (type & 4)
+          if (type & 4) {
               opts.promises = true;
-          if (type & 8)
+              if (type & 1)
+                  opts.noRuntime = true ;
+          }
+          if (type & 8) {
+              if (!useGenerators)
+                  continue ;
               opts.generators = true;
+              if (opts.noRuntime)
+                  continue ;
+          } else if (useGenOnly)
+              continue ;
+          
           if (!(type & (4|8)))
               opts.es7 = true;
         }
+        
         types[type] = Object.keys(opts).toString() ;
         try {
             var pr, tCompiler = process.hrtime();
@@ -263,7 +274,7 @@ async function runTest(test, provider, type) {
             tID = null ;
             if (returned)
                 return ;
-            console.log("Timeout".red,test,provider)
+            console.log("Timeout".red,test.name,provider.name.yellow);
             onResult(new Error("Timed out")) ;
         },10000) ;
         var t = process.hrtime();
@@ -286,8 +297,8 @@ try {
               process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
               gc() ;
 
-              for (var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++) {
-                  if (!(type & 1) && (type&12))
+              for (var type in types/*var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++*/) {
+                  if (!(type & 1) && (type&8))
                       continue ;
 
                   table[type] = table[type] || [];
@@ -349,7 +360,7 @@ try {
         }
     }
 
-    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
+    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
