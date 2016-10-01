@@ -199,7 +199,7 @@ The currently supported options are:
 		sourcemap:<boolean>,	// Create a sourcemap for the browser's debugger
 		wrapAwait:<boolean>,		// Allow 'await' on non-Promise expressions
 		lazyThenables:<boolean>,	// Evaluate async bodies lazily in 'es7' mode. See the Changelog for 2.4.0 for more information
-    inlineTrampoline:<boolean>  // Generate the loop trampoline inline if true, otherwise call the runtime to execute the trampoline. Default is false.
+    	noRuntime:<boolean>  	// Only compatible with promises & engine. Generate pure ES5 code for an environment that support Promises natively or as a global declaration. Currently about 15% slower that using the built-in runtime $asyncbind. Default is false.
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
