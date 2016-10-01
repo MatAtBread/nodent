@@ -297,7 +297,7 @@ try {
               process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
               gc() ;
 
-              for (var type in types/*var type = useGenOnly ? 8 : 0;type < (useGenerators ? 12 : 8); type++*/) {
+              for (var type in types) if (Object.getOwnPropertyDescriptor(types,type)) {
                   if (!(type & 1) && (type&8))
                       continue ;
 
