@@ -81,6 +81,12 @@ try {
 } catch (ex) {}
 try {
     providers.push({
+        name: 'promisejs.org',
+        p: require('promise')
+    });
+} catch (ex) {}
+try {
+    providers.push({
         name: 'promiscuous',
         p: require('promiscuous')
     });
