@@ -119,6 +119,7 @@ The full list of options is:
 | --minast 			| Same as --ast, but omit all the source-mapping and location information from the tree
 | --exec 			| Execute the transformed code
 | --sourcemap 		| Produce a source-map in the transformed code
+| --runtime			| Include the nodent runtime in the output
 
 Code generation options:
 
@@ -127,6 +128,7 @@ Code generation options:
 | --use=_mode_ 		| Ignore any "use nodent" directive in the source file, and force compilation _mode_ to be `es7`,`promises`,`generators`. `engine` or `default`
 | --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#differences-from-the-es7-specification)
 | --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
+| --noruntime		| Compile code (in -promises or -engine mode) for execution with no runtime requirement at all
 
 Use within your Node scripts
 ============================
@@ -154,7 +156,7 @@ All the implementations work with each other - you can mix and match. If you're 
 `use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, and works on a wide range of desktop and mobile browsers.
 
 #### Shipping an app or module within Node, npm or [modern browsers supporting Promises](http://kangax.github.io/compat-table/es6/#test-Promise)
-`use nodent-promises` provides the most compatibility between modules and apps. If your module or library targets Node earlier than v4.1.x, you should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API.
+`use nodent-promises` provides the most compatibility between modules and apps. If your module or library targets Node earlier than v4.1.x, you should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API. In promises mode, there is no need for a runtime at all. Specifying the option `use nodent-promises {"noRuntime":true}` will generate pure ES5 code at the cost of some loss in performance and increase in code size.
 
 > **v2.x** users: `nodent.EagerThenable()` is still defined, but as of v3 is the same as the `Thenable` implementation.
 
@@ -162,7 +164,7 @@ All the implementations work with each other - you can mix and match. If you're 
 `use nodent-generators` generates code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x. The performance and memory overhead of generators is poor - currently (Node v6.6.0) averaging 3.5 times slower compared to the es7 with 'lazyThenables'.
 
 #### Engine
-`use nodent-engine` does _not_ transpile standard ES7 async/await constructs, but only transpiles the additional non-standard features provided by nodent - await anywhere, async getters, async return and throw. At the time of writing, not many runtimes implement async and await - Chrome v53 does with command line flags, and Edge 14 are examples. On Chrome, performance is better than generators, but not quite as good as Promises, and still less than half the speed of ES7 mode.
+`use nodent-engine` does _not_ transpile standard ES7 async/await constructs, but only transpiles the additional non-standard features provided by nodent - await anywhere, async getters, async return and throw. At the time of writing, not many runtimes implement async and await - Chrome v53 does with command line flags, and Edge 14 are examples. On Chrome, performance is better than generators, but not quite as good as Promises, and still less than half the speed of ES7 mode. In promises mode, there is no need for a runtime at all. Specifying the option `use nodent-engine {"noRuntime":true}` will generate pure ES5 code at the cost of some loss in performance and increase in code size.
 
 Use within a browser
 ====================
@@ -205,14 +207,12 @@ The currently supported options are:
 
 Note that parsing of script tags within HTML is relatively simple - the parsing is based on regex and is therefore easily confused by JS strings that contain the text 'script', or malformed/nested tags. Ensure you are parsing accurate HTML to avoid these errors. Scripts inline in HTML do not support source-mapping at present.
 
-At runtime (i.e. in the browser), you'll need to provide some support routines:
+If you're using a modern browser with Promise support (or including a third-party promise library), you can specify the compiler filag `noRuntime: true`, which will generate pure ES5 code at the cost of some loss in performance and increase in code size. Otherwise, you'll need to provide some support routines at runtime (i.e. in the browser):
 
 * `Function.prototype.$asyncbind`
 * `Function.prototype.$asyncspawn` if you're using generators
-* `Object.$makeThenable` if you're using the `wrapAwait` option (see [await with a non-Promise](#differences-from-the-es7-specification)
-*  `wndow.$error` if you use await outside of an async function, to catch unhandled errors, for example:
-
-This are generated automatically in the transpiled files when you set the `runtime` option, and declared when Nodent is loaded (so they are already avaiable for use within Node).
+* `Object.$makeThenable` if you're using the `wrapAwait` option and not using promises (see [await with a non-Promise](#differences-from-the-es7-specification)
+*  `window.$error` if you use await outside of an async function, to catch unhandled errors, for example:
 
 	// Called when an async function throws an exception during
 	// asynchronous operations and the calling synchronous function has returned.
@@ -220,6 +220,8 @@ This are generated automatically in the transpiled files when you set the `runti
 		// Maybe log the error somewhere
 		throw ex ;
 	};
+
+This are generated automatically in the transpiled files when you set the `runtime` option, and declared when Nodent is loaded (so they are already avaiable for use within Node).
 
 Further information on using Nodent in the browser can be found at https://github.com/MatAtBread/nodent/issues/2.
 
@@ -244,59 +246,54 @@ You can continue to use all the Nodent extensions with async/await capable engin
 
 Extensions to the specification:
 
-* **async getters**
+* **async getters** and ** static async** class members:
 
-	Nodent permits a class or object definition to define async getters:
+Nodent permits a class or object definition to define async getters:
 
-		async get data() { ... }
-		get async data() { ... }
-
-	This syntax is currently not supported by any other ES7 parsers and must be substituted with something an internal async IIFE:
-
-		get data() { return (async function(){
-			...
-		})() }
-
-	Nodent logs a warning when it detects this situation.
+	async get data() { ... }
+	get async data() { ... }
+	
+	class MyClass {
+		static async name() { ... }
+	}
 
 * **await outside async**
 
-	The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent. In practice this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
+The ES7 async-await spec states that you can only use await inside an async function. This generates a warning in nodent, but is permitted. The synchronous return value from the function is compilation mode dependent. In practice this means that the standard, synchronous function containing the `await` does not have a useful return value of it's own.
 
 * **async return/throw**
 
-	The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise. See [below](#exiting-async-functions-from-callbacks) for details.
+The statements `async return <expression>` and `async throw <expression>` are proposed extensions to the ES7 standard (see https://github.com/lukehoban/ecmascript-asyncawait/issues/38). The alternative to this syntax is to use a standard ES5 declaration returning a Promise. See [below](#exiting-async-functions-from-callbacks) for details.
 
 Known differences from the specification:
 
 * **AsyncFunction**
 
-	The [`AsyncFunction`](#asyncfunction) type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. The `AsyncFunction` constructor allows you to create async functions on the fly, much as the standard `Function` constructor does.
+The [`AsyncFunction`](docs/helpers.md#asyncfunction) type is _not_ defined by default, but is returned via the expression `require('nodent')(...).require('asyncfunction')`. The `AsyncFunction` constructor allows you to create async functions on the fly, just as the standard `Function` constructor does.
 
 * **case without break**
 
-	As of the current version, `case` blocks without a `break;` that fall thorugh into the following `case` do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`. Nodent logs a warning when it detects this situation.
+As of the current version, `case` blocks without a `break;` that fall thorugh into the following `case` do not transform correctly if they contain an `await` expression. Re-work each `case` to have it's own execution block ending in `break`, `return` or `throw`. Nodent logs a warning when it detects this situation.
 
 * **await non-Promise**
 
-	The ES7 specification allows an application to `await` on a non-Promise value (this occurs because the template implementation wraps every generated value in a Promise). So the statement:
+The ES7 specification allows an application to `await` on a non-Promise value (this occurs because the template implementation wraps every generated value in a Promise). So the statement:
 
 		var x = await 100 ; // 100
 
-	...is valid. Nodent, by default, does _not_ allow this behaviour (you'll get a run-time error about '100.then is not a function'. Generally, this is not a problem in that you obviously only want to wait on asynchronous things (and not numbers, strings or anything else). However, there is one unpleasant edge case, which is where an expression _might_ be a Promise (my advice is to never write code like this, and avoid code that does).
+...is valid. Nodent, by default, does _not_ allow this behaviour (you'll get a run-time error about '100.then is not a function'. Generally, this is not a problem in that you obviously only want to wait on asynchronous things (and not numbers, strings or anything else). However, there is one unpleasant edge case, which is where an expression _might_ be a Promise (my advice is to never write code like this, and avoid code that does).
 
 		var x = await maybeThisIsAPromise() ;
 
-	In this case, the expression will need wrapping before it is awaited on by Nodent. You can emulate this behaviour by specifying the code-generation flag 'wrapAwait' in your package.json or after the nodent directive:
+In this case, the expression will need wrapping before it is awaited on by Nodent. You can emulate this behaviour by specifying the code-generation flag 'wrapAwait' in your package.json or after the nodent directive:
 
 		'use nodent {"wrapAwait":true}';
 
-	Wrapping every value in a Promise increases the time taken to invoke an async function by about 20%. An alternative to
-  wrapping everything is to only wrap expression where this might be the case explicitly:
+Wrapping every value in a Promise increases the time taken to invoke an async function by about 20%. An alternative to wrapping everything is to only wrap expression where this might be the case explicitly:
 
 		var x = await Promise.resolve(maybeThisIsAPromise()) ;
 
-  or
+or
 
 		var isThenable = require('nodent').isThenable ;
 			...
@@ -304,29 +301,29 @@ Known differences from the specification:
     	if (isThenable(x))
       		x = await x ;
 
-  The second implementation avoid the expense (20%) of wrapping every return value in a Promise, with the expense of testing if it is a Promise before awaiting on it.
+The second implementation avoid the expense (20%) of wrapping every return value in a Promise, with the expense of testing if it is a Promise before awaiting on it.
 
 * **lazyThenables**
 
-	> **v2.x** users - lazyThenables are _only_ available in -es7 mode in v3, and the nodent.Thenable implementation is _not_ lazy, as it was in v2.x.
+> **v2.x** users - lazyThenables are _only_ available in -es7 mode in v3, and the nodent.Thenable implementation is _not_ lazy, as it was in v2.x.
 
-	Invoking an async function _without_ a preceding `await` (simply by calling it) executes the function body but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This is in compliance with the ES7 specification.  
+Invoking an async function _without_ a preceding `await` (simply by calling it) executes the function body but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This is in compliance with the ES7 specification.  
 
-	However, this has a performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7 {"lazyThenables":true}` mode. In this case mode, if you call the async function the body _is not actually executed_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
+However, this has a performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7 {"lazyThenables":true}` mode. In this case mode, if you call the async function the body _is not actually executed_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
 
-	In `use nodent-promises` mode, it is the implementation of the Promise that determines the execution scheduling and performance. The table below is a summary of modes and execution semantics. You can test the performance on your own hardware with the following command. Note the relative performance is a worst case, since the test does nothing other than make async calls in a loop.
+In `use nodent-promises` mode, it is the implementation of the Promise that determines the execution scheduling and performance. The table below is a summary of modes and execution semantics. You can test the performance on your own hardware with the following command. Note the relative performance is a worst case, since the test does nothing other than make async calls in a loop.
 
 		./nodent.js tests --generators tests/semantics/perf.js
 
-| Mode | Flags / Implementation | Lazy / Eager | Possibly sync resolution | Performance (relative) |
-|------|----------|----|--------------------------|------------------------|
-| es7 | lazyThenable | Lazy | Yes | 1.0
-| es7 | (none)| Eager | No | 1.7x slower
-| promises | nodent | Eager | No | 1.7x slower
-| promises | node 6.6 native | Eager | No | 5.2x slower
-| promises | bluebird 3.4.6 | Eager | No | 2.0x slower
-| promises | rsvp 3.3.1 | Eager | No | 2.2x slower
-| promises | when 3.7.7 | Eager | No | 1.6x slower
+| Mode  	| Flags / Implementation | Lazy / Eager | Possibly sync resolution | Performance (relative) |
+|-----------|----------|----|--------------------------|------------------------|
+| es7 		| lazyThenable | Lazy | Yes | 1.0
+| es7 		| (none)| Eager | No | 1.7x slower
+| promises 	| nodent | Eager | No | 1.7x slower
+| promises 	| node 6.6 native | Eager | No | 5.2x slower
+| promises 	| bluebird 3.4.6 | Eager | No | 2.0x slower
+| promises 	| rsvp 3.3.1 | Eager | No | 2.2x slower
+| promises 	| when 3.7.7 | Eager | No | 1.6x slower
 | generators | nodent | Eager | No | 7.5x slower
 | generators | node 6.6 native | Eager | No | 15.0x slower
 | generators | bluebird 3.4.6 | Eager | No | 8.5x slower
@@ -358,23 +355,23 @@ Advanced Configuration
 Nodent has two sets of configuration values:
 
 * one controls the **runtime environment** - catching unhandled errors, handling warnings from Nodent and stack mapping, etc.
-* the other controls **code generation** - whether to generate code that uses Promises or generators (or not), whether to await on non-Promise values, etc.
+* the other controls **code generation** - whether to generate code that uses Promises or generators (or not), whether to await on non-Promise values, whether to include the runtime code, etc.
 
 The first is defined _once_ per installation (Nodent contained as dependencies within dependencies have their own, per-installation, instances). You can 'redefine' the values, but the effect is to overwrite existing settings. These are specified as the first argument when you  `require('nodent')(options)`. Details of the options are [below](#api).
 
 The second set is defined per-file for each file that Nodent loads and compiles.  The options are:
 
-|Member| Type |  |
-|-------|-----|------------------------|
-|es7|boolean|set by the directive `use nodent-es7`
-|promises|boolean|set by the directive `use nodent-promises`
-|generators|boolean|set by the directive `use nodent-generators`
-|engine|boolean|set by the directive `use nodent-engine`
-|wrapAwait|boolean|default: false [more info...](#differences-from-the-es7-specification)
-|sourcemap|boolean|default:true - generate a source-map in the output JS
-|parser|object|default:{sourceType:'script'} - passed to [Acorn](https://github.com/ternjs/acorn) to control the parser
-|mapStartLine|int|default:0 - initial line number for the source-map
-|generatedSymbolPrefix|string|used to disambiguate indentifiers created by the compiler
+|Member			| Type 	|  						|
+|---------------|-------|-----------------------|
+|es7			|boolean| set by the directive `use nodent-es7`
+|promises		|boolean| set by the directive `use nodent-promises`
+|generators		|boolean| set by the directive `use nodent-generators`
+|engine			|boolean| set by the directive `use nodent-engine`
+|wrapAwait		|boolean| default: false [more info...](#differences-from-the-es7-specification)
+|sourcemap		|boolean| default:true - generate a source-map in the output JS
+|parser			|object	| default:{sourceType:'script'} - passed to [Acorn](https://github.com/ternjs/acorn) to control the parser
+|mapStartLine	|int	| default:0 - initial line number for the source-map
+|generatedSymbolPrefix	| string|used to disambiguate indentifiers created by the compiler
 
 The members $return, $error, $arguments, $asyncspawn, $asyncbind, $makeThenable represent the symbols generated by the compiler. You could change them to avoid name clashes, but this is not recommended.
 
@@ -393,9 +390,9 @@ When determining what options to use when compiling an individual file, nodent f
 			}
 		}
 
-	You can also set options for the pre-defined sets here (default, es7, promises, generators, engine).
+You can also set options for the pre-defined sets here (default, es7, promises, generators, engine).
 
-	> **v2.x** users - Until v2.5.4, Nodent would typically look for your application's package.json. All later versions use the installation location of the calling code, so an application, module and sub-module can all have their own settings and defaults.
+> **v2.x** users - Until v2.5.4, Nodent would typically look for your application's package.json. All later versions use the installation location of the calling code, so an application, module and sub-module can all have their own settings and defaults.
 
 * Finally, nodent applies any options specified _within_ the directive, but after the name. The options are strict JSON and cannot be an expression. This is useful for quickly testing options, but is probably a bad idea if applied to very many files. One exception is rare use of the `wrapAwait` options, which has a performance overhead and few genuine use-cases. For example, to create the same effect as the 'myapp' set above:
 
@@ -424,21 +421,20 @@ Options:
 
 Return: a 'nodent' compiler object with the following properties:
 
-| Member             | Type   |                        |
-|--------------------|--------|------------------------|
-|version|string|The currently installed version|
-|asyncify (PromiseProvider)|function|Return a function to convert an object with functions with callbacks to ones with async function members. `asyncify` is also a meta-property (see below)
-|Thenable(function) EagerThenable()(function)|function|Nodent's in-built Promise implementation. `Thenable` is also a meta-property (see below)
-|require(moduleName,options)|object|Import an async helper module|
-|generateRequestHandler(path, matchRegex, options)|function|Create a function use with Express or Connect that compiles files for a browser on demand - like a magic version of the 'static' middleware
-|isThenable (object)|boolean|Return boolean if the supplied argument is Thenable (i.e. has an executable `then` member). All Promises, `nodent.EagerThenable()` and `nodent.Thenable` return true
-|$asyncbind|function|Required runtime in ES7/Promises mode
-|$asyncspawn|function|Required runtime in generator mode
+| Member            							| Type   	|                        |
+|-----------------------------------------------|-----------|------------------------|
+|version										|string		| The currently installed version|
+|asyncify (PromiseProvider)						|function	| Return a function to convert an object with functions with callbacks to ones with async function members. `asyncify` is also a meta-property (see below)
+|Thenable(function) EagerThenable()(function)	|function	| Nodent's in-built Promise implementation. `Thenable` is also a meta-property (see below)
+|require(moduleName,options)					|object		| Import an async helper module|
+|generateRequestHandler(path, matchRegex, options)|function	| Create a function use with Express or Connect that compiles files for a browser on demand - like a magic version of the 'static' middleware
+|isThenable (object)							|boolean	| Return boolean if the supplied argument is Thenable (i.e. has an executable `then` member). All Promises, `nodent.EagerThenable()` and `nodent.Thenable` return true
+|$asyncbind										|function	| Required runtime in ES7 mode, required in -promises and -engine mode if not compiled with `noRuntime:true`
+|$asyncspawn									|function	| Required runtime in generator mode
 
 Note the nodent object has other members used for implementation - these are subject to change and are not part of the API.
 
 > **v2.x** users - nodent.Thenable and nodent.EagerThenable() are now full Promises/A+-compliant Promise implementations. There is no external access to the synchronous 'Thenable' used in -es7-lazyThenables mode.
-
 
 Meta-API
 --------
@@ -450,8 +446,8 @@ The available meta-properties are:
 
 | Member| Type |  |
 |-------|-----|------------------------|
-|Thenable|function|Nodent's built in Promise/A+ implementation|
-|asyncify|object|Method to transform methods from callbacks to async functions by wrapping in Promises|
+|Thenable			|function|Nodent's built in Promise/A+ implementation|
+|asyncify			|object|Method to transform methods from callbacks to async functions by wrapping in Promises|
 |setDefaultCompileOptions (compiler[,env])|function|Set the defaults for the compiler and environment. This should be called before the first compiler is created. The default environment options (`log augmentObject extension dontMapStackTraces asyncStackTrace`) will be used when the corresponding option is missing when the compiler is created. The compiler options (`sourcemap` and default symbol names) must be set before the first compiler is created. The other compilation options (`es7 promises generators engine`) are set by the corresponding directive|
 |setCompileOptions (name,compiler)|function|Set the compilation options for a named [directive](#advanced-configuration) for the compiler. This should be called before the first compiler is created.
 
@@ -471,7 +467,7 @@ The return ('compiler') has the additional, instance specific properties specifi
 Built-in conversions and helpers
 ==============================
 
-Nodentify has a small set of covers for common Node modules. More information can be found [here](./docs/helpers.md)
+Nodent has a small set of covers for common Node modules. More information can be found [here](./docs/helpers.md)
 
 Testing
 =======
@@ -519,7 +515,7 @@ Additionally, a try the following links to test performance against Babel and Tr
 
 The example timings are from Chrome v53 on Mac OSX. I get even wider results with Firefox, and dramatically wider results on mobiles (nodent ES7 mode is upto 10x faster than generators and transpilers).
 
-The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actual operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
+The test is a simple set of nested loops calling async functions that don't do much. The purpose is to illustrate the overhead generated in the transpilation by each compiler. In reality, you'd be crazy to use async calls for everything, but very well advised to use them for I/O bound operations (network, disks, streams, etc). In these cases, you can be reasonably certain that the overhead generated by the compilers would be small in comparison to the actual operation....but it's nice to know you're not wasting cycles, right? For those who want to know why, the real reason is the use of generators (the suggested implementation in the ES7 async/await specification), which are inefficient natively (about 50% slower than using 'nodent-promises'), and even worse when transcompiled into ES5.
 
 Upgrading
 ---------
@@ -528,11 +524,11 @@ v3.0.0
 Nodent v3 is a significant update. Major changes are:
 
 * The Promise implementation used by Nodent by default is based on the most excellent [Zousan](https://github.com/bluejava/zousan) Promise implementation. After a lot of looking around and testing, Zousan proved to be one of the smallest and fastest around - small enough to fit
-into Nodent's runtime and faster in many cases than Bluebird and when.
+into Nodent's runtime and faster in most practical cases than Bluebird and when. The speed is enhanced compared to most libraries as nodent rarely generates code that relies on Promise chaining or having multiple `.then()` calls on the same Promise. Zousan is optimal in these cases as only creates the required data lazily.
 
 * Promises are now the default execution mode. Only -es7 with lazyThenables uses the synchronous Thenable protocol. This is only retained for speed in exceptional cases. In almost all practical applications (i.e. using async functions to handle IO of some sort), the overhead is around 20% _per call_, meaning it is trivial compared to the IO operation. Nodent syntax-transformation remains around 3-4 times faster than both native generators and libraries like regenerator.
 
-* The use of Promises/A+ compliant execution means the loop asynchronisation used in Nodent v2 can be unwound. Specifically, `for`, `while` and `do...while` loops in Nodent v2 were recursive if the loop didn't yield control to an async operation. This meant that you could run out of stack on relatively trivial loop. For example:
+* The use of Promises/A+ compliant execution means the recursive loop asynchronisation used in Nodent v2 can be unwound. Specifically, `for`, `while` and `do...while` loops in Nodent v2 were recursive if the loop didn't yield control to an async operation. This meant that you could run out of stack on relatively trivial loop. For example:
 
 ```
 for (var i=0; i<cache.length; i++) {
@@ -549,10 +545,12 @@ Nodent will still generate potentially recursive loops if you specify `use noden
 
 This execution case was pointed out by https://github.com/jods4 - many thanks.
 
+* The helper function `noDentify` which was deprecated in v2 has now been removed from the main nodent library. It can be required by `Function.prototype.noDentify = nodent().require('nodentify')` if needed.
+
 Changelog
 ==========
 
-28-Sep-16 v3.0.0 [see above](#upgrading)
+02-Oct-16 v3.0.0 [see above](#upgrading)
 
 28-Sep-16 v2.6.10
 
