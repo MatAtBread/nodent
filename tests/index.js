@@ -296,9 +296,9 @@ async function runTest(test, provider, type) {
 
 try {
     var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0, nMedian = 0 ;
-    for (i = 0;i < test.length; i++) {
+    nextTest: for (i = 0;i < test.length; i++) {
         var benchmark = null;
-        for (var j = 0;j < providers.length; j++) {
+        nextProvider: for (var j = 0;j < providers.length; j++) {
             try {
               process.stdout.write('\r- Test: ' + test[i].name + ' using ' + providers[j].name.yellow + spaces + '\n');
               gc() ;
@@ -315,7 +315,7 @@ try {
                       if (result.result !== DoNotTest) {
                           console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
                           type = 32767;
-                          j = providers.length;
+                          continue nextProvider ;
                       }
                       continue;
                   }
