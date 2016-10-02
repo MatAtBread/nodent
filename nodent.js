@@ -501,7 +501,7 @@ $asyncbind.call($asyncbind) ;
 
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable = Thenable ;
-NodentCompiler.prototype.EagerThenable = $asyncbind.EagerThenable ;
+NodentCompiler.prototype.EagerThenable = $asyncbind.EagerThenableFactory ;
 NodentCompiler.prototype.isThenable = function(x) { return x && x instanceof Object && typeof x.then==="function"} ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
@@ -807,7 +807,7 @@ initialize.setCompileOptions = function(set,compiler) {
 
 initialize.asyncify = asyncify ;
 initialize.Thenable = $asyncbind.Thenable ;
-initialize.EagerThenable = $asyncbind.EagerThenable ;
+initialize.EagerThenable = $asyncbind.EagerThenableFactory ;
 
 module.exports = initialize ;
 
