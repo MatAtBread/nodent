@@ -1,5 +1,6 @@
-var nodent = require('../../nodent')() ;
 var map = nodent.require('map',{throwOnError:true}) ;
+Function.prototype.noDentify = nodent.require('nodentify') ;
+
 Function.prototype.asAsync = function(){
 	var fn = this ;
 	var args = Array.prototype.slice.call(arguments) ;
