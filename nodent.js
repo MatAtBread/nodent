@@ -160,6 +160,10 @@ function parseCompilerOptions(code,log,filename) {
 			log("No valid 'use nodent' directive, assumed -es7 mode") ;
 			parseOpts = optionSets.es7 ;
 		}
+
+		if (parseOpts.generators || parseOpts.engine)
+		    parseOpts.promises = true ;
+		    
 		return parseOpts ;
 	}
 	return null ; // No valid nodent options
@@ -187,53 +191,6 @@ function btoa(str) {
 	}
 
 	return buffer.toString('base64');
-}
-
-/**
- * NoDentify (make async) a general function.
- * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
- * for example:
- * 		http.aGet = http.get.noDentify(1) ;	// The 1st argument (from zero) is the callback. errorIdx is undefined (no error)
- *
- * The function is transformed from:
- * 		http.get(opts,function(result){}) ;
- * to:
- * 		http.aGet(opts).then(function(result){}) ;
- *
- * @params
- * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
- * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
- * resultIdx 	The argument index of the callback that holds the result.
- * 				'undefined' for the argument after the errorIdx (errorIdx != undefined)
- * 				[] returns all the arguments
- * promiseProvider	For promises, set this to the module providing Promises.
- */
-function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
-	promiseProvider = promiseProvider || Thenable ;
-	var fn = this ;
-	return function() {
-		var scope = this ;
-		var args = Array.prototype.slice.apply(arguments) ;
-		var resolver = function(ok,error) {
-			if (undefined==idx)	// No index specified - use the final (unspecified) parameter
-				idx = args.length ;
-			if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
-				args[idx] = ok ;
-			else {
-				args[idx] = function() {
-					var err = arguments[errorIdx] ;
-					if (err)
-						return error(err) ;
-					if (Array.isArray(resultIdx) && resultIdx.length===0)
-						return ok(arguments) ;
-					var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
-					return ok(result) ;
-				} ;
-			}
-			return fn.apply(scope,args) ;
-		}
-		return new promiseProvider(resolver) ;
-	};
 }
 
 function compileNodentedFile(nodent,log) {
@@ -555,7 +512,7 @@ function setGlobalEnvironment(initOpts) {
 	Object.$makeThenable
 	Object.prototype.isThenable
 	Object.prototype.asyncify
-	Function.prototype.noDentify
+	Function.prototype.noDentify // Moved to a cover as of v3.0.0
 	Function.prototype.$asyncspawn
 	Function.prototype.$asyncbind
 	Error.prepareStackTrace
@@ -575,12 +532,6 @@ function setGlobalEnvironment(initOpts) {
 		enumerable:false,
 		configurable:true
 	};
-	augmentFunction.noDentify = {
-		value:noDentify,
-		configurable:true,
-		enumerable:false,
-		writable:true
-	} ;
 	try {
 	    Object.defineProperties(Function.prototype,augmentFunction) ;
 	} catch (ex) {
@@ -840,52 +791,56 @@ function runFromCLI(){
     }
 
     function processInput(content){
-        var pr ;
-        var parseOpts ;
-
-        // Input options
-        if (cli.fromast) {
-            content = JSON.parse(content) ;
-            pr = { origCode:"", filename:filename, ast: content } ;
-            parseOpts = parseCompilerOptions(content,nodent.log) ;
-            if (!parseOpts) {
-				        cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
-                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-                console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+        try {
+            var pr ;
+            var parseOpts ;
+    
+            // Input options
+            if (cli.fromast) {
+                content = JSON.parse(content) ;
+                pr = { origCode:"", filename:filename, ast: content } ;
+                parseOpts = parseCompilerOptions(content,nodent.log) ;
+                if (!parseOpts) {
+                    cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                    console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+                }
+            } else {
+                parseOpts = parseCompilerOptions(cli.use?'"use nodent-'+cli.use+'";':content,nodent.log) ;
+                if (!parseOpts) {
+                    cli.use = '"use nodent";' ;
+                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                    console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+                }
+                pr = nodent.parse(content,filename,parseOpts);
             }
-        } else {
-            parseOpts = parseCompilerOptions(cli.use?'"use nodent-'+cli.use+'";':content,nodent.log) ;
-            if (!parseOpts) {
-                cli.use = '"use nodent";' ;
-                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-                console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+    
+            // Processing options
+            if (!cli.parseast && !cli.pretty)
+                nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
+    
+            // Output options
+            nodent.prettyPrint(pr,parseOpts) ;
+            if (cli.out || cli.pretty) {
+                if (cli.runtime) {
+                    console.log("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
+                    console.log("global.$error = global.$error || "+global.$error.toString()+";\n") ;
+                }
+                console.log(pr.code) ;
             }
-            pr = nodent.parse(content,filename,parseOpts);
-        }
-
-        // Processing options
-        if (!cli.parseast && !cli.pretty)
-            nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-
-        // Output options
-        nodent.prettyPrint(pr,parseOpts) ;
-        if (cli.out || cli.pretty) {
-            if (cli.runtime) {
-                console.log("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
-                console.log("global.$error = global.$error || "+global.$error.toString()+";\n") ;
+            if (cli.minast || cli.parseast) {
+                console.log(JSON.stringify(pr.ast,function(key,value){
+                    return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
+                },2,null)) ;
             }
-            console.log(pr.code) ;
-        }
-        if (cli.minast || cli.parseast) {
-            console.log(JSON.stringify(pr.ast,function(key,value){
-                return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
-            },2,null)) ;
-        }
-        if (cli.ast) {
-            console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-        }
-        if (cli.exec) {
-            (new Function(pr.code))() ;
+            if (cli.ast) {
+                console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+            }
+            if (cli.exec) {
+                (new Function(pr.code))() ;
+            }
+        } catch (ex) {
+            console.error(ex) ;
         }
     }
 
@@ -896,7 +851,8 @@ function runFromCLI(){
 		sourcemap:cli.sourcemap,
         wrapAwait:cli.wrapAwait,
         lazyThenables:cli.lazyThenables,
-        noUseDirective:cli.use?true:false
+        noUseDirective:cli.use?true:false,
+        noRuntime:cli.noruntime
 	});
 
 	var nodent = initialize({
