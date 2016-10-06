@@ -963,9 +963,6 @@ function runFromCLI(){
 	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.dest && !cli.ast && !cli.minast && !cli.exec) {
 		// No input/output options - just require the
 		// specified module now we've initialized nodent
-	    if (cli.length>1)
-	        console.log("Ignoring extra files ",cli.slice(1)) ;
-	    
 		try {
 			var mod = path.resolve(cli[0]) ;
 			return require(mod);
