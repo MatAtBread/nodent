@@ -829,6 +829,11 @@ The test is a simple set of nested loops calling async functions that don't do m
 Changelog
 ==========
 
+06-Oct-16 v2.6.11
+
+- Bump acorn-es7-plugin to resolve issues with 'async get(){}'
+- Merge in fixes related to some loop constructs and use of 'finally{ return...}' in synchronous code called by async code
+
 28-Sep-16 v2.6.10
 
 - Fix issue with scoping on let/const declarations in for-loop initializers

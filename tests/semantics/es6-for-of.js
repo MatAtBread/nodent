@@ -1,6 +1,11 @@
-Array.prototype.pushAsync = async function() {
-    [].push.apply(this,arguments) ;
-}
+Object.defineProperty(Array.prototype,'pushAsync',{
+    writable:true,
+    configurable:true,
+    value:async function() {
+    	[].push.apply(this,arguments) ;
+	}
+}) ;
+
 async function log() {
     console.log.apply(console,arguments) ;
 }
