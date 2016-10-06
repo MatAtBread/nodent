@@ -1,4 +1,4 @@
-"use nodent-es7";
+'use nodent-es7 {"lazyThenables":true}';
 
 module.exports = {
 	name: "es7",
