@@ -716,8 +716,8 @@ function initialize(initOpts){
 	}
 
     function versionAwareNodentJSLoader(mod,filename) {
-        if (filename.match(/nodent\/nodent.js$/)) {
-            var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent.js$/,"")} ;
+        if (filename.match(/nodent\/nodent\.js$/)) {
+            var downLevel = {path:filename.replace(/\/node_modules\/nodent\/nodent\.js$/,"")} ;
             if (downLevel.path) {
                 downLevel.version = JSON.parse(fs.readFileSync(filename.replace(/nodent\.js$/,"package.json"))).version ;
                 // Load the specified nodent
@@ -745,6 +745,9 @@ function initialize(initOpts){
                     }) ;
                 }
             }
+        } else if (filename.match(/node_modules\/nodent\/.*\.js$/)) {
+            // Things inside nodent always use the standard loader            
+            return stdJSLoader(mod,filename) ;
         } else {
             // The the appropriate loader for this file
             for (var n=0; n<nodentLoaders.length; n++) {
@@ -878,53 +881,68 @@ function runFromCLI(){
         return o ;
     }
 
-    function processInput(content){
-        var pr ;
-        var parseOpts ;
-
-        // Input options
-        if (cli.fromast) {
-            content = JSON.parse(content) ;
-            pr = { origCode:"", filename:filename, ast: content } ;
-            parseOpts = parseCompilerOptions(content,nodent.log) ;
-            if (!parseOpts) {
-				        cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
-                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-                console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+    function processInput(content,name){
+        try {
+            var pr ;
+            var parseOpts ;
+    
+            // Input options
+            if (cli.fromast) {
+                content = JSON.parse(content) ;
+                pr = { origCode:"", filename:filename, ast: content } ;
+                parseOpts = parseCompilerOptions(content,nodent.log) ;
+                if (!parseOpts) {
+                    cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                    console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+                }
+            } else {
+                parseOpts = parseCompilerOptions(cli.use?'"use nodent-'+cli.use+'";':content,nodent.log) ;
+                if (!parseOpts) {
+                    cli.use = '"use nodent";' ;
+                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                    if (!cli.dest)
+                        console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+                }
+                pr = nodent.parse(content,filename,parseOpts);
             }
-        } else {
-            parseOpts = parseCompilerOptions(cli.use?'"use nodent-'+cli.use+'";':content,nodent.log) ;
-            if (!parseOpts) {
-                cli.use = '"use nodent";' ;
-                parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-                console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+    
+            // Processing options
+            if (!cli.parseast && !cli.pretty)
+                nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
+    
+            // Output options
+            nodent.prettyPrint(pr,parseOpts) ;
+            if (cli.out || cli.pretty || cli.dest) {
+                if (cli.dest && !name)
+                    throw new Error("Can't write unknown file to "+cli.dest) ;
+                
+                var output = "" ;
+                if (cli.runtime) {
+                    output += ("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
+                    output += ("global.$error = global.$error || "+global.$error.toString()+";\n") ;
+                }
+                output += pr.code ;
+                if (name && cli.dest) {
+                    fs.writeFileSync(cli.dest+name,output) ;
+                    console.log("Compiled",cli.dest+name) ;
+                } else {
+                    console.log(output);
+                }
             }
-            pr = nodent.parse(content,filename,parseOpts);
-        }
-
-        // Processing options
-        if (!cli.parseast && !cli.pretty)
-            nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-
-        // Output options
-        nodent.prettyPrint(pr,parseOpts) ;
-        if (cli.out || cli.pretty) {
-            if (cli.runtime) {
-                console.log("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
-                console.log("global.$error = global.$error || "+global.$error.toString()+";\n") ;
+            if (cli.minast || cli.parseast) {
+                console.log(JSON.stringify(pr.ast,function(key,value){
+                    return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
+                },2,null)) ;
             }
-            console.log(pr.code) ;
-        }
-        if (cli.minast || cli.parseast) {
-            console.log(JSON.stringify(pr.ast,function(key,value){
-                return key[0]==="$" || key.match(/^(start|end|loc)$/)?undefined:value
-            },2,null)) ;
-        }
-        if (cli.ast) {
-            console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
-        }
-        if (cli.exec) {
-            (new Function(pr.code))() ;
+            if (cli.ast) {
+                console.log(JSON.stringify(pr.ast,function(key,value){ return key[0]==="$"?undefined:value},0)) ;
+            }
+            if (cli.exec) {
+                (new Function(pr.code))() ;
+            }
+        } catch (ex) {
+            console.error(ex) ;
         }
     }
 
@@ -942,9 +960,12 @@ function runFromCLI(){
 		augmentObject:true
 	}) ;
 
-	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.ast && !cli.minast && !cli.exec) {
+	if (!cli.fromast && !cli.parseast && !cli.pretty && !cli.out && !cli.dest && !cli.ast && !cli.minast && !cli.exec) {
 		// No input/output options - just require the
 		// specified module now we've initialized nodent
+	    if (cli.length>1)
+	        console.log("Ignoring extra files ",cli.slice(1)) ;
+	    
 		try {
 			var mod = path.resolve(cli[0]) ;
 			return require(mod);
@@ -958,8 +979,11 @@ function runFromCLI(){
 		filename = "(stdin)" ;
 		return readStream(process.stdin).then(processInput,globalErrorHandler) ;
 	} else {
-		filename = path.resolve(cli[0]) ;
-		return processInput(stripBOM(fs.readFileSync(filename, 'utf8'))) ;
+	    for (var i=0; i<cli.length; i++) {
+    		filename = path.resolve(cli[i]) ;
+    		processInput(stripBOM(fs.readFileSync(filename, 'utf8')),cli[i]) ;
+	    }
+	    return ;
 	}
 }
 

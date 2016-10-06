@@ -1,6 +1,6 @@
 {
   "name": "nodent",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
@@ -8,6 +8,9 @@
     "test": "cd tests && npm i --prod && cd .. && ./nodent.js tests --syntax --quick --quiet --generators",
     "test-loader": "cd tests/loader/app && npm test && cd ../../..",
     "start": "./nodent.js"
+  },
+  "bin":{
+    "nodentjs":"./nodent.js"  
   },
   "dependencies": {
     "acorn": "3.3.0",
