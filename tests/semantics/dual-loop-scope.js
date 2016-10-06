@@ -1,3 +1,5 @@
+'use strict';
+
 async function nop(x) { return x }
 var x = {
     ab:"ab",

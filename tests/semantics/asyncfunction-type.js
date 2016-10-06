@@ -1,7 +1,8 @@
 var AsyncFunction = require('../../nodent')().require('asyncfunction') ;
 
+var add = new AsyncFunction("i","j","return i+j") ;
+
 module.exports = async function() {
-    var add = new AsyncFunction("i","j","return i+j") ;
     return (add instanceof Function)===true
         && (add instanceof AsyncFunction)===true
         && (add.toString())

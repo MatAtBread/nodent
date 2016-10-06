@@ -4,7 +4,7 @@ var gen = [
 	require('./codegen/cg-generators.js')
 ];
 
-function* gen(){}
+function* doWeKnowGenerators(){}
 
 async function inter(i,j) {
 	return (gen[j].name == await gen[j].call() && await gen[j].call() == await gen[i].consume(gen[j].call))?1:100 ;
