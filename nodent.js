@@ -43,7 +43,9 @@ var config = {
 //		set within the directive as a JSON-encoded extension
 
 var initialCodeGenOpts = {
+    noRuntime:false,
     lazyThenables:false,
+    es6target:false,
     noUseDirective:false,
 	wrapAwait:null,
 	mapStartLine:0,
@@ -93,7 +95,11 @@ function globalErrorHandler(err) {
 
 /* Extract compiler options from code (either a string or AST) */
 var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
-
+var runtimes = require('./lib/runtime') ;
+var $asyncbind = runtimes.$asyncbind ;
+var $asyncspawn = runtimes.$asyncspawn ;
+var Thenable = $asyncbind.Thenable ; 
+    
 function noLogger(){}
 
 function isDirective(node){
@@ -103,6 +109,7 @@ function isDirective(node){
 }
 
 function parseCompilerOptions(code,log,filename) {
+    if (!log) log = console.warn.bind(console) ;
 	var regex, set, parseOpts = {} ;
 	if (typeof code=="string") {
 		if (regex = code.match(useDirective)) {
@@ -127,23 +134,23 @@ function parseCompilerOptions(code,log,filename) {
 	    set = "default" ;
 	    regex = [null,null,"{}"] ;
 	}
-    if (set) {
-        try {
-            if (!filename)
-                filename = require('path').resolve('.') ;
-            else  if (require('fs').lstatSync(filename).isDirectory())
-                filename = require('path').dirname(filename) ;
+	if (set) {
+	    try {
+	        if (!filename)
+	            filename = require('path').resolve('.') ;
+	        else  if (require('fs').lstatSync(filename).isDirectory())
+	            filename = require('path').dirname(filename) ;
 
-            var packagePath = require('resolve').sync('package.json',{
-                moduleDirectory:[''],
-                extensions:[''],
-                basedir:filename
-            }) ;
-            var packageOptions = JSON.parse(fs.readFileSync(packagePath)).nodent.directive[set] ;
-        } catch(ex) {
-            // Meh
-        }
-    }
+	        var packagePath = require('resolve').sync('package.json',{
+	            moduleDirectory:[''],
+	            extensions:[''],
+	            basedir:filename
+	        }) ;
+	        var packageOptions = JSON.parse(fs.readFileSync(packagePath)).nodent.directive[set] ;
+	    } catch(ex) {
+	        // Meh
+	    }
+	}
 	try {
 		parseOpts = copyObj([optionSets[set],packageOptions,regex[2] && JSON.parse(regex[2])]);
 	} catch(ex) {
@@ -155,6 +162,11 @@ function parseCompilerOptions(code,log,filename) {
 			log("No valid 'use nodent' directive, assumed -es7 mode") ;
 			parseOpts = optionSets.es7 ;
 		}
+
+		if (parseOpts.generators || parseOpts.engine)
+		    parseOpts.promises = true ;
+		if (parseOpts.promises)
+		    parseOpts.es7 = true ;		    
 		return parseOpts ;
 	}
 	return null ; // No valid nodent options
@@ -182,53 +194,6 @@ function btoa(str) {
 	}
 
 	return buffer.toString('base64');
-}
-
-/**
- * NoDentify (make async) a general function.
- * The format is function(a,b,cb,d,e,f){}.noDentify(cbIdx,errorIdx,resultIdx) ;
- * for example:
- * 		http.aGet = http.get.noDentify(1) ;	// The 1st argument (from zero) is the callback. errorIdx is undefined (no error)
- *
- * The function is transformed from:
- * 		http.get(opts,function(result){}) ;
- * to:
- * 		http.aGet(opts).then(function(result){}) ;
- *
- * @params
- * idx			The argument index that is the 'callback'. 'undefined' for the final parameter
- * errorIdx		The argument index of the callback that holds the error. 'undefined' for no error value
- * resultIdx 	The argument index of the callback that holds the result.
- * 				'undefined' for the argument after the errorIdx (errorIdx != undefined)
- * 				[] returns all the arguments
- * promiseProvider	For promises, set this to the module providing Promises.
- */
-function noDentify(idx,errorIdx,resultIdx,promiseProvider) {
-	promiseProvider = promiseProvider || Thenable ;
-	var fn = this ;
-	return function() {
-		var scope = this ;
-		var args = Array.prototype.slice.apply(arguments) ;
-		var resolver = function(ok,error) {
-			if (undefined==idx)	// No index specified - use the final (unspecified) parameter
-				idx = args.length ;
-			if (undefined==errorIdx)	// No error parameter in the callback - just pass to ok()
-				args[idx] = ok ;
-			else {
-				args[idx] = function() {
-					var err = arguments[errorIdx] ;
-					if (err)
-						return error(err) ;
-					if (Array.isArray(resultIdx) && resultIdx.length===0)
-						return ok(arguments) ;
-					var result = arguments[resultIdx===undefined?errorIdx+1:resultIdx] ;
-					return ok(result) ;
-				} ;
-			}
-			return fn.apply(scope,args) ;
-		}
-		return new promiseProvider(resolver) ;
-	};
 }
 
 function compileNodentedFile(nodent,log) {
@@ -370,52 +335,6 @@ function parseCode(code,origFilename,__sourceMapping,opts) {
 	}
 }
 
-/*
-$asyncbind has multple execution paths, determined by the arguments, to fulfil all runtime requirements in a single function
-so it can be serialized via toString() for transport to a browser. It is always called with this=Function (ie. it is attached
-to Function.prototype)
-
-The paths are:
-	$asyncbind(obj)							 // Simply return this function bound to obj
-	$asyncbind(obj,true) 					 // Call this function, bound to obj, returning a (possibly resolved) Thenable for its completion
-	$asyncbind(obj,function(exception){})    // Return a Thenable bound to obj, passing exceptions to the specified handler when (if) it throws
-*/
-
-var runtimes = require('./lib/runtime') ;
-var $asyncbind = runtimes.$asyncbind ;
-var $asyncspawn = runtimes.$asyncspawn ;
-
-function wrapAsyncStack(catcher) {
-    var context = {} ;
-    Error.captureStackTrace(context,$asyncbind) ;
-    return function wrappedCatch(ex){
-        if (ex instanceof Error && context) {
-            try {
-                ex.stack = //+= "\n\t...\n"+
-                    ex.stack.split("\n").slice(0,3)
-                    .filter(function(s){
-                        return !s.match(/^\s*at.*nodent\.js/) ;
-                    }).join("\n")+
-                    ex.stack.split("\n").slice(3).map(function(s){return "\n    "+s}).join("")+
-                    context.stack.split("\n").slice(2)
-                    .filter(function(s){
-                        return !s.match(/^\s*at.*nodent\.js/) ;
-                    })
-                    .map(function(s,idx){
-                        return idx?"\n"+s:s.replace(/^(\s*)at /g,"\n$1await ")
-                    }).join("") ;
-            } catch (stackError) {
-                // Just fall through and don't modify the stack
-            }
-            context = null ;
-        }
-        return catcher.call(this,ex) ;
-    } ;
-}
-
-
-var Thenable = require('./lib/thenable') ;
-
 /* NodentCompiler prototypes, that refer to 'this' */
 function requireCover(cover,opts) {
 	opts = opts || {} ;
@@ -537,10 +456,13 @@ NodentCompiler.prototype.setOptions = function(members){
 	delete this.options.log ;
 	return this ;
 };
+
+$asyncbind.call($asyncbind) ;
+
 NodentCompiler.prototype.version =  require("./package.json").version ;
 NodentCompiler.prototype.Thenable = Thenable ;
-NodentCompiler.prototype.EagerThenable = require('./lib/eager.js') ;
-NodentCompiler.prototype.isThenable = Thenable.isThenable ;
+NodentCompiler.prototype.EagerThenable = $asyncbind.EagerThenableFactory ;
+NodentCompiler.prototype.isThenable = function(x) { return x && x instanceof Object && typeof x.then==="function"} ;
 NodentCompiler.prototype.asyncify =  asyncify ;
 NodentCompiler.prototype.require =  requireCover ;
 NodentCompiler.prototype.generateRequestHandler = generateRequestHandler ;
@@ -593,7 +515,7 @@ function setGlobalEnvironment(initOpts) {
 	Object.$makeThenable
 	Object.prototype.isThenable
 	Object.prototype.asyncify
-	Function.prototype.noDentify
+	Function.prototype.noDentify // Moved to a cover as of v3.0.0
 	Function.prototype.$asyncspawn
 	Function.prototype.$asyncbind
 	Error.prepareStackTrace
@@ -613,12 +535,6 @@ function setGlobalEnvironment(initOpts) {
 		enumerable:false,
 		configurable:true
 	};
-	augmentFunction.noDentify = {
-		value:noDentify,
-		configurable:true,
-		enumerable:false,
-		writable:true
-	} ;
 	try {
 	    Object.defineProperties(Function.prototype,augmentFunction) ;
 	} catch (ex) {
@@ -631,9 +547,6 @@ function setGlobalEnvironment(initOpts) {
 	if (!(defaultCodeGenOpts[defaultCodeGenOpts.$error] in global)) {
 		global[defaultCodeGenOpts[defaultCodeGenOpts.$error]] = globalErrorHandler ;
 	}
-
-	if (initOpts.asyncStackTrace)
-		$asyncbind.wrapAsyncStack = wrapAsyncStack ;
 
 	// "Global" options:
 	// If anyone wants to augment Object, do it. The augmentation does not depend on the config options
@@ -666,7 +579,6 @@ function initialize(initOpts){
  * 		augmentObject:boolean,
  * 		extension:string?
  * 		dontMapStackTraces:boolean
- * 		asyncStackTrace:boolean
  */
 	if (!initOpts)
 		initOpts = {} ;
@@ -848,8 +760,8 @@ initialize.setCompileOptions = function(set,compiler) {
 };
 
 initialize.asyncify = asyncify ;
-initialize.Thenable = Thenable ;
-initialize.EagerThenable = require('./lib/eager.js') ;
+initialize.Thenable = $asyncbind.Thenable ;
+initialize.EagerThenable = $asyncbind.EagerThenableFactory ;
 
 module.exports = initialize ;
 
@@ -953,7 +865,9 @@ function runFromCLI(){
 		sourcemap:cli.sourcemap,
         wrapAwait:cli.wrapAwait,
         lazyThenables:cli.lazyThenables,
-        noUseDirective:cli.use?true:false
+        noUseDirective:cli.use?true:false,
+        noRuntime:cli.noruntime,
+        es6target:cli.es6target,
 	});
 
 	var nodent = initialize({

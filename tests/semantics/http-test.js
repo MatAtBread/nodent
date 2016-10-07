@@ -1,4 +1,4 @@
-var http = require('../../nodent')().require('http',{autoProtocol:true,Promise:Promise===DoNotTest?null:Promise}) ;
+var http = nodent.require('http',{autoProtocol:true,Promise:Promise===DoNotTest?null:Promise}) ;
 
 module.exports = async function() {
     var s = await http.getBody('http://nodent.mailed.me.uk/echo?ok') ;
