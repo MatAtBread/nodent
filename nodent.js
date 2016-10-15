@@ -746,7 +746,7 @@ function initialize(initOpts){
                 }
             }
         } else if (filename.match(/node_modules\/nodent\/.*\.js$/)) {
-            // Things inside nodent always use the standard loader            
+            // Things inside nodent always use the standard loader
             return stdJSLoader(mod,filename) ;
         } else {
             // The the appropriate loader for this file
@@ -885,38 +885,37 @@ function runFromCLI(){
         try {
             var pr ;
             var parseOpts ;
-    
+
             // Input options
             if (cli.fromast) {
                 content = JSON.parse(content) ;
                 pr = { origCode:"", filename:filename, ast: content } ;
                 parseOpts = parseCompilerOptions(content,nodent.log) ;
                 if (!parseOpts) {
-                    cli.use = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
-                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
-                    console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+cli.use+" */") ;
+                    var directive = cli.use ? '"use nodent-'+cli.use+'";' : '"use nodent";' ;
+                    parseOpts = parseCompilerOptions(directive,nodent.log) ;
+                    console.warn("/* "+filename+": No 'use nodent*' directive, assumed "+directive+" */") ;
                 }
             } else {
                 parseOpts = parseCompilerOptions(cli.use?'"use nodent-'+cli.use+'";':content,nodent.log) ;
                 if (!parseOpts) {
-                    cli.use = '"use nodent";' ;
-                    parseOpts = parseCompilerOptions(cli.use,nodent.log) ;
+                    parseOpts = parseCompilerOptions('"use nodent";',nodent.log) ;
                     if (!cli.dest)
-                        console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+cli.use+" */") ;
+                        console.warn("/* "+filename+": 'use nodent*' directive missing/ignored, assumed "+'"use nodent";'+" */") ;
                 }
                 pr = nodent.parse(content,filename,parseOpts);
             }
-    
+
             // Processing options
             if (!cli.parseast && !cli.pretty)
                 nodent.asynchronize(pr,undefined,parseOpts,nodent.log) ;
-    
+
             // Output options
             nodent.prettyPrint(pr,parseOpts) ;
             if (cli.out || cli.pretty || cli.dest) {
                 if (cli.dest && !name)
                     throw new Error("Can't write unknown file to "+cli.dest) ;
-                
+
                 var output = "" ;
                 if (cli.runtime) {
                     output += ("Function.prototype.$asyncbind = "+Function.prototype.$asyncbind.toString()+";\n") ;
