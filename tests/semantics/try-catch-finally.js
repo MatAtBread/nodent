@@ -67,11 +67,11 @@ async function check() {
 
 		if (a != b) {
 			f = false ;
-			console.log('s',i,a == b?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,b) ;
+			//console.log('s',i,a == b?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,b) ;
 		}
 		if (a != c) {
 			f = false ;
-			console.log('s',i,a == c?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,c) ;
+			//console.log('s',i,a == c?"pass":"FAIL",("0000000"+(i.toString(2))).substr(-8),a,c) ;
 		}
 	}
 	return f && i==z ;
