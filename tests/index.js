@@ -184,34 +184,37 @@ files.forEach(function (n) {
             "async function _a() { "+forceStrict + code+" }" ;
     }
     var compileException = false;
-    for (var type = useEngine?-1:0;type < 16; type++) {
-        var opts = {}; 
-        if (type==-1)
-          opts.engine = true ;
-        else {
-          if (!(type & 12) && !(type & 1))
-              opts.lazyThenables = true;
-          if (type & 2)
-              opts.wrapAwait = true;
-          if (type & 4) {
-              opts.promises = true;
-              if (type & 1)
-                  opts.noRuntime = true ;
-          }
-          if (type & 8) {
-              if (!useGenerators)
-                  continue ;
-              opts.generators = true;
-              if (opts.noRuntime)
-                  continue ;
-          } else if (useGenOnly)
-              continue ;
-          
-          if (!(type & (4|8)))
-              opts.es7 = true;
+    for (var type = 0;type < (useEngine?24:16); type++) {
+        var opts = {};
+        if (type&16) { 
+            if (!(type & 4))
+                continue ;
+            opts.engine = true ;
         }
-        
+
+        if (!(type & 12) && !(type & 1))
+            opts.lazyThenables = true;
+        if (type & 2)
+            opts.wrapAwait = true;
+        if (type & 4) {
+            opts.promises = true;
+            if (type & 1)
+                opts.noRuntime = true ;
+        }
+        if (type & 8) {
+            if (!useGenerators)
+                continue ;
+            opts.generators = true;
+            if (opts.noRuntime)
+                continue ;
+        } else if (useGenOnly)
+            continue ;
+
+        if (!(type & (4|8)))
+            opts.es7 = true;
+
         types[type] = Object.keys(opts).toString() ;
+
         try {
             var pr, tCompiler = process.hrtime();
             pr = nodent.compile(forceStrict + code, n, opts).code;
@@ -245,7 +248,7 @@ if (promiseImpls == providers.length)
 
 var testCache = {} ;
 async function runTest(test, provider, type) {
-    if (provider.p && !(type & (4 | 8))) {
+    if ((provider.p && !(type & (4 | 8 | 16))) || (!provider.p && (type & (4 | 8 | 16)))) {
         return {
             result: DoNotTest
         };
@@ -366,7 +369,7 @@ try {
         }
     }
 
-    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
+    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
