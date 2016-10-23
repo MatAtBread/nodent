@@ -255,7 +255,7 @@ Nodent permits a class or object definition to define async getters:
 
 	async get data() { ... }
 	get async data() { ... }
-	
+
 	class MyClass {
 		static async name() { ... }
 	}
@@ -366,7 +366,7 @@ The second set is defined per-file for each file that Nodent loads and compiles.
 
 |Member			| Type 	|  						|
 |---------------|-------|-----------------------|
-|es7			|boolean| set by any `use nodent...` directive 
+|es7			|boolean| set by any `use nodent...` directive
 |promises		|boolean| set by the directive `use nodent-promises` and `use nodent-generators`
 |generators		|boolean| set by the directive `use nodent-generators`
 |engine			|boolean| set by the directive `use nodent-engine`
@@ -558,6 +558,23 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+23-Oct-16 v3.0.4
+
+- 'engine' mode: fix case where async class method contains a callback containing a reference to `super`
+- 'engine' mode: fix case where finally contains an exit (does not need transformation)
+- Return undefined from top-level trampoline to avoid long Promise chains
+- Run tests against nodejs 7 nightly and Chrome Canary to ensure engine-mode compliance
+
+15-Oct-16 v3.0.3
+
+- Fix issue when handling multiple files on the command line, and "use" option is missing
+- Don't hoist function expressions (upsets Babel and ES6 compliant scope rules)
+
+10-Oct-16 v3.0.2
+
+- Move runtime into a separate module nodent-runtime
+- Remove hidden '$' properties from AST before exit
+
 06-Oct-16 v3.0.0 [see above](#upgrading)
 
 28-Sep-16 v2.6.10
@@ -592,4 +609,3 @@ Thanks to the people who reported bugs, provided test cases and fixes while I wa
 - https://github.com/runn1ng
 - https://github.com/simonbuchan
 - https://github.com/steve-gray
-
