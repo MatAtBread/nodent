@@ -91,7 +91,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = undefined, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = false ;
+var useQuick = false, quiet = false, useGenerators = undefined, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -105,13 +105,8 @@ for (; idx < process.argv.length; idx++) {
         syntaxTest = 1;
      else if (arg == '--syntax') {
         syntaxTest = 2;
-     } else if (arg == '--engine') {
-       try {
-           eval("async function x(){}");
-           useEngine = true;
-       } catch (ex) {
-           console.log(("V8 "+process.versions.v8+" does not support async/await (try a later version of nodejs). Skipping some tests. ").yellow) ;
-       }
+     } else if (arg == '--noengine') {
+       useEngine = false;
      } else if (arg == '--nogenerators') {
          useGenerators = false;
      } else if (arg == '--generators' || arg == '--genonly') {
@@ -130,12 +125,21 @@ for (; idx < process.argv.length; idx++) {
     }
 }
 
+if (useEngine) {
+  try {
+      eval("async function x(){ return await null }");
+  } catch (ex) {
+      console.log(("V8 "+process.versions.v8+" does not support async/await (try a later version of nodejs). Skipping 'use nodent-engine' tests. ").yellow) ;
+      useEngine = false;
+  }
+}
+
 if (useGenerators !== false) useGenerators = true ;
 if (useGenerators) {
     try {
         eval("var temp = new Promise(function(){}) ; function* x(){ return }");
     } catch (ex) {
-        console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping some tests. ").yellow) ;
+        console.log(("V8 "+process.versions.v8+" does not support Promises or Generators (try a later version of nodejs). Skipping 'use nodent-generator' tests. ").yellow) ;
         if (useGenOnly)
             process.exit(-1);
         useGenerators = false ;
@@ -186,7 +190,7 @@ files.forEach(function (n) {
     var compileException = false;
     for (var type = 0;type < (useEngine?24:16); type++) {
         var opts = {};
-        if (type&16) { 
+        if (type&16) {
             if (!(type & 4))
                 continue ;
             opts.engine = true ;

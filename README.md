@@ -495,7 +495,7 @@ The test runner in tests/index.js accepts the following options:
 	--quick      	Don't target a specific execute time, just run each test once
 	--nogenerators 	Performance test syntax transformations only, not generators
 	--genonly	 	Only run the performance tests for generator mode
-	--engine		Performance test the underlying engine's support for async and await (e.g. Chrome v53 with flags)
+	--noengine		Performance test the underlying engine's support for async and await (e.g. Chrome v53, node.js v7 with flags)
 	--syntax	 	Check the parser/output code before running semantic tests
 	--syntaxonly	Only run syntax tests
 	--forceStrict	Run the tests with a 'use strict' inserted at the top of every test file
@@ -507,7 +507,7 @@ Performance
 
 Run the test script without the `--quick` option to see how nodent code performs in ES7 mode, Promises, generators and engine on your platform. The specific 'perf' test just calls and awaits in a tight loop:
 
-	./nodent.js tests --generators --engine tests/semantics/perf.js
+	./nodent.js tests tests/semantics/perf.js
 
 Additionally, a try the following links to test performance against Babel and Traceur.
 
@@ -558,8 +558,9 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
-23-Oct-16 v3.0.4
+23-Oct-16 v3.0.5, v3.0.4
 
+- 'engine' mode: don't map 'super' in all async members, onlt async getters (v3.0.5)
 - 'engine' mode: fix case where async class method contains a callback containing a reference to `super`
 - 'engine' mode: fix case where finally contains an exit (does not need transformation)
 - Return undefined from top-level trampoline to avoid long Promise chains
