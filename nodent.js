@@ -865,7 +865,6 @@ function runFromCLI(){
 		sourcemap:cli.sourcemap,
         wrapAwait:cli.wrapAwait,
         lazyThenables:cli.lazyThenables,
-        noUseDirective:cli.use?true:false,
         noRuntime:cli.noruntime,
         es6target:cli.es6target,
 	});
