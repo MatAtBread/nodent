@@ -96,7 +96,7 @@ function globalErrorHandler(err) {
 
 /* Extract compiler options from code (either a string or AST) */
 var useDirective = /^\s*['"]use\s+nodent-?([a-zA-Z0-9]*)?(\s*.*)?['"]\s*;/
-var runtimes = require('./lib/runtime') ;
+var runtimes = require('nodent-runtime') ;
 var $asyncbind = runtimes.$asyncbind ;
 var $asyncspawn = runtimes.$asyncspawn ;
 var Thenable = $asyncbind.Thenable ;
