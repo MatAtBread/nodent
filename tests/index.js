@@ -91,7 +91,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = undefined, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true ;
+var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true, useES6 = true ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -134,7 +134,6 @@ if (useEngine) {
   }
 }
 
-if (useGenerators !== false) useGenerators = true ;
 if (useGenerators) {
     try {
         eval("var temp = new Promise(function(){}) ; function* x(){ return }");
@@ -144,6 +143,13 @@ if (useGenerators) {
             process.exit(-1);
         useGenerators = false ;
     }
+}
+
+try {
+    eval("(a)=>0") ;
+} catch (ex) {
+    console.log(("V8 "+process.versions.v8+" does not arrow functions. Skipping es6target tests. ").yellow) ;
+    useES6 = false ;
 }
 
 function pad(s, n) {
@@ -183,62 +189,77 @@ files.forEach(function (n) {
     var code = fs.readFileSync(n).toString();
     var dualMode = n.match(/\/dual-/) ;
     if (dualMode) {
-        code = "module.exports = async function() { return _s() === await _a() }\n"+
-            "function _s() { "+code.replace(/async|await/g,"")+" }\n"+
+        code = "module.exports = async function() { "+
+            "var s = _s(), a = await _a() ;"+
+            "if (s !== a) {console.log(s,a)} "+
+            "return s === a }\n"+
+            "function _s() { "+forceStrict + code.replace(/async|await/g,"")+" }\n"+
             "async function _a() { "+forceStrict + code+" }" ;
     }
     var compileException = false;
-    for (var type = 0;type < (useEngine?24:16); type++) {
-        var opts = {};
-        if (type&16) {
-            if (!(type & 4))
-                continue ;
-            opts.engine = true ;
-        }
-
-        if (!(type & 12) && !(type & 1))
-            opts.lazyThenables = true;
-        if (type & 2)
-            opts.wrapAwait = true;
-        if (type & 4) {
-            opts.promises = true;
-            if (type & 1)
+    for (var mode = 0; mode < 5; mode++) {
+        for (var flags=0; flags<8; flags++) {
+            var opts = {} ;
+            switch (mode) {
+            case 0: // es7 (lazy)
+                opts.es7 = true ;
+                opts.lazyThenables = true ;
+                break;
+            case 1: // es7 (eager)
+                opts.es7 = true ;
+                break;
+            case 2: // Promises
+                opts.promises = true ;
+                break;
+            case 3: // Generators 
+                if (!useGenerators)
+                    continue ;
+                opts.generators = true ;
+                break;
+            case 4: // Engine
+                if (!useEngine)
+                    continue ;
+                opts.engine = true ;
+                break;
+            }
+            if (flags & 1) {
+                if (!useES6)
+                    continue ;
+                opts.es6target = true ;
+            }
+            if (flags & 2) {
+                if (!(opts.promises || opts.engine))
+                    continue ;
                 opts.noRuntime = true ;
-        }
-        if (type & 8) {
-            if (!useGenerators)
-                continue ;
-            opts.generators = true;
-            if (opts.noRuntime)
-                continue ;
-        } else if (useGenOnly)
-            continue ;
-
-        if (!(type & (4|8)))
-            opts.es7 = true;
-
-        types[type] = Object.keys(opts).toString() ;
-
-        try {
-            var pr, tCompiler = process.hrtime();
-            pr = nodent.compile(forceStrict + code, n, opts).code;
-            tTotalCompilerTime += time(tCompiler);
+            }
+            if (flags & 4)
+                opts.wrapAwait = true ;
+            
+            var type = mode*8+flags ;
+            types[type] = Object.keys(opts).toString() ;
+    
             try {
-                test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+                var pr, tCompiler = process.hrtime();
+                pr = nodent.compile(forceStrict + code, n, opts).code;
+                tTotalCompilerTime += time(tCompiler);
+                try {
+                    test[i].fn[type] = new Function("module", "require", "Promise", "__unused", "nodent", "DoNotTest", pr);
+                    test[i].fn[type].opts = opts ;
+                } catch (ex) {
+                    if (!compileException)
+                        console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                    compileException = true ;
+                    test[i].fn[type] = function(m) {
+                        m.exports = DoNotTest ;
+                    }
+                }
             } catch (ex) {
                 if (!compileException)
-                    console.warn(test[i].name+(" not supported by V8 "+process.versions.v8+" (try a later version of nodejs): ").yellow+ex.message.red) ;
+                    console.warn(test[i].name+(" nodent failed to compile ").yellow+" ("+types[type]+") "+ex.message.red) ;
                 compileException = true ;
                 test[i].fn[type] = function(m) {
                     m.exports = DoNotTest ;
                 }
-            }
-        } catch (ex) {
-            if (!compileException)
-                console.warn(test[i].name+(" nodent failed to compile - FAIL ").yellow+ex.message.red) ;
-            compileException = true ;
-            test[i].fn[type] = function(m) {
-                m.exports = DoNotTest ;
             }
         }
     }
@@ -252,11 +273,19 @@ if (promiseImpls == providers.length)
 
 var testCache = {} ;
 async function runTest(test, provider, type) {
-    if ((provider.p && !(type & (4 | 8 | 16))) || (!provider.p && (type & (4 | 8 | 16)))) {
+    if (!test.fn[type].opts || (provider.p && !(test.fn[type].opts.promises || test.fn[type].opts.generators || test.fn[type].opts.engine))) {
         return {
             result: DoNotTest
         };
     }
+    
+    if (!provider.p && test.fn[type].opts.engine) {
+        return {
+            result: DoNotTest
+        };
+    }
+    
+    
     await sleep(1);
     var key = [test.name,provider.name,type].join();
     var m = {};
@@ -303,6 +332,7 @@ async function runTest(test, provider, type) {
 
 try {
     var result, byType = {}, byProvider = {}, byTest = {}, table = [], fails = [], tMedian = 0, nMedian = 0 ;
+    var maxLines = 0 ;
     nextTest: for (i = 0;i < test.length; i++) {
         var benchmark = null;
         nextProvider: for (var j = 0;j < providers.length; j++) {
@@ -311,9 +341,6 @@ try {
               gc() ;
 
               for (var type in types) if (Object.getOwnPropertyDescriptor(types,type)) {
-                  if (!(type & 1) && (type&8))
-                      continue ;
-
                   table[type] = table[type] || [];
                   table[type][j] = table[type][j] || [];
                   // Warm up V8
@@ -362,6 +389,8 @@ try {
               }
               console.log(spaces+'\n') ;
               var lines = 2+showPerformanceTable() ;
+              if (maxLines < lines+1)
+                  maxLines = lines+1 ;
               while (lines--) {
                   process.stdout.write('\u001B[1A') ;
               }
@@ -373,7 +402,8 @@ try {
         }
     }
 
-    console.log('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nBenchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
+    while (maxLines--) console.log("") ;
+    console.log('Benchmark execution time: '+((tMedian/nMedian)+' ms').cyan) ;
     console.log(fails.join("\n")) ;
 
     function showPerformanceTable() {
