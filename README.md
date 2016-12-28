@@ -130,7 +130,7 @@ Code generation options:
 | --wrapAwait 		| Allow `await` with a non-Promise expression [more info...](#differences-from-the-es7-specification)
 | --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 | --noruntime		| Compile code (in -promises or -engine mode) for execution with no runtime requirement at all
-| --es6target		| Compile code assuming an ES6 target (As of v3.0.0 this doesn't do anything different. When it does the exact ES6 features will be listed)
+| --es6target		| Compile code assuming an ES6 target (as of v3.0.8, this only requires support for arrow functions)
 
 Use within your Node scripts
 ============================
@@ -204,7 +204,7 @@ The currently supported options are:
 		wrapAwait:<boolean>,		// Allow 'await' on non-Promise expressions
 		lazyThenables:<boolean>,	// Evaluate async bodies lazily in 'es7' mode. See the Changelog for 2.4.0 for more information
     	noRuntime:<boolean>,  	// Only compatible with promises & engine. Generate pure ES5 code for an environment that support Promises natively or as a global declaration. Currently about 15% slower that using the built-in runtime $asyncbind. Default is false.
-    	es6target:<boolean>		// Compile code assuming an ES6 target (As of v3.0.0 this doesn't do anything different. When it does the exact ES6 features will be listed)
+    	es6target:<boolean>		// Compile code assuming an ES6 target (as of v3.0.8, this only requires support for arrow functions)
 	}
 	setHeaders: function(response) {}	// Called prior to outputting compiled code to allow for headers (e.g. cache settings) to be sent
 
@@ -312,26 +312,26 @@ The second implementation avoids the expense (20%) of wrapping every return valu
 
 Invoking an async function _without_ a preceding `await` (simply by calling it) executes the function body but you can't get the result. This is useful for initiating 'background' things, or running async functions for their side effects. This is in compliance with the ES7 specification.  
 
-However, this has a performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7 {"lazyThenables":true}` mode. In this case mode, if you call the async function the body _is not actually executed_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
+However, this has a performance overhead. For maximum performance, you can specify this code generation option in `use nodent-es7 {"lazyThenables":true}` mode. In this mode, if you call the async function the body _is not actually executed_ until resolved with an `await` (or a `.then()`). If you know your code always uses `await`, you can use this option to improve performance.
 
 In `use nodent-promises` mode, it is the implementation of the Promise that determines the execution scheduling and performance. The table below is a summary of modes and execution semantics. You can test the performance on your own hardware with the following command. Note the relative performance is a worst case, since the test does nothing other than make async calls in a loop.
 
-		./nodent.js tests --generators tests/semantics/perf.js
+		./nodent.js tests tests/semantics/perf.js
 
-| Mode  	| Flags / Implementation | Lazy / Eager | Possibly sync resolution | Performance (relative) |
-|-----------|----------|----|--------------------------|------------------------|
-| es7 		| lazyThenable | Lazy | Yes | 1.0
-| es7 		| (none)| Eager | No | 1.7x slower
-| promises 	| nodent | Eager | No | 1.7x slower
-| promises 	| node 6.6 native | Eager | No | 5.2x slower
-| promises 	| bluebird 3.4.6 | Eager | No | 2.0x slower
-| promises 	| rsvp 3.3.1 | Eager | No | 2.2x slower
-| promises 	| when 3.7.7 | Eager | No | 1.6x slower
-| generators | nodent | Eager | No | 7.5x slower
-| generators | node 6.6 native | Eager | No | 15.0x slower
-| generators | bluebird 3.4.6 | Eager | No | 8.5x slower
-| generators | rsvp 3.3.1 | Eager | No | 7.6x slower
-| generators | when 3.7.7 | Eager | No | 8.3x slower
+| Mode  	 | Flags / Implementation 	| Lazy / Eager  | Possibly sync resolution  | Performance (relative) |
+|------------|--------------------------|---------------|---------------------------|------------------------|
+| es7 		 | lazyThenable 			| Lazy  		| Yes 						| 1.0
+| es7 		 | (none)					| Eager 		| No 						| 1.7x slower
+| promises 	 | nodent 					| Eager 		| No 						| 1.7x slower
+| promises 	 | node 6.6 native 			| Eager 		| No 						| 5.2x slower
+| promises 	 | bluebird 3.4.6 			| Eager 		| No 						| 2.0x slower
+| promises 	 | rsvp 3.3.1 				| Eager 		| No 						| 2.2x slower
+| promises 	 | when 3.7.7 				| Eager 		| No 						| 1.6x slower
+| generators | nodent 					| Eager 		| No 						| 7.5x slower
+| generators | node 6.6 native 			| Eager 		| No 						| 15.0x slower
+| generators | bluebird 3.4.6 			| Eager 		| No 						| 8.5x slower
+| generators | rsvp 3.3.1 				| Eager 		| No 						| 7.6x slower
+| generators | when 3.7.7 				| Eager 		| No 						| 8.3x slower
 
 All other JavaScript ES5/6/2015 constructs will be transformed as necessary to implement `async` and `await`.
 
@@ -373,7 +373,7 @@ The second set is defined per-file for each file that Nodent loads and compiles.
 |wrapAwait		|boolean| default: false - allow `await` followed by a non-Promise [more info...](#differences-from-the-es7-specification)
 |sourcemap		|boolean| default: true - generate a source-map in the output JS
 |noRuntime		|boolean| default: false - generate pure ES5 code with external dependencies. The code is bigger and slower, and only works with -promises or -engine
-|es6target		|boolean| default: false - use ES6 constructs like arrow functions to improve code speed and size
+|es6target		|boolean| default: false - use ES6 constructs to improve code speed and size (as of v3.0.8, this only requires support for arrow functions)
 |parser			|object	| default: {sourceType:'script'} - passed to [Acorn](https://github.com/ternjs/acorn) to control the parser
 |mapStartLine	|int	| default: 0 - initial line number for the source-map
 |generatedSymbolPrefix	| string | default '$': string used to disambiguate indentifiers created by the compiler
@@ -557,6 +557,10 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 
 Changelog
 ==========
+
+20-Dec-16 v3.0.8
+
+- Use arrow functions when the `es6target` option is specified. This generates async call sequences that run approximately 20% faster (on on V8 v5.4.x) as calls to `bind(this)` and `$asyncbind(this)` are omitted from the generated code.
 
 23-Oct-16 v3.0.5, v3.0.4
 

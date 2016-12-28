@@ -210,14 +210,14 @@ files.forEach(function (n) {
                 break;
             }
             if (flags & 1)
-                opts.wrapAwait = true ;
-            if (flags & 2)
                 opts.es6target = true ;
-            if (flags & 4) {
+            if (flags & 2) {
                 if (!(opts.promises || opts.engine))
                     continue ;
                 opts.noRuntime = true ;
             }
+            if (flags & 4)
+                opts.wrapAwait = true ;
             
             var type = mode*8+flags ;
             types[type] = Object.keys(opts).toString() ;
