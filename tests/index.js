@@ -91,7 +91,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = undefined, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true ;
+var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true, useES6 = true ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -134,7 +134,6 @@ if (useEngine) {
   }
 }
 
-if (useGenerators !== false) useGenerators = true ;
 if (useGenerators) {
     try {
         eval("var temp = new Promise(function(){}) ; function* x(){ return }");
@@ -144,6 +143,13 @@ if (useGenerators) {
             process.exit(-1);
         useGenerators = false ;
     }
+}
+
+try {
+    eval("(a)=>0") ;
+} catch (ex) {
+    console.log(("V8 "+process.versions.v8+" does not arrow functions. Skipping es6target tests. ").yellow) ;
+    useES6 = false ;
 }
 
 function pad(s, n) {
@@ -183,7 +189,10 @@ files.forEach(function (n) {
     var code = fs.readFileSync(n).toString();
     var dualMode = n.match(/\/dual-/) ;
     if (dualMode) {
-        code = "module.exports = async function() { return _s() === await _a() }\n"+
+        code = "module.exports = async function() { "+
+            "var s = _s(), a = await _a() ;"+
+            "if (s !== a) {console.log(s,a)} "+
+            "return s === a }\n"+
             "function _s() { "+forceStrict + code.replace(/async|await/g,"")+" }\n"+
             "async function _a() { "+forceStrict + code+" }" ;
     }
@@ -203,14 +212,21 @@ files.forEach(function (n) {
                 opts.promises = true ;
                 break;
             case 3: // Generators 
+                if (!useGenerators)
+                    continue ;
                 opts.generators = true ;
                 break;
             case 4: // Engine
+                if (!useEngine)
+                    continue ;
                 opts.engine = true ;
                 break;
             }
-            if (flags & 1)
+            if (flags & 1) {
+                if (!useES6)
+                    continue ;
                 opts.es6target = true ;
+            }
             if (flags & 2) {
                 if (!(opts.promises || opts.engine))
                     continue ;

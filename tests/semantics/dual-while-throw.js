@@ -1,3 +1,5 @@
+'use nodent';
+
 async function foo() {
     JSON.parse("*");
 }
