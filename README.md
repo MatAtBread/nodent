@@ -560,7 +560,7 @@ Changelog
 
 20-Dec-16 v3.0.8
 
-- Use arrow functions when the `es6target` option is specified. This generates async call sequences that run approximately 20% faster (on on V8 v5.4.x) as calls to `bind(this)` and `$asyncbind(this)` are omitted from the generated code.
+- Use arrow functions when the `es6target` option is specified. This generates async call sequences that run approximately 20% faster (on on V8 v5.4.x) as calls to `bind(this)` and `$asyncbind(this)` are omitted from the generated code, esepcially when `noRuntime` is also specified.
 
 23-Oct-16 v3.0.5, v3.0.4
 
