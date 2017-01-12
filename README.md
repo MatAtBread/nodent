@@ -558,6 +558,10 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+12-Jan-17 v3.0.9
+
+- Change internal variable name to avoid an issue with rollup (see https://github.com/MatAtBread/nodent/issues/70) 
+
 20-Dec-16 v3.0.8
 
 - Use arrow functions when the `es6target` option is specified. This generates async call sequences that run approximately 20% faster (on on V8 v5.4.x) as calls to `bind(this)` and `$asyncbind(this)` are omitted from the generated code, esepcially when `noRuntime` is also specified.
