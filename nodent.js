@@ -139,7 +139,7 @@ function parseCompilerOptions(code,log,filename) {
 	    try {
 	        if (!filename)
 	            filename = require('path').resolve('.') ;
-	        else  if (require('fs').lstatSync(filename).isDirectory())
+	        else  if (!require('fs').lstatSync(filename).isDirectory())
 	            filename = require('path').dirname(filename) ;
 
 	        var packagePath = require('resolve').sync('package.json',{
