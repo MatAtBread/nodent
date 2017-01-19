@@ -22,6 +22,14 @@ async function fn2() {
     }
 }
 
+async function fn3() {
+    try {
+        throw '1';
+    } catch (ex) {
+        return '2';
+    }
+}
+
 async function fn(a) {
     try {
         if (a&1)
@@ -42,4 +50,4 @@ async function fn(a) {
 var s = "" ;
 for (var i=0; i<8; i++)
     s += await fn(i) ;
-return s+await fn1()+":"+await fn2();
+return s+await fn1()+":"+await fn2()+":"+await fn3();
