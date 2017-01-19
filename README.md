@@ -558,6 +558,12 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+19-Jan-17 V3.0.11
+
+- Fix case where try/catch is not contained in a block (e.g, case, conditional or label)
+- Fix case where throw is incorrectly mapped inside a sync try to an exit, rather than the matching catch [NB: this mimics V8's incorrect behaviour. After the fix it meets the specification and also Babel's implementation]
+- Fix issue that prevented the correct package.json being located for setting compiler options (3.0.10)
+
 12-Jan-17 v3.0.9
 
 - Change internal variable name to avoid an issue with rollup (see https://github.com/MatAtBread/nodent/issues/70) 
