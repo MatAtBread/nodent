@@ -50,6 +50,7 @@ var initialCodeGenOpts = {
 	wrapAwait:null,
 	mapStartLine:0,
 	sourcemap:true,
+    engine:false,
 	parser:{sourceType:'script'},
 	$return:"$return",
 	$error:"$error",
