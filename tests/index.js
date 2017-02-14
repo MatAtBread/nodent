@@ -1,5 +1,4 @@
 'use nodent-es7 {"lazyThenables":true}';
-'use strict';
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs');
@@ -348,7 +347,6 @@ try {
                   if (result.result !== true) {
                       if (result.result !== DoNotTest) {
                           console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
-                          type = 32767;
                           continue nextProvider ;
                       }
                       continue;
