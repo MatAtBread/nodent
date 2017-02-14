@@ -89,7 +89,6 @@ var optionSets = {
 };
 optionSets.promises = optionSets.promise ;
 optionSets.generators = optionSets.generator ;
-optionSets.engine = optionSets.engine ;
 
 function globalErrorHandler(err) {
 	throw err ;

@@ -498,7 +498,7 @@ The test runner in tests/index.js accepts the following options:
 	--noengine		Performance test the underlying engine's support for async and await (e.g. Chrome v53, node.js v7 with flags)
 	--syntax	 	Check the parser/output code before running semantic tests
 	--syntaxonly	Only run syntax tests
-	--forceStrict	Run the tests with a 'use strict' inserted at the top of every test file (required to test ES6 extensions on Node 4 and 5)
+	--notStrict		Run the tests without a 'use strict' inserted at the top of every test file (NB: the reverse --forceStrict was the default until v3.0.11)
 
 > **v2.x** users - The flag --generators has been replaced by --nogenerators, which has the opposite sense.
 
@@ -562,7 +562,7 @@ Changelog
 
 - Correctly handle `async return|throw` extension if nested more than one function level deep (see tests/semantics/nested-async-exits.js)
 - Provide default value for `engine` in configuration object so it can be programmatically over-ridden
-- Remove `use strict` from tests unless `--forceStrict` is specified
+- Enforce `use strict` in tests unless `--notStrict` is specified
 - Correct handling of `strict` mode nested function hoisting to mimic the semantics of recent browsers
 - Run tests against NodeJS 0.10, 0.12, 4, 5, 6 and 7 in both strict and sloppy modes
 
