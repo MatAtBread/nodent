@@ -29,18 +29,18 @@ async function y() {
 }
 
 var z = {
-    async u() {
+    u:async function() {
         function a() { 
             async return 123 ;
         }
         setImmediate(a) ;
     },
-    async v() {
+    v:async function() {
         (function a() { 
             async return 456 ;
         })() ;
     },
-    async x() {
+    x:async function() {
         function a() { 
             (function b() {
                 async return 123 ;
@@ -48,7 +48,7 @@ var z = {
         }
         setImmediate(a) ;
     },
-    async y() {
+    y:async function() {
         (function a() { 
             (function b() {
                 async return 456 ;

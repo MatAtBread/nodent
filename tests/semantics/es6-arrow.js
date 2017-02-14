@@ -1,4 +1,4 @@
-"use strict";
+
 
 var q = [
 	 async x => 3,

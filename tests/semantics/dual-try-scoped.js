@@ -2,7 +2,7 @@
 
 async function nop(x) { return x }
 async function x() {
-    'use strict';
+    
     const r = [] ;
     let x1 = await nop(4) ;
     {

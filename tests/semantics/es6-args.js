@@ -1,4 +1,4 @@
-"use strict";
+
 
 async function a() {
 	return arguments[0] ;
