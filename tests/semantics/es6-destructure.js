@@ -1,4 +1,4 @@
-"use strict";
+
 
 async function n(m) {
     return m ;

@@ -1,4 +1,4 @@
-'use strict';
+
 
 async function nop(x) { return x }
 

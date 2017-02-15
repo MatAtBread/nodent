@@ -1,5 +1,3 @@
-'use strict';
-
 try {
     async function nop(x) { return x }
 

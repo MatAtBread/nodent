@@ -1,5 +1,4 @@
 'use nodent-es7 {"lazyThenables":true}';
-'use strict';
 
 /* Run all the scripts in ./tests compiled for ES7 and Promises */
 var fs = require('fs');
@@ -91,7 +90,7 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, forceStrict = "", useEngine = true, useES6 = true ;
+var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, forceStrict = "'use strict';\n", useEngine = true, useES6 = true ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -118,11 +117,17 @@ for (; idx < process.argv.length; idx++) {
         quiet = true;
     } else if (arg == '--quick') {
         useQuick = true;
-    } else if (arg == '--forceStrict') {
-        forceStrict = "'use strict';\n";
+    } else if (arg == '--notStrict') {
+        forceStrict = "";
     } else {
         break;
     }
+}
+
+if (forceStrict) {
+    console.log("Running tests with", "'use strict'".yellow);
+} else {
+    console.log("Running tests without 'use strict'");
 }
 
 if (useEngine) {
@@ -348,7 +353,6 @@ try {
                   if (result.result !== true) {
                       if (result.result !== DoNotTest) {
                           console.log(test[i].name, '\u2717'.red, types[type].red, providers[j].name.red, result.result.toString().red, spaces);
-                          type = 32767;
                           continue nextProvider ;
                       }
                       continue;

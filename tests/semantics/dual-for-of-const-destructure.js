@@ -1,5 +1,3 @@
-'use strict';
-
 async function nop(x) { return x }
 
 async function b() {
@@ -10,4 +8,4 @@ async function b() {
     return n ;
 }
 
-b() ;
+return await b() ;
