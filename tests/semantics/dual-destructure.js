@@ -45,6 +45,20 @@ async function indirect() {
   return [a,c].toString()
 }
 
+// Destructuring with assignment
+async function assignObj() {
+    await nop();
+    const {x = 456} = {x:123};
+    return x.toString() ;
+}
+async function assignArray() {
+    await nop();
+    const {x = 456} = [789];
+    return x.toString() ;
+}
+
 return [
-  await trivialArray(),await trivialObject(),await rename(),await key(),await nestedArray(),await nestedObject(),await indirect(), await arrayElide(), await arraySpread()
+  await trivialArray(),await trivialObject(),await rename(),await key(),
+  await nestedArray(),await nestedObject(),await indirect(), await arrayElide(),
+  await arraySpread(), await assignObj(), await assignArray()
 ].toString() ;
