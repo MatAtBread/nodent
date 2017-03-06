@@ -562,8 +562,8 @@ Changelog
 - Fix case where object key `arguments` is incorrectly mapped within async functions (Babel trees/fast-async only)
 - Fix mapping of identifier `arguments` in arrow functions (name is mapped, but no local arguments is created)
 - Fix case where destructured declarations containing an assigment lost their identifier when initialzed within an `await`
-- Fix case where initialized declarations were deferred until after an await leading to `var url = '/', r = await get(url)` failing due to `url` being not yet assigned.
-- Fix cases where assignments within expression lists (function parameters, array initializers, template strings, comma operators) were initialised out of order if one of them contained an `await`
+- Fix case where initialized declarations were deferred until after an `await` leading to `var url = '/', r = await get(url)` failing due to `url` being not yet assigned.
+- Fix cases where assignments within expression lists (function parameters, array initializers, template strings, comma operators, object definitions) were initialised out of order if one of them contained an `await`
 - Fix case where an exception after a `try` block has completed incorrectly invokes the catch block it contains, rather than the one it is contained in
 
 14-Feb-17 v3.0.12
