@@ -557,6 +557,13 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 
 Changelog
 ==========
+07-Mar-17 v3.0.14
+
+- Fix case where object key `arguments` is incorrectly mapped within async functions (Babel trees/fast-async only)
+- Fix mapping of identifier `arguments` in arrow functions (name is mapped, but no local arguments is created)
+- Fix case where destructured declarations containing an assigment lost their identifier when initialzed within an `await`
+- Fix case where initialized declarations were deferred until after an await leading to `var url = '/', r = await get(url)` failing due to `url` being not yet assigned.
+- Fix cases where assigments within expression lists (function parameters, array initializers, template strings, comma operators) were initialised out of order if one of them contained an `await`
 
 14-Feb-17 v3.0.12
 
