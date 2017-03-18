@@ -3,7 +3,7 @@
 NoDent
 ======
 
-NoDent is a small module for Nodejs that implements the JavaScript ES7 keywoards `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node.
+NoDent is a small module for Nodejs that implements the JavaScript ES7 keywords `async` and `await`. These make writing, reading and understanding asynchronous and callback methods more implicit and embedded in the language. It works by (optionally) transforming JavaScript when it is loaded into Node.
 
 This README assumes you're using Nodent v3.x.x - see [Upgrading](#upgrading) if your upgrading from an earlier version, and keep an eye out for the asides that look like..
 
