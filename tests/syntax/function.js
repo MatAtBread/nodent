@@ -22,18 +22,18 @@ function* g() {
 	yield 7;
 	return "answer";
 }
-let h = function* () {};
-let f = (a) => a;
-let g = (a, b) => a + b;
-let h = (a, b = 0) => a + b;
-let i = (a, b) => {};
-let j = () => {};
-let k = () => ({});
-let l = () => {
+let h2 = function* () {};
+let f2 = (a) => a;
+let g2 = (a, b) => a + b;
+let h3 = (a, b = 0) => a + b;
+let i2 = (a, b) => {};
+let j2 = () => {};
+let k2 = () => ({});
+let l2 = () => {
 	let a = 42;
 	return a;
 };
-let m = () => ({
+let m2 = () => ({
 	a: 1,
 	b: 2
 });
