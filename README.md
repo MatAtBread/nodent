@@ -562,11 +562,11 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
-29-Mar-17 v3.0.16
+29-Mar-17 v3.0.17
 
 - Add 'noNodentExtensions' flag [(see 'Differences from the es7 specification' above)](#differences-from-the-es7-specification)
 
-28-Mar-17 v3.0.15
+28-Mar-17 v3.0.16
 
 - Update dependencies to work with Acorn v5
 
