@@ -867,6 +867,7 @@ function runFromCLI(){
         lazyThenables:cli.lazyThenables,
         noRuntime:cli.noruntime,
         es6target:cli.es6target,
+        parser:cli.noextensions?{noNodentExtensions:true}:undefined
 	});
 
 	var nodent = initialize({

@@ -131,6 +131,7 @@ Code generation options:
 | --lazyThenables 	| Evaluate async bodies lazily in 'es7' mode. See the [Changelog](#changelog) for 2.4.0 for more information
 | --noruntime		| Compile code (in -promises or -engine mode) for execution with no runtime requirement at all
 | --es6target		| Compile code assuming an ES6 target (as of v3.0.8, this only requires support for arrow functions)
+| --noextensions	| Don't allow nodent's extensions to the ES7 specification [more info...](#differences-from-the-es7-specification)
 
 Use within your Node scripts
 ============================
@@ -245,7 +246,9 @@ Async programming with Nodent (or ES7) is much easier and simpler to debug than 
 Differences from the ES7 specification
 --------------------------------------
 
-You can continue to use all the Nodent extensions with async/await capable engines. In the `use nodent-engine` mode, all ES7 standard async/await constructs are passed through unchanged, and only functions that use a Nodent extension are transformed.
+You can continue to use all the Nodent extensions with async/await capable engines. In the `use nodent-engine` mode, all ES7 standard async/await constructs are passed through unchanged, and only functions that use a Nodent extension are transformed. 
+
+You can disable the _extensions_ (but not the _known differences_) by compiling with flag `parser:{ noNodentExtensions: true}` or the command line option `--noextensions`. Nodent will pass the code unalterted to the parser (acorn) which will fail the syntactic extensions. In this scenario, the dependency `acorn-es7-plugin` is not required (but will still be installed by default). The option only works with acorn >4.x.
 
 Extensions to the specification:
 
@@ -499,6 +502,7 @@ The test runner in tests/index.js accepts the following options:
 	--syntax	 	Check the parser/output code before running semantic tests
 	--syntaxonly	Only run syntax tests
 	--notStrict		Run the tests without a 'use strict' inserted at the top of every test file (NB: the reverse --forceStrict was the default until v3.0.11)
+	--noNodentExtensions	Compile the tests disallowing nodent's extensions to ES7 specification. This will generate test failures
 
 > **v2.x** users - The flag --generators has been replaced by --nogenerators, which has the opposite sense.
 
@@ -557,6 +561,15 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 
 Changelog
 ==========
+
+29-Mar-17 v3.0.16
+
+- Add 'noNodentExtensions' flag [(see 'Differences from the es7 specification' above)](#differences-from-the-es7-specification)
+
+28-Mar-17 v3.0.15
+
+- Update dependencies to work with Acorn v5
+
 07-Mar-17 v3.0.14
 
 - Fix case where object key `arguments` is incorrectly mapped within async functions (Babel trees/fast-async only)
