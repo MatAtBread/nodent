@@ -90,7 +90,8 @@ try {
         p: require('promiscuous')
     });
 } catch (ex) {}
-var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, forceStrict = "'use strict';\n", useEngine = true, useES6 = true ;
+var useQuick = false, quiet = false, useGenerators = true, useGenOnly = false, syntaxTest = 0, 
+    forceStrict = "'use strict';\n", useEngine = true, useES6 = true, noNodentExtensions = false ;
 var idx;
 for (idx = 0; idx < process.argv.length; idx++) {
     var fqPath = path.resolve(process.argv[idx]);
@@ -119,6 +120,8 @@ for (; idx < process.argv.length; idx++) {
         useQuick = true;
     } else if (arg == '--notStrict') {
         forceStrict = "";
+    } else if (arg == '--noNodentExtensions') {
+        noNodentExtensions = true;
     } else {
         break;
     }
@@ -205,6 +208,9 @@ files.forEach(function (n) {
     for (var mode = 0; mode < 5; mode++) {
         for (var flags=0; flags<8; flags++) {
             var opts = {} ;
+            if (noNodentExtensions)
+                opts.parser = { noNodentExtensions: true } ;
+
             switch (mode) {
             case 0: // es7 (lazy)
                 opts.es7 = true ;
