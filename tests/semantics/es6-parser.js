@@ -16,3 +16,8 @@ function syntax() {
 	// A call to 'async'
 	async((b)=>0) ;
 }
+
+function nothing(){}
+
+// Template strings
+nothing(`${(123).toString()}`.toString()) ;

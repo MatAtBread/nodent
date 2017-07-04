@@ -562,6 +562,11 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+04-Jul-17 v3.0.20
+
+- Fix issue with '.' after a template string.
+- Fix edge cases with try-catch-finally (v3.0.18..19)
+
 29-Mar-17 v3.0.17
 
 - Add 'noNodentExtensions' flag [(see 'Differences from the es7 specification' above)](#differences-from-the-es7-specification)
