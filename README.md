@@ -133,12 +133,16 @@ Code generation options:
 | --es6target		| Compile code assuming an ES6 target (as of v3.0.8, this only requires support for arrow functions)
 | --noextensions	| Don't allow nodent's extensions to the ES7 specification [more info...](#differences-from-the-es7-specification)
 
-Use within your Node scripts
+Node.js usage
 ============================
+
+Automatic transpilation
+------------
+
 There is no need to use the command line at all if you want to do is use `async` and `await` in your own scripts then just  `require('nodent')()`. Files are transformed if they have a `use nodent` directive at the top, or have the extension ".njs". Existing files ending in '.js' _without_ a `use nodent...` directive are untouched and are loaded and executed unchanged.
 
-ES7 and Promises
-----------------
+### ES7 and Promises
+
 Nodent can generate code that implements `async` and `await` using basic ES5 JavaScript, Promises (via Nodent's built-in library, a third party library or module, or an ES5+/6 platform) or Generators (ES6). Using the directive:
 
 	'use nodent';
@@ -152,22 +156,37 @@ Within your package.json, you can have named sets of pre-defined options, which 
 	'use nodent-generators';
 	'use nodent-engine';
 
-### Which one should you use?
+#### Which one should you use?
 All the implementations work with each other - you can mix and match. If you're unsure as to which will suit your application best, or want to try them all out `'use nodent';` will use a 'default' configuration you can determine in your application's package.json. See [Advanced Configuration](#advanced-configuration) for details.
 
-#### Shipping a self-contained app to a browser, Node <=0.10.x or other unknown environment
+##### Shipping a self-contained app to a browser, Node <=0.10.x or other unknown environment
 `use nodent-es7` - it's the most compatible as it doesn't require any platform support such as Promises or Generators, and works on a wide range of desktop and mobile browsers.
 
-#### Shipping an app or module within Node, npm or [modern browsers supporting Promises](http://kangax.github.io/compat-table/es6/#test-Promise)
+##### Shipping an app or module within Node, npm or [modern browsers supporting Promises](http://kangax.github.io/compat-table/es6/#test-Promise)
 `use nodent-promises` provides the most compatibility between modules and apps. If your module or library targets Node earlier than v4.1.x, you should install a Promise library (e.g. rsvp, when, bluebird) or use `nodent.Thenable` to expose the Promise API. In promises mode, there is no need for a runtime at all. Specifying the option `use nodent-promises {"noRuntime":true}` will generate pure ES5 code at the cost of some loss in performance and increase in code size.
 
 > **v2.x** users: `nodent.EagerThenable()` is still defined, but as of v3 is the same as the `Thenable` implementation.
 
-#### Generators
+##### Generators
 `use nodent-generators` generates code which is reasonably easy to follow, but is best not used for anything beyond experimentation as it requires an advanced browser on the client-side, or Node v4.x.x. The performance and memory overhead of generators is poor - currently (Node v6.6.0) averaging 3.5 times slower compared to the es7 with 'lazyThenables'.
 
-#### Engine
+##### Engine
 `use nodent-engine` does _not_ transpile standard ES7 async/await constructs, but only transpiles the additional non-standard features provided by nodent - await anywhere, async getters, async return and throw. At the time of writing, not many runtimes implement async and await - Chrome v53 does with command line flags, and Edge 14 are examples. On Chrome, performance is better than generators, but not quite as good as Promises, and still less than half the speed of ES7 mode. In promises mode, there is no need for a runtime at all. Specifying the option `use nodent-engine {"noRuntime":true}` will generate pure ES5 code at the cost of some loss in performance and increase in code size.
+
+Programmatical usage within scripts
+-------------
+
+The `compiler.js` module exposes bare compiler. Through that end transpilation of files can be achieved without side effects (built-ins extensions, normally implied by _automatic transpilation_ mode).
+
+Example usage:
+
+```javascript
+var NodentCompiler = require('nodent/compiler');
+
+var compiler = new NodentCompiler() ;
+
+var es5ReadySourceCode = compiler.compile(sourceCode, filename, { sourcemap:false, promises: true, noRuntime: true, es6target: true });
+```
 
 Use within a browser
 ====================
