@@ -1,4 +1,4 @@
-var AsyncFunction = require('../../nodent')().require('asyncfunction') ;
+debugger;var AsyncFunction = require('../../nodent')().require('asyncfunction') ;
 
 var add = new AsyncFunction("i","j","return i+j") ;
 
