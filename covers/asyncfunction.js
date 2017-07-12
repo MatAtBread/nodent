@@ -6,6 +6,7 @@ module.exports = function(nodent,config) {
         config.promises = 'Promise' in global ;
     if (!('log' in config) || config.log===false)
         config.log = Nothing ;
+    config.sourcemap = false ;
             
     function AsyncFunction() {
         var params = [].slice.call(arguments,0,-1) ;
