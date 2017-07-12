@@ -583,6 +583,18 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+12-Jul-17 v3.1.0
+
+This version splits the CLI, require hook and options parsing (`use nodent` directive, package.json options) from the core compiler. 
+
+_If your code monkey patches the internals of nodent, it may no longer work, as the core compiler has been moved into a submodule._ 
+
+- The core compiler is now in [`nodent-compiler`](https://github.com/MatAtBread/nodent-compiler).
+- The runtime remains in [`nodent-runtime`](https://github.com/MatAtBread/nodent-runtime) 
+- The CLI (which invokes the compiler), require hook (which intercepts .js files loaded into node and sets up the runtime environment) remiain here, in `nodent`.
+
+If you are not requiring individual components within `nodent` or otherwise dependent on the internal structure, no changes will be required.
+
 04-Jul-17 v3.0.20
 
 - Fix issue with '.' after a template string.
