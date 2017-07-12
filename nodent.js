@@ -8,7 +8,7 @@
  */
 var stdJSLoader ;
 var fs = require('fs') ;
-var NodentCompiler = require('./compiler') ;
+var NodentCompiler = require('nodent-compiler') ;
 
 // Config options used to control the run-time behaviour of the compiler
 var config = {

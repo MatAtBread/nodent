@@ -16,7 +16,7 @@ Contents
   * [Why Nodent?](#why-nodent)
   * [Installation](#installation)
   * [Command\-Line usage](#command-line-usage)
-  * [Use within Node](#use-within-your-node-scripts)
+  * [Node.js usage](#node-js-usage)
     * [ES7 and Promises](#es7-and-promises)
   * [Use within a browser](#use-within-a-browser)
   * [async and await syntax](#async-and-await-syntax-and-usage)
@@ -86,7 +86,7 @@ Installation
 
 Command-Line usage
 ==================
-You can invoke and run a nodented JavaScript file from the command line (although for Node apps it's much easier using the [JS transpiler](#use-within-your-node-scripts)). To load, compile and run your JS file (containing `async` and `await`), use:
+You can invoke and run a nodented JavaScript file from the command line (although for Node apps it's much easier using the [JS transpiler](#automatic-transpilation)). To load, compile and run your JS file (containing `async` and `await`), use:
 
 	./nodent.js myNodentedFile.js
 
@@ -176,15 +176,17 @@ All the implementations work with each other - you can mix and match. If you're 
 Programmatical usage within scripts
 -------------
 
-The `compiler.js` module exposes bare compiler. Through that end transpilation of files can be achieved without side effects (built-ins extensions, normally implied by _automatic transpilation_ mode).
+To compile code programmatically you should use require([`nodent-compiler`](https://github.com/MatAtBread/nodent-compiler)). This module is a standalone compiler that has:
+
+- no require hook (it does not intercept .js files as they are loaded into Node)
+- no runtime (it does not implement any functions required to run transpiled code)
+- no pollution (because it has no runtime, it does not add async-specific bindings on `Function.prototype`, a global error handler, stack source-mapping) 
 
 Example usage:
 
 ```javascript
-var NodentCompiler = require('nodent/compiler');
-
+var NodentCompiler = require('nodent-compiler');
 var compiler = new NodentCompiler() ;
-
 var es5ReadySourceCode = compiler.compile(sourceCode, filename, { sourcemap:false, promises: true, noRuntime: true, es6target: true });
 ```
 
