@@ -583,6 +583,23 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+18-Aug-17 v3.1.1
+
+- Permit the compiler options `es6target`, `noRuntime`, `promises` and `engine` to be defined with the value `"host"`, in which case they are determined from the execution environment the code was compiled in (ie. the version of nodejs). This allows transpiled code to gracefully compile across node >0.10 using additional features of each platform as they are available. An addition named set of options, also called `"host"` is defined to use these values, allowing the directive `"use nodent-host"` to compile code for the current platform. The new value can also be used to set (or reset) names sets in the package.json. For example, to set "host" as the default values:
+
+```json
+  "nodent":{
+    "directive":{
+      "default":{
+		"es6target":"host",
+		"promises":"host",
+		"engine":"host",
+		"noRuntime":"host"
+      }
+    }
+  }
+```  
+
 12-Jul-17 v3.1.0
 
 This version splits the CLI, require hook and options parsing (`use nodent` directive, package.json options) from the core compiler. 

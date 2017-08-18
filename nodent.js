@@ -60,10 +60,15 @@ var optionSets = {
 		generators:{value:true,writable:true,enumerable:true},
 		es7:{value:false,writable:true,enumerable:true}
 	}),
-	engine:Object.create(defaultCodeGenOpts,{
-		engine:{value:true,writable:true,enumerable:true},
-		promises:{value:true,writable:true,enumerable:true}
-	})
+    engine:Object.create(defaultCodeGenOpts,{
+        engine:{value:true,writable:true,enumerable:true},
+        promises:{value:true,writable:true,enumerable:true}
+    }),
+    host:Object.create(defaultCodeGenOpts,{
+        promises:{value:"host",writable:true,enumerable:true},
+        es6target:{value:"host",writable:true,enumerable:true},
+        engine:{value:"host",writable:true,enumerable:true}
+    })
 };
 optionSets.promises = optionSets.promise ;
 optionSets.generators = optionSets.generator ;
@@ -84,6 +89,13 @@ function isDirective(node){
         (node.expression.type === 'StringLiteral' ||
             (node.expression.type === 'Literal' && typeof node.expression.value === 'string')) ;
 }
+
+var hostOptions = {
+    promises:"Promise",
+    es6target:"()=>0",
+    engine:"(async ()=>0)",
+    noRuntime:"Promise"
+} ;
 
 function parseCompilerOptions(code,log,filename) {
     if (!log) log = console.warn.bind(console) ;
@@ -133,6 +145,12 @@ function parseCompilerOptions(code,log,filename) {
 	} catch(ex) {
 		log("Invalid literal compiler option: "+((regex && regex[0]) || "<no options found>"));
 	}
+
+	Object.keys(hostOptions).forEach(function(k){
+	    if (parseOpts[k] === 'host') {
+	        parseOpts[k] = (function(){ try { eval(hostOptions[k]) ; return true } catch (ex) { return false } })()
+	    } 
+	}) ;
 
 	if (parseOpts.promises || parseOpts.es7 || parseOpts.generators || parseOpts.engine) {
 		if ((((parseOpts.promises || parseOpts.es7) && parseOpts.generators))) {
