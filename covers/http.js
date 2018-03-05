@@ -32,7 +32,7 @@ module.exports = function(nodent,config) {
 	}
 
 	cover.request = function(opts){
-		return new (opts.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			var request = protocol(opts).request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
@@ -40,13 +40,13 @@ module.exports = function(nodent,config) {
 	};
 
 	cover.get = function(opts){
-		return new (config.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			protocol(opts).get(opts,$return).on('error',$error) ;
 		}) ;
 	};
 
 	cover.getBody = function(opts){
-		return new (config.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			protocol(opts).get(opts,function(res){
 				try {
 					var enc = "utf8" ;
