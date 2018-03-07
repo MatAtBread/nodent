@@ -262,6 +262,9 @@ function generateRequestHandler(path, matchRegex, options) {
 	var compilerOptions = copyObj([NodentCompiler.initialCodeGenOpts,options.compiler]) ;
 
 	return function (req, res, next) {
+		if (req.url.indexOf('..')>=0)
+			return next() ;
+		
 		if (cache[req.url]) {
 			res.setHeader("Content-Type", cache[req.url].contentType);
 			options.setHeaders && options.setHeaders(res) ;
