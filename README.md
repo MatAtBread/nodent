@@ -583,6 +583,15 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+18-Apr-18 v3.2.0
+
+- Use `nodent-compiler @3.2.0`, which in turn uses the `nodent-transform@3.2.0`, which is the base AST transformer (with no parser or code generator), which is also used 
+from Babel 7-beta (see https://github.com/babel/babel/pull/7076) and forms the basis of leaner (external) `fast-async` Babel plugin.
+
+10-Apr-18 v3.1.3-8
+
+- Various minor fixes and compatability changes to ensure operation with a variety of versions of acorn, babel, node, etc.
+
 21-Aug-17 v3.1.2
 
 - Correctly walk destructuring assignment initializers

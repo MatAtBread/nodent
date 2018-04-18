@@ -101,20 +101,21 @@ function locations(k) {
 	return ['end','start','loc'].indexOf(k)<0 ;
 }
 
+debugger ;
 function eqTree(a,b,p) {
 	if (!p) p = "" ;
 	var ka = Object.keys(a).filter(locations).sort() ;
 	var kb = Object.keys(b).filter(locations).sort() ;
-	if (ka.length != kb.length)
+	if (ka.length > kb.length) 
 		throw new Error("length("+ka.length+","+kb.length+") "+p) ;
 
 	for (var i=0;i<ka.length;i++)
-		if (ka[i] != kb[i] || typeof a[ka[i]] != typeof b[kb[i]] || (!(a[ka[i]] instanceof Object) && a[ka[i]] !== b[kb[i]]))
-			throw new Error("key("+ka[i]+","+kb[i]+") "+p) ;
+		if (typeof a[ka[i]] != typeof b[ka[i]] || (!(a[ka[i]] instanceof Object) && a[ka[i]] !== b[ka[i]]))
+			throw new Error("key("+ka[i]+","+ka[i]+") "+p) ;
 
 	for (var i=0;i<ka.length;i++)
 		if (typeof a[ka[i]] === 'object' && a[ka[i]])
-			eqTree(a[ka[i]],b[kb[i]],p+" > "+ka[i]+":"+a[ka[i]].type) ;
+			eqTree(a[ka[i]],b[ka[i]],p+" > "+ka[i]+":"+a[ka[i]].type) ;
 	return true ;
 }
 
