@@ -583,6 +583,11 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+24-Apr-18 v3.2.2
+
+- Fix the lifetime of let and const loop variable declarations (the previous implementation correctly limited the scope, but not the lifetime of the loop declarations, meaning the would be re-used if referenced in a callback)
+- Move compiler-only tests into a different sub-directory since they are now duplicates of the tests in nodent-compiler.
+
 18-Apr-18 v3.2.0
 
 - Use `nodent-compiler @3.2.0`, which in turn uses the `nodent-transform@3.2.0`, which is the base AST transformer (with no parser or code generator), which is also used 
