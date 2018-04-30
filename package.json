@@ -1,6 +1,6 @@
 {
   "name": "nodent",
-  "version": "3.2.2",
+  "version": "3.2.4",
   "description": "NoDent - Asynchronous Javascript language extensions",
   "main": "nodent.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "nodentjs": "./nodent.js"
   },
   "dependencies": {
-    "nodent-compiler": "^3.2.2",
+    "nodent-compiler": "^3.2.4",
     "nodent-runtime": "^3.2.1",
     "resolve": "^1.5.0"
   },

@@ -583,6 +583,11 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+30-Apr-18 v3.2.4
+
+- Fix issue where `catch` body was incompletely transformed (see https://github.com/MatAtBread/nodent/issues/109)
+- Fix issue where unreachable continuation generated an illegal Identifer after try-catch (see https://github.com/MatAtBread/fast-async/issues/56)
+
 24-Apr-18 v3.2.2
 
 - Fix the lifetime of let and const loop variable declarations (the previous implementation correctly limited the scope, but not the lifetime of the loop declarations, meaning they would be re-used if referenced in a callback)
