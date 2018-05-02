@@ -583,6 +583,11 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
+02-May-18 v3.2.6 (3.2.5)
+
+- Re-work detection of whether `const` semantics should be treated as pre-ES6 (NodeJS <=5.x) or ES6 in favour of ES6 semantics. Note that this may change the execution path of code which previously made the opposite assumption in NodeJS <5.x and realted JS engines. (More details at https://github.com/MatAtBread/nodent-transform/commit/5fa3d01400ffb4903fe4184c3886f5d8b1c223b0)
+- Fix regression in v3.2.5 which limited the scope of `var` declarations within loop bodies.
+
 30-Apr-18 v3.2.4
 
 - Fix issue where `catch` body was incompletely transformed (see https://github.com/MatAtBread/nodent/issues/109)
