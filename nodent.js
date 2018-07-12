@@ -214,7 +214,8 @@ function asyncify(promiseProvider) {
 		for (var j in o) (function(){
 			var k = j ;
 			try {
-				if (typeof obj[k]==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
+				var pd = Object.getOwnPropertyDescriptor(obj,k) ;
+				if (pd.value && typeof pd.value==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
 					o[k+suffix] = function() {
 						var a = Array.prototype.slice.call(arguments) ;
 						var resolver = function($return,$error) {
@@ -232,7 +233,7 @@ function asyncify(promiseProvider) {
 								a.push(cb) ;
 							} else {
 								// Assume the CB is the final arg
-								a[obj[k].length-1] = cb ;
+								a.push(cb) ;
 							}
 							var ret = obj[k].apply(obj,a) ;
 						} ;
