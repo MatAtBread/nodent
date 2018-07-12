@@ -583,7 +583,7 @@ This execution case was pointed out by https://github.com/jods4 - many thanks.
 Changelog
 ==========
 
-12-Jul-18 v3.2.7
+12-Jul-18 v3.2.8 (3.2.7)
 
 - Modify the implementation of `asyncify` so that it doesn't try and asyncify getters, even if they return a function. In node v10 this recurses as `fs.ReadStream` is a getter that does a lazy load, and for some reason it fails on Ubuntu (maybe all linux). 
 Also, always push the promised callback, rather than forcing it into the final argument position, as it breaks logic used by `fs.stat` to determine its optional arguments. It is possible this change will break 

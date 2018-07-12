@@ -214,7 +214,11 @@ function asyncify(promiseProvider) {
 		for (var j in o) (function(){
 			var k = j ;
 			try {
-				var pd = Object.getOwnPropertyDescriptor(obj,k) ;
+				var pd ;
+				for (var po = obj; po; po = po.__proto__) {
+					if (pd = Object.getOwnPropertyDescriptor(po,k))
+						break ;
+				}
 				if (pd.value && typeof pd.value==='function' && (!o[k+suffix] || !o[k+suffix].isAsync) && filter(k,o)) {
 					o[k+suffix] = function() {
 						var a = Array.prototype.slice.call(arguments) ;
