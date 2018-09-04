@@ -9,7 +9,7 @@ module.exports = function(nodent,config) {
 	var cover = Object.create(http) ;
 
 	cover.request = function(opts){
-		return new (config.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			var request = http.request(opts,function(){}) ;
 			request.on('error',$error) ;
 			$return(request) ;
@@ -17,19 +17,28 @@ module.exports = function(nodent,config) {
 	};
 	
 	cover.get = function(opts){
-		return new (config.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			http.get(opts,$return).on('error',$error) ;
 		}) ;
 	};
 	
 	cover.getBody = function(opts){
-		return new (config.Promise)(function($return,$error){
+		return new (opts.Promise || config.Promise)(function($return,$error){
 			http.get(opts,function(res){
 				try {
-					res.setEncoding('utf8');
+					var enc = "utf8" ;
+					if (res.headers['content-type']) {
+						var m = res.headers['content-type'].match(/.*charset=(.*)\b/) ;
+						if (m && m.length>1 && Buffer.isEncoding(m[1]))
+							enc = m[1] ;
+					}
 					var body = "" ;
-					res.on('data', function (chunk) { body += chunk ; });
-					res.on('end', function(){
+					function handle(s) {
+						s.on('error',$error) ;
+						s.on('data', function (chunk) { 
+							body += chunk ; 
+						});
+						s.on('end',function(){
 						if (res.statusCode==200)
 							$return(body) ;
 						else {
@@ -39,6 +48,22 @@ module.exports = function(nodent,config) {
 							$error(err) ;
 						}
 					}) ;
+						return s ;
+					}
+					
+					switch (res.headers['content-encoding']) {
+					// or, just use zlib.createUnzip() to handle both cases
+					case 'gzip':
+					case 'deflate':
+						var z = require('zlib').createUnzip() ;
+						handle(z);
+						res.pipe(z);
+						break;
+					default:
+						res.setEncoding(enc);
+						handle(res) ;
+						break;
+					}					
 				} catch(ex) {
 					$error(ex) ;
 				}

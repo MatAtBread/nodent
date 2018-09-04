@@ -52,7 +52,7 @@ module.exports = function(nodent,config) {
 					var enc = "utf8" ;
 					if (res.headers['content-type']) {
 						var m = res.headers['content-type'].match(/.*charset=(.*)\b/) ;
-						if (m && m.length>1)
+						if (m && m.length>1 && Buffer.isEncoding(m[1]))
 							enc = m[1] ;
 					}
 					var body = "" ;
